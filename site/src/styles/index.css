@@ -1,0 +1,60 @@
+/* Cascade mirrors the Quilt draft: page base < Tailwind < section styles. */
+@layer frame, theme, base, components, utilities;
+@import "./frame.css" layer(frame);
+@import "tailwindcss";
+@import "../../../../brand/tokens.tailwind.css";
+@import "./fonts.css";
+@import "../../../../brand/state-layer.css";
+@import "./landing.css";
+@import "./sections.css";
+
+/* brand/DESIGN.md「引入」：字体按 [lang] 切换，不在 html 或 [lang] 上设字号 */
+:root {
+  color-scheme: dark light;
+}
+body {
+  font-size: var(--semantic-typography-body-font-size);
+}
+[lang] {
+  font-family: var(--semantic-typography-body-font-family);
+  line-height: var(--semantic-typography-body-line-height);
+  letter-spacing: var(--semantic-typography-body-letter-spacing);
+}
+
+/* 区块标题用品牌展示字阶 headline，窄屏按视口缩小 */
+.lp-root {
+  --lp-h2-size: clamp(1.75rem, 4.2vw, var(--semantic-typography-display-headline-font-size));
+  --lp-h2-leading: var(--semantic-typography-display-headline-line-height);
+  --lp-h2-weight: var(--semantic-typography-display-headline-font-weight);
+  --lp-h2-tracking: var(--semantic-typography-display-headline-letter-spacing);
+}
+
+/* 滚动条：槽位恒定，颜色走 token（RESP-007、RESP-015） */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-color-border-strong) transparent;
+}
+
+/* Imbo design-system colors used by the header and the newer sections (values come from frame.css) */
+@theme inline {
+  --color-background: rgb(var(--color-background-rgb));
+  --color-on-background: rgb(var(--color-on-background-rgb));
+  --color-surface: rgb(var(--color-surface-rgb));
+  --color-on-surface: rgb(var(--color-on-surface-rgb));
+  --color-surface-variant: rgb(var(--color-surface-variant-rgb));
+  --color-on-surface-variant: rgb(var(--color-on-surface-variant-rgb));
+  --color-outline: rgb(var(--color-outline-rgb));
+  --color-outline-variant: rgb(var(--color-outline-variant-rgb));
+  --color-primary: rgb(var(--color-primary-rgb));
+  --color-on-primary: rgb(var(--color-on-primary-rgb));
+  --color-secondary: rgb(var(--color-secondary-rgb));
+  --color-secondary-container: rgb(var(--color-secondary-container-rgb));
+  --color-tertiary: rgb(var(--color-tertiary-rgb));
+  --color-error: rgb(var(--color-error-rgb));
+  --color-warning: rgb(var(--color-warning-rgb));
+  --color-success: rgb(var(--color-success-rgb));
+  /* rounded-md / rounded-lg take the design-system radii from frame.css; rounded-sm keeps the brand value */
+  --radius-md: 4px;
+  --radius-lg: 8px;
+}

@@ -1,0 +1,338 @@
+/*
+ * landing 积木的样式入口。宿主项目在 Tailwind 入口里依次引入：tailwindcss、项目 brand/tokens.css（visual-system 产物）、本文件。
+ * 积木只经 --lp-* 取值；.lp-root 把它们指向 brand/ 的 --semantic-* 变量，本文件不带任何品牌颜色。
+ * 各品牌叫法一致的直接指过去；圆角、阴影、展示字体这类各品牌叫法不同的，给常见名的回退链。
+ * 品牌缺积木要的变量时，用 visual-system 补进 brand/，不在项目里写映射或字面量顶替；缺的那类效果补齐前不出现。
+ * 交互态只经 brand/state-layer.css：积木给可交互元素挂 .state-layer 与 .focus-ring，不写 hover 色与焦点环。
+ * 渐变字、光晕这类可选效果默认关，项目要开时在入口样式里给 .lp-root 设对应变量。
+ */
+
+.lp-root {
+  /* 颜色 */
+  --lp-bg: var(--semantic-color-surface-background);
+  --lp-surface: var(--semantic-color-surface-raised);
+  --lp-surface-2: var(--semantic-color-surface-overlay);
+  --lp-fg: var(--semantic-color-text-primary);
+  --lp-fg-muted: var(--semantic-color-text-secondary);
+  --lp-fg-soft: var(--semantic-color-text-tertiary);
+  --lp-line: var(--semantic-color-border-subtle);
+  --lp-line-strong: var(--semantic-color-border-strong);
+  --lp-accent: var(--semantic-color-action-primary);
+  --lp-accent-fg: var(--semantic-color-text-on-action);
+  /* 演示里的数据色：用品牌的图表色板，品牌没有图表色时退成反馈色 */
+  --lp-data-1: var(--semantic-color-data-viz-series-1, var(--semantic-color-feedback-success));
+  --lp-data-2: var(--semantic-color-data-viz-series-2, var(--semantic-color-feedback-warning));
+  --lp-data-3: var(--semantic-color-data-viz-series-3, var(--semantic-color-action-primary));
+  --lp-data-4: var(--semantic-color-data-viz-series-4, var(--semantic-color-feedback-error));
+
+  /* 可选效果，默认关：品牌主色渐变（导航徽标、brand 按钮）、标题渐变字、光晕、
+     玻璃顶栏的底（可以是渐变）与边（box-shadow 列表）、主按钮的光晕 */
+  --lp-brand-from: var(--lp-accent);
+  --lp-brand-via: var(--lp-accent);
+  --lp-brand-to: var(--lp-accent);
+  --lp-brand-fg: var(--lp-accent-fg);
+  --lp-heading-gradient: linear-gradient(var(--lp-fg), var(--lp-fg));
+  --lp-aura: transparent;
+  --lp-nav-bg: var(--semantic-material-chrome-tint, var(--lp-bg));
+  --lp-nav-edge: inset 0 0 0 var(--lp-hairline) var(--lp-line);
+  --lp-button-shadow: 0 0 #0000;
+  /* 点睛色：眉题、正文里的链接、当前项标记；品牌有链接色就用它 */
+  --lp-highlight: var(--semantic-color-action-link, var(--semantic-color-text-link, var(--lp-fg)));
+
+  /* 字体 */
+  --lp-font-body: var(--semantic-typography-body-font-family);
+  --lp-font-display: var(--semantic-typography-display-font-family, var(--semantic-typography-display-headline-font-family, var(--lp-font-body)));
+  --lp-font-hero: var(--semantic-typography-display-hero-font-family, var(--lp-font-display));
+  --lp-font-mono: var(--primitive-font-family-mono, ui-monospace, monospace);
+
+  /* 形状与描边 */
+  --lp-radius-card: var(--semantic-radius-card, var(--semantic-radius-lg));
+  --lp-radius-control: var(--semantic-radius-control, var(--semantic-radius-md));
+  --lp-radius-button: var(--lp-radius-control);
+  --lp-card-shadow: var(--semantic-elevation-raised, 0 0 #0000);
+  --lp-hairline: var(--semantic-layout-hairline);
+
+  /* 版式：landing 自己的排版尺度，不属于品牌 */
+  --lp-container: 72rem;
+  --lp-gutter: 1rem;
+  --lp-section-y: clamp(4rem, 9vw, 7.5rem);
+
+  /* 区块标题：默认大标题；模板设 data-heading="compact" 时，标题与副标题同字号、副标题换成次级色 */
+  --lp-h2-size: clamp(2rem, 4.6vw, 3.5rem);
+  --lp-h2-leading: 1.08;
+  --lp-h2-weight: 600;
+  --lp-h2-tracking: -0.02em;
+  --lp-sub-size: 1rem;
+  --lp-sub-gap: 1rem;
+  /* 首屏大标题（hero-field）：字体、字重、字距取品牌展示字阶 hero */
+  --lp-hero-size: clamp(2.75rem, 7vw, 5.5rem);
+  --lp-hero-leading: 1.05;
+  --lp-hero-weight: var(--semantic-typography-display-hero-font-weight, 700);
+  --lp-hero-tracking: var(--semantic-typography-display-hero-letter-spacing, -0.03em);
+
+  /* 动效：loop 是自动循环插图一轮的时长，slow 是单个动作的时长，show 是一次性演出；
+     ease 用于出现与状态变化，ease-move 用于已在画面上的移动 */
+  --lp-dur-fast: var(--semantic-motion-duration-fast);
+  --lp-dur-slow: var(--semantic-motion-duration-slow, var(--semantic-motion-duration-base));
+  --lp-dur-loop: 9600ms;
+  --lp-dur-show: 1200ms;
+  /* stage 是整块画面换场：横推距离是整个舞台宽，比单个动作长（raycast.com 换功能实测约 0.5s） */
+  --lp-dur-stage: calc(var(--lp-dur-slow) * 1.6);
+  --lp-ease: var(--semantic-motion-easing-standard);
+  --lp-ease-move: var(--semantic-motion-easing-emphasized, var(--semantic-motion-easing-standard));
+
+  background: var(--lp-bg);
+  color: var(--lp-fg);
+  font-family: var(--lp-font-body);
+  -webkit-font-smoothing: antialiased;
+  /* 点按反馈交给 state-layer 的 :active，去掉浏览器的灰色点按块（INT-005） */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lp-root[data-heading="compact"] {
+  --lp-h2-size: clamp(1.125rem, 1.6vw, 1.25rem);
+  --lp-h2-leading: 1.4;
+  --lp-h2-weight: 500;
+  --lp-h2-tracking: 0;
+  --lp-sub-size: var(--lp-h2-size);
+  --lp-sub-gap: 0;
+}
+
+@theme inline {
+  --color-lp-bg: var(--lp-bg);
+  --color-lp-surface: var(--lp-surface);
+  --color-lp-surface-2: var(--lp-surface-2);
+  --color-lp-fg: var(--lp-fg);
+  --color-lp-fg-muted: var(--lp-fg-muted);
+  --color-lp-fg-soft: var(--lp-fg-soft);
+  --color-lp-line: var(--lp-line);
+  --color-lp-line-strong: var(--lp-line-strong);
+  --color-lp-accent: var(--lp-accent);
+  --color-lp-accent-fg: var(--lp-accent-fg);
+  --color-lp-brand-fg: var(--lp-brand-fg);
+  --color-lp-highlight: var(--lp-highlight);
+  --color-lp-data-1: var(--lp-data-1);
+  --color-lp-data-2: var(--lp-data-2);
+  --color-lp-data-3: var(--lp-data-3);
+  --color-lp-data-4: var(--lp-data-4);
+  --font-lp-display: var(--lp-font-display);
+  --font-lp-body: var(--lp-font-body);
+  --font-lp-mono: var(--lp-font-mono);
+  --radius-lp-card: var(--lp-radius-card);
+  --radius-lp-control: var(--lp-radius-control);
+  --radius-lp-button: var(--lp-radius-button);
+}
+
+@layer components {
+  .lp-container {
+    width: 100%;
+    max-width: calc(var(--lp-container) + 2 * var(--lp-gutter));
+    margin-inline: auto;
+    padding-inline: var(--lp-gutter);
+  }
+
+  .lp-section {
+    padding-block: var(--lp-section-y);
+    scroll-margin-top: 5rem;
+  }
+
+  .lp-heading {
+    font-family: var(--lp-font-display);
+    background-image: var(--lp-heading-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-wrap: balance;
+  }
+
+  .lp-h2 {
+    font-size: var(--lp-h2-size);
+    line-height: var(--lp-h2-leading);
+    font-weight: var(--lp-h2-weight);
+    letter-spacing: var(--lp-h2-tracking);
+  }
+  .lp-hero {
+    font-family: var(--lp-font-hero);
+    font-size: var(--lp-hero-size);
+    line-height: var(--lp-hero-leading);
+    font-weight: var(--lp-hero-weight);
+    letter-spacing: var(--lp-hero-tracking);
+  }
+  .lp-sub {
+    margin-top: var(--lp-sub-gap);
+    font-size: var(--lp-sub-size);
+    line-height: 1.5;
+    color: var(--lp-fg-muted);
+    text-wrap: pretty;
+  }
+
+  .lp-brand-bg {
+    background-image: linear-gradient(91deg, var(--lp-brand-from), var(--lp-brand-via) 51%, var(--lp-brand-to));
+    color: var(--lp-brand-fg);
+  }
+
+  .lp-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--lp-radius-card);
+    background: var(--lp-surface);
+    box-shadow:
+      inset 0 0 0 var(--lp-hairline) var(--lp-line),
+      var(--lp-card-shadow);
+  }
+
+  /* 光晕：放在需要聚焦的区块背后；品牌没开 --lp-aura 时不可见 */
+  .lp-aura {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 9999px;
+    background: radial-gradient(closest-side, var(--lp-aura), transparent);
+    filter: blur(2.5rem);
+    animation: lp-loop-drift 18s ease-in-out infinite alternate;
+  }
+
+  /* 进场：只有播放器启用（有 JS 且没开减少动效）时才先隐藏，默认样式即最终画面 */
+  .lp-motion [data-reveal]:not(.is-in) {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  .lp-motion [data-reveal] {
+    transition:
+      opacity var(--lp-dur-slow) var(--lp-ease),
+      transform var(--lp-dur-slow) var(--lp-ease);
+    transition-delay: calc(var(--i, 0) * 60ms);
+  }
+  /* lit：键帽逐个亮起（raycast.com「It’s not about saving time」）。没亮时淡成衬底键帽的样子、不位移；
+     间隔拉长到 250ms，长于常规错峰（MOTION-014），因为它演的是依次按下的一串键 */
+  .lp-motion [data-reveal="lit"]:not(.is-in) {
+    opacity: 0.3;
+    transform: none;
+  }
+  .lp-motion [data-reveal="lit"] {
+    transition-delay: calc(var(--i, 0) * 250ms);
+  }
+
+  /* SVG 元素的变换原点默认在画布左上角，pop / grow 要以自身为中心 */
+  .lp-root svg [data-a] {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+}
+
+/* 细线：分割线与静态描边用 inset 阴影画，宽度取品牌 hairline（VIS-020）；四边 / 上 / 下 / 左 */
+@utility lp-hair {
+  box-shadow: inset 0 0 0 var(--lp-hairline) var(--lp-line);
+}
+@utility lp-hair-strong {
+  box-shadow: inset 0 0 0 var(--lp-hairline) var(--lp-line-strong);
+}
+@utility lp-hair-t {
+  box-shadow: inset 0 var(--lp-hairline) 0 var(--lp-line);
+}
+@utility lp-hair-b {
+  box-shadow: inset 0 calc(-1 * var(--lp-hairline)) 0 var(--lp-line);
+}
+@utility lp-hair-l {
+  box-shadow: inset var(--lp-hairline) 0 0 var(--lp-line);
+}
+
+/* 横向可滚的标签条：隐藏滚动条但保留滚动；还有内容的一侧渐隐（data 属性由 useTabStrip 维护） */
+@utility lp-tabstrip {
+  overflow-x: auto;
+  scrollbar-width: none;
+  --lp-fade-start: black;
+  --lp-fade-end: black;
+  mask-image: linear-gradient(to right, transparent, var(--lp-fade-start) 1.5rem, black calc(100% - 1.5rem), var(--lp-fade-end));
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  &[data-more-start] {
+    --lp-fade-start: transparent;
+  }
+  &[data-more-end] {
+    --lp-fade-end: transparent;
+  }
+}
+
+/* 像素台阶角（可选效果，默认关）：模板设 navShape: "pixel" 时 .lp-root 带 data-nav-shape="pixel"，
+   浮动顶栏的边和底改由两层按台阶裁出的伪元素画，台阶边长 --lp-pixel；导航本身不裁，窄屏下拉面板挂在它下面 */
+.lp-root[data-nav-shape="pixel"] {
+  --lp-pixel: 4px;
+  --lp-nav-bg: transparent;
+  --lp-nav-edge: none;
+  --lp-pixel-corners: polygon(
+    0 calc(2 * var(--lp-pixel)), var(--lp-pixel) calc(2 * var(--lp-pixel)), var(--lp-pixel) var(--lp-pixel), calc(2 * var(--lp-pixel)) var(--lp-pixel), calc(2 * var(--lp-pixel)) 0,
+    calc(100% - 2 * var(--lp-pixel)) 0, calc(100% - 2 * var(--lp-pixel)) var(--lp-pixel), calc(100% - var(--lp-pixel)) var(--lp-pixel), calc(100% - var(--lp-pixel)) calc(2 * var(--lp-pixel)), 100% calc(2 * var(--lp-pixel)),
+    100% calc(100% - 2 * var(--lp-pixel)), calc(100% - var(--lp-pixel)) calc(100% - 2 * var(--lp-pixel)), calc(100% - var(--lp-pixel)) calc(100% - var(--lp-pixel)), calc(100% - 2 * var(--lp-pixel)) calc(100% - var(--lp-pixel)), calc(100% - 2 * var(--lp-pixel)) 100%,
+    calc(2 * var(--lp-pixel)) 100%, calc(2 * var(--lp-pixel)) calc(100% - var(--lp-pixel)), var(--lp-pixel) calc(100% - var(--lp-pixel)), var(--lp-pixel) calc(100% - 2 * var(--lp-pixel)), 0 calc(100% - 2 * var(--lp-pixel))
+  );
+}
+.lp-root[data-nav-shape="pixel"] [data-lp-nav] {
+  isolation: isolate;
+}
+.lp-root[data-nav-shape="pixel"] [data-lp-nav]::before,
+.lp-root[data-nav-shape="pixel"] [data-lp-nav]::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  clip-path: var(--lp-pixel-corners);
+}
+.lp-root[data-nav-shape="pixel"] [data-lp-nav]::before {
+  inset: 0;
+  background: var(--lp-line-strong);
+}
+.lp-root[data-nav-shape="pixel"] [data-lp-nav]::after {
+  inset: var(--lp-hairline);
+  background: var(--lp-surface);
+}
+
+@keyframes lp-loop-drift {
+  from { transform: translate3d(-4%, -2%, 0) scale(1); }
+  to { transform: translate3d(4%, 3%, 0) scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-aura {
+    animation: none;
+  }
+}
+
+/* 首屏进场（一次性，不受暂停按钮管）：上移淡入，--d 是各行的错开延迟；减少动效时直接是终态 */
+@keyframes lp-rise {
+  from { opacity: 0; translate: 0 1rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lp-rise {
+    animation: lp-rise var(--lp-dur-show) var(--lp-ease-move) var(--d, 0s) both;
+  }
+}
+
+/* 换场（一次性，不受暂停按钮管）：push 是整块画面横推，--lp-push 为 1 时新画面从右推入、旧画面往左推出，-1 反向；
+   swap 是换分组时旧卡淡出上移、新卡从下方淡入，退场比进场快（MOTION-015）。积木在减少动效时不进入换场状态 */
+@keyframes lp-push-in {
+  from { translate: calc(var(--lp-push, 1) * 100%) 0; }
+}
+@keyframes lp-push-out {
+  to { translate: calc(var(--lp-push, 1) * -100%) 0; }
+}
+@keyframes lp-swap-in {
+  from { opacity: 0; translate: 0 1.5rem; }
+}
+@keyframes lp-swap-out {
+  to { opacity: 0; translate: 0 -0.5rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lp-push-in {
+    animation: lp-push-in var(--lp-dur-stage) var(--lp-ease-move);
+  }
+  .lp-push-out {
+    animation: lp-push-out var(--lp-dur-stage) var(--lp-ease-move) forwards;
+  }
+  .lp-swap-in {
+    animation: lp-swap-in var(--lp-dur-slow) var(--lp-ease);
+  }
+  .lp-swap-out {
+    animation: lp-swap-out var(--lp-dur-fast) var(--lp-ease) forwards;
+  }
+}

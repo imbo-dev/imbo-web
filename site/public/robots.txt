@@ -1,0 +1,11 @@
+# Search crawlers (Googlebot, Bingbot, Applebot), AI search crawlers
+# (OAI-SearchBot, Claude-SearchBot, PerplexityBot) and user-triggered
+# fetchers (ChatGPT-User, Claude-User, Perplexity-User) may crawl everything.
+# AI training crawlers (GPTBot, ClaudeBot, CCBot, Google-Extended,
+# Applebot-Extended) are not blocked either. To opt out of training, add one
+# Disallow group for those tokens and set Cloudflare AI Crawl Control to
+# "Disallow AI Training" so the edge matches this file.
+User-agent: *
+Allow: /
+
+Sitemap: https://imbo.dev/sitemap.xml

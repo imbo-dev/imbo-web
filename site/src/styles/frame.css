@@ -1,0 +1,111 @@
+/* The page the Quilt draft is rendered on: Imbo design-system colors and radii (dark),
+   the page canvas, and the Tailwind v3 preflight the draft's frame loads. Everything in
+   Tailwind's own layers overrides this file. */
+:root {
+  --color-error: #ED79A4;
+  --color-error-rgb: 237 121 164;
+  --color-on-error: #0F0F0E;
+  --color-on-error-rgb: 15 15 14;
+  --color-outline: #838077;
+  --color-outline-rgb: 131 128 119;
+  --color-primary: #EDEAE2;
+  --color-primary-rgb: 237 234 226;
+  --color-success: #5BCC80;
+  --color-success-rgb: 91 204 128;
+  --color-surface: #1A1A17;
+  --color-surface-rgb: 26 26 23;
+  --color-warning: #EFB146;
+  --color-warning-rgb: 239 177 70;
+  --color-tertiary: #D91E36;
+  --color-tertiary-rgb: 217 30 54;
+  --color-on-primary: #0F0F0E;
+  --color-on-primary-rgb: 15 15 14;
+  --color-on-success: #0F0F0E;
+  --color-on-success-rgb: 15 15 14;
+  --color-on-surface: #EDEAE2;
+  --color-on-surface-rgb: 237 234 226;
+  --color-on-warning: #0F0F0E;
+  --color-on-warning-rgb: 15 15 14;
+  --color-secondary: #312F2B;
+  --color-secondary-rgb: 49 47 43;
+  --color-background: #0F0F0E;
+  --color-background-rgb: 15 15 14;
+  --color-on-tertiary: #FFFFFF;
+  --color-on-tertiary-rgb: 255 255 255;
+  --color-on-secondary: #EDEAE2;
+  --color-on-secondary-rgb: 237 234 226;
+  --color-on-background: #EDEAE2;
+  --color-on-background-rgb: 237 234 226;
+  --color-outline-variant: #312F2B;
+  --color-outline-variant-rgb: 49 47 43;
+  --color-surface-variant: #312F2B;
+  --color-surface-variant-rgb: 49 47 43;
+  --color-on-surface-variant: #C1BDB4;
+  --color-on-surface-variant-rgb: 193 189 180;
+  --color-primary-container: #080707;
+  --color-primary-container-rgb: 8 7 7;
+  --color-tertiary-container: #D91E36;
+  --color-tertiary-container-rgb: 217 30 54;
+  --color-on-primary-container: #EDEAE2;
+  --color-on-primary-container-rgb: 237 234 226;
+  --color-secondary-container: #262421;
+  --color-secondary-container-rgb: 38 36 33;
+  --color-on-tertiary-container: #FFFFFF;
+  --color-on-tertiary-container-rgb: 255 255 255;
+  --color-on-secondary-container: #EDEAE2;
+  --color-on-secondary-container-rgb: 237 234 226;
+  --radius-lg: 8px;
+  --radius-md: 4px;
+  --radius-sm: 2px;
+  --radius-full: 9999px;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--color-background);
+  color: var(--color-on-background);
+  font-family: "JetBrains Mono", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tailwind v3.4.17 preflight */
+*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}
+::after,::before{--tw-content:''}
+:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:"JetBrains Mono", system-ui, sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}
+body{margin:0;line-height:inherit}
+hr{height:0;color:inherit;border-top-width:1px}
+abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}
+h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}
+a{color:inherit;text-decoration:inherit}
+b,strong{font-weight:bolder}
+code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}
+small{font-size:80%}
+sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}
+sub{bottom:-.25em}
+sup{top:-.5em}
+table{text-indent:0;border-color:inherit;border-collapse:collapse}
+button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}
+button,select{text-transform:none}
+button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}
+:-moz-focusring{outline:auto}
+:-moz-ui-invalid{box-shadow:none}
+progress{vertical-align:baseline}
+::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}
+[type=search]{-webkit-appearance:textfield;outline-offset:-2px}
+::-webkit-search-decoration{-webkit-appearance:none}
+::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}
+summary{display:list-item}
+blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}
+fieldset{margin:0;padding:0}
+legend{padding:0}
+menu,ol,ul{list-style:none;margin:0;padding:0}
+dialog{padding:0}
+textarea{resize:vertical}
+input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
+[role=button],button{cursor:pointer}
+:disabled{cursor:default}
+audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}
+img,video{max-width:100%;height:auto}
+[hidden]:where(:not([hidden=until-found])){display:none}

@@ -1,6 +1,6 @@
 # Imbo web
 
-`landing/`：官网 imbo.dev，部署在 Cloudflare Pages 项目 `imbo`。`landing/deploy.sh` 用 wrangler 把 `landing/src/` 原样发布上去。`src/_redirects` 把 `/install` 跳到 GitHub 最新 release 的 `install.sh`，安装命令 `curl -fsSL https://imbo.dev/install | sh` 靠它，改页面时保留这个文件。页面本身还没写。视觉事实源是 `../brand/DESIGN.md`；产品设计与测试文档在 `../docs/`。本仓库不推远端。
+`site/`：线上官网 imbo.dev，Vite + React + Tailwind 单页，一比一复刻 Quilt 画板 `f35ff3e9-a374-4b50-ba58-a5fe83b08054` 里的画面「Imbo landing (EN)」，构建时预渲染。部署在 Cloudflare Pages 项目 `imbo`，发布、回滚、排障见 `docs/DEPLOY.md`（入口 `site/deploy.sh`）。`site/public/_redirects` 把 `/install` 跳到 GitHub 最新 release 的 `install.sh`，安装命令 `curl -fsSL https://imbo.dev/install | sh` 靠它，改页面时保留这个文件。视觉事实源是 `../brand/DESIGN.md`；产品设计与测试文档在 `../docs/`。本仓库不推远端。
 
 ## 前端实现纪律
 <!-- ui-constraints:前端实现纪律 rev 2026-10 -->
