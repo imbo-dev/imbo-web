@@ -79,3 +79,4 @@ N/A — 本站没有数据库。
 | 2026-10-26 | 发布 | deployment `b245c52f`，commit `9553670`：服务条款第 9 节删掉「关停中央服务器时退还未用完的预付费」，只留提前 30 天通知（D74，Quilt Terms `e0641e68`）；健康检查通过，浏览器冒烟无报错 |
 | 2026-10-26 | 发布 | 网页端首次上线：新建 Pages 项目 `imbo-app`（wrangler 4.152 的 `pages project create` 会转去建 Workers 形态的项目并失败，改用 API `POST /accounts/<账号>/pages/projects` 建成旧版 Pages 项目，与 `imbo` 相同），自定义域名 `app.imbo.dev`，DNS 加代理的 CNAME `app`；deployment `71dcf420`，commit `cebc758`；健康检查通过，浏览器打开登录页、发验证码无报错 |
 | 2026-10-26 | 回滚演练 | 网页端再发一次同一提交得到 `32e5950f`，回到 `71dcf420` 再切回 `32e5950f`，见第 4 节；线上是 `32e5950f` |
+| 2026-10-27 | 发布 | deployment `148d09eb`，commit `6c95283` + `f4b814d`：落地页写上六个工具（Quilt 落地页 `ab29e3f4`、Privacy `815ed92c`，标题、meta、分享图、JSON-LD、llms.txt 同步）；导航跳转后内容停在页头下方 24px（原来多空出区块上边距 120px），页头上滚满 120px 才出现，手机菜单点后收起；健康检查通过，浏览器冒烟无报错，导航检查 12 项全过 |
