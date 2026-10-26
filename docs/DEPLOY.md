@@ -29,7 +29,7 @@ site/deploy.sh
 
 脚本先跑 `npm run build`（`tsc --noEmit`、Vite 构建、SSR 预渲染），任一步失败即中止；再从 Bitwarden 取 `CLOUDFLARE_ACCOUNT_TOKEN_RW`，以 `CLOUDFLARE_API_TOKEN` 注入 wrangler 发布 `site/dist/`。Bitwarden 锁着时先由人执行 `bw unlock`。输出末行的 `https://<id>.imbo-6vs.pages.dev` 里的 `<id>` 就是本次版本。发布后跑第 1 节的健康检查，并在第 7 节登记一行。
 
-网页端用 `app/deploy.sh` 发布，步骤与上面相同，发到项目 `imbo-app`，末行地址形如 `https://<id>.imbo-app.pages.dev`；发布后跑第 1 节的网页健康检查，在第 7 节登记。
+网页端用 `app/deploy.sh` 发布，步骤与上面相同，发到项目 `imbo-app`，末行地址形如 `https://<id>.imbo-app.pages.dev`；发布后跑第 1 节的网页健康检查和 `../docs/TEST.md` 的 TC-104（`node app/tests/prod.mjs <截图目录>`，用线上测试账号登录走一遍），在第 7 节登记。
 
 `site/public/_redirects` 让 `/install` 与 `/install.sh` 302 到 GitHub 最新 release 的 `install.sh`，安装命令 `curl -fsSL https://imbo.dev/install | sh` 依赖它，改页面时保留。`site/public/_headers` 让 `/assets/*` 长缓存、HTML 每次回源校验。
 
