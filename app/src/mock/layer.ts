@@ -133,7 +133,7 @@ export const mock = {
             return {
               ...c,
               pending: c.pending + (controls.pendingExtra[c.id] ?? 0),
-              last_message: last && { id: last.id, from: last.from, preview: last.body.slice(0, 100), created_at: last.created_at },
+              last_message: last && { id: last.id, from: last.from, preview: (last.body || last.files.map((x) => x.name).join(", ")).slice(0, 100), created_at: last.created_at },
             }
           })
           .sort((a, b) => Date.parse(b.last_message?.created_at ?? "0") - Date.parse(a.last_message?.created_at ?? "0")),
