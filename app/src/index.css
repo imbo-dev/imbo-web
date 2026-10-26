@@ -1,0 +1,75 @@
+/* Brand entry per brand/DESIGN.md「引入」: one adapter, then fonts, then the state layer (kept out of @layer). */
+@import "tailwindcss";
+@import "../../../brand/tokens.shadcn.css";
+@import "../../../brand/fonts/fonts.css";
+@import "../../../brand/state-layer.css";
+
+/* Same test as the mode layer in tokens.css: explicit data-theme="dark", or a dark system preference without an explicit light choice. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+:root { color-scheme: dark light; }
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+
+body {
+  margin: 0;
+  background: var(--semantic-color-surface-background);
+  color: var(--semantic-color-text-primary);
+  font-size: var(--semantic-typography-body-font-size);
+}
+[lang] {
+  font-family: var(--semantic-typography-body-font-family);
+  line-height: var(--semantic-typography-body-line-height);
+  letter-spacing: var(--semantic-typography-body-letter-spacing);
+}
+
+/* Every scrolling pane declares its own scrollbar (scrollbar-width does not inherit); gutter reserved so lists don't shift. */
+.scroll-pane {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-color-border-strong) transparent;
+}
+
+/* Navigation lists (the left column) scroll without a visible scrollbar; an edge fades only on the side that has
+   more to scroll, driven by the scroll position itself. Without scroll-timeline support there is no fade. */
+@property --fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.nav-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent, black var(--fade-start), black calc(100% - var(--fade-end)), transparent);
+  animation: nav-fade linear both;
+  animation-timeline: scroll(self);
+}
+.nav-scroll::-webkit-scrollbar { display: none; }
+@keyframes nav-fade {
+  0% { --fade-start: 0px; --fade-end: 1.5rem; }
+  2%, 98% { --fade-start: 1.5rem; --fade-end: 1.5rem; }
+  100% { --fade-start: 1.5rem; --fade-end: 0px; }
+}
+
+/* Radix marks the item under the pointer or arrow keys with data-highlighted. */
+.state-layer[data-highlighted]::after { opacity: var(--state-hover); }
+
+.otp-caret { animation: otp-caret 1s steps(2, start) infinite; }
+@keyframes otp-caret { to { visibility: hidden; } }
+
+/* Skeleton rows pulse while loading; with reduced motion they stay as static shapes. */
+.skeleton { background: var(--semantic-color-surface-selected); border-radius: var(--semantic-radius-sm); animation: skeleton 1.4s ease-in-out infinite; }
+@keyframes skeleton { 50% { opacity: 0.45; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .otp-caret, .skeleton { animation: none; }
+}
