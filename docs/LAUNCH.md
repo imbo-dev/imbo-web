@@ -6,7 +6,7 @@
 
 | 键名 | 配到哪 | 来源 | 配置动作（零回显） | 验证 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| `CLOUDFLARE_ACCOUNT_TOKEN_RW` | 不落地，发布时从 Bitwarden 取出注入 wrangler | Bitwarden | A：`site/deploy.sh` 内 `bw get password` 读入变量，不打印 | 2026-10-26 发布成功 | ☑ |
+| `IMBO_PAGES_DEPLOY_TOKEN` | 不落地，发布时从 Bitwarden 取出注入 wrangler | Bitwarden（A 用 `CLOUDFLARE_ACCOUNT_TOKEN_RW` 经 API 造的账号 token，只给 Pages Write） | A：`site/deploy.sh`、`app/deploy.sh` 内 `bw get password` 读入变量，不打印 | 2026-10-27 实测能列出 Pages 项目、看不到任何 zone、读 R2 被拒 | ☑ |
 
 ## 2. 部署步骤清单
 
@@ -15,7 +15,7 @@
 - [x] 7. 首次部署（★A1；A）· 验证：deployment `34e754b2` 成功，`https://imbo.dev/` 200 且含 `og:site_name` Imbo，`/install` 302 · 2026-10-26
 - [x] 8. 线上冒烟一轮（★P2；A）· 验证：无测试文档，以下方最小冒烟集替代，全部通过 · 2026-10-26
 - [x] 9. 回滚演练（★P3；A）· 验证：回到 `c8a5aac3`（`/` 404、`/install` 302）再切回 `34e754b2`（`/` 200）· 2026-10-26
-- [ ] 10. 搭 push 即部署管线 · `web/` 没有 GitHub 远端，暂不做
+- [ ] 10. 搭 push 即部署管线 · 不做：代码在 GitHub 私有仓 `Bearisbug/imbo-web`，私有仓的 Actions 按分钟计费，用户 2026-10-27 定继续用 `deploy.sh` 发布
 
 最小冒烟集（线上 2026-10-26 全部通过）：
 

@@ -4,7 +4,7 @@
 
 `app/`：网页端 app.imbo.dev，Vite + React + Tailwind，部署在 Cloudflare Pages 项目 `imbo-app`（入口 `app/deploy.sh`，发布、回滚见 `docs/DEPLOY.md`）。按 Imbo 主 Agent 定的第一版范围只读：登录注册、对话、我的会话、联系人、账户与订阅。数据走 imbo-server 的浏览器接口 `/v1`（`src/data/online.ts`；构建产物直接请求 `https://api.imbo.dev`，开发模式走下面的代理），每个响应都用 `src/data/contract.ts` 的 zod schema 校验（字段名与 `docs/DESIGN.md` §8 一致），组件只经 `src/data/store.ts` 取数。本地运行 `cd app && IMBO_API=http://127.0.0.1:18081 npm run dev`：开发服务器固定在 5190 端口，把 `/v1` 代理到 `IMBO_API`（默认 `http://127.0.0.1:18080`）；服务器要设 `IMBO_WEB_ORIGIN=http://localhost:5190`，页面也必须从 `http://localhost:5190` 打开，否则登录会被来源检查拒掉。`npm run dev:mock`（5191 端口）换成 `src/mock/` 的假数据，左下角「Demo」面板切套餐、加载 / 空 / 出错状态和模拟来信；普通构建不含 `src/mock/`。
 
-视觉事实源是 `../brand/DESIGN.md`；产品设计与测试文档在 `../docs/`。本仓库不推远端。
+视觉事实源是 `../brand/DESIGN.md`；产品设计与测试文档在 `../docs/`。代码推 GitHub 私有仓 `Bearisbug/imbo-web` 存档，发布仍用 `site/deploy.sh`、`app/deploy.sh`；仓库里不放 workflow，私有仓的 Actions 按分钟计费。
 
 ## 前端实现纪律
 <!-- ui-constraints:前端实现纪律 rev 2026-10 -->

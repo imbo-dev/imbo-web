@@ -1,6 +1,6 @@
 # imbo.dev 部署手册
 
-官网 imbo.dev 是 `site/` 构建出的静态单页，网页端 app.imbo.dev 是 `app/` 构建出的单页应用，都用 wrangler 手动发布到 Cloudflare Pages。本仓库不推远端，没有 push 即部署管线。
+官网 imbo.dev 是 `site/` 构建出的静态单页，网页端 app.imbo.dev 是 `app/` 构建出的单页应用，都用 wrangler 手动发布到 Cloudflare Pages，没有 push 即部署管线。代码推 GitHub 私有仓 `Bearisbug/imbo-web` 存档，仓库里不放 workflow：私有仓的 Actions 按分钟计费。
 
 ## 1. 环境信息表
 
@@ -27,7 +27,7 @@
 site/deploy.sh
 ```
 
-脚本先跑 `npm run build`（`tsc --noEmit`、Vite 构建、SSR 预渲染），任一步失败即中止；再从 Bitwarden 取 `CLOUDFLARE_ACCOUNT_TOKEN_RW`，以 `CLOUDFLARE_API_TOKEN` 注入 wrangler 发布 `site/dist/`。Bitwarden 锁着时先由人执行 `bw unlock`。输出末行的 `https://<id>.imbo-6vs.pages.dev` 里的 `<id>` 就是本次版本。发布后跑第 1 节的健康检查，并在第 7 节登记一行。
+脚本先跑 `npm run build`（`tsc --noEmit`、Vite 构建、SSR 预渲染），任一步失败即中止；再从 Bitwarden 取 `IMBO_PAGES_DEPLOY_TOKEN`，以 `CLOUDFLARE_API_TOKEN` 注入 wrangler 发布 `site/dist/`。Bitwarden 锁着时先由人执行 `bw unlock`。输出末行的 `https://<id>.imbo-6vs.pages.dev` 里的 `<id>` 就是本次版本。发布后跑第 1 节的健康检查，并在第 7 节登记一行。
 
 网页端用 `app/deploy.sh` 发布，步骤与上面相同，发到项目 `imbo-app`，末行地址形如 `https://<id>.imbo-app.pages.dev`；发布后跑第 1 节的网页健康检查和 `../docs/TEST.md` 的 TC-104（`node app/tests/prod.mjs <截图目录>`，用线上测试账号登录走一遍），在第 7 节登记。
 
@@ -56,7 +56,8 @@ CLOUDFLARE_API_TOKEN=$(bw get password CLOUDFLARE_ACCOUNT_TOKEN_RW) sh -c 'curl 
 
 | 层 | 键名 | 用途 |
 | --- | --- | --- |
-| Bitwarden（本机执行） | `CLOUDFLARE_ACCOUNT_TOKEN_RW` | wrangler 发布与回滚，注入时变量名为 `CLOUDFLARE_API_TOKEN` |
+| Bitwarden（本机执行） | `IMBO_PAGES_DEPLOY_TOKEN` | `deploy.sh` 发布用。Cloudflare 账号 token「imbo-web Pages deploy」，只有 Pages Write；注入时变量名为 `CLOUDFLARE_API_TOKEN` |
+| Bitwarden（本机执行） | `CLOUDFLARE_ACCOUNT_TOKEN_RW` | 全权限 token：第 4 节回滚，以及建 Pages 项目、加自定义域名、改 DNS 与跳转规则；注入时变量名为 `CLOUDFLARE_API_TOKEN` |
 | 运行时 | 无 | 纯静态站，没有运行时密钥 |
 
 ## 6. 数据库备份与恢复
@@ -81,3 +82,4 @@ N/A — 本站没有数据库。
 | 2026-10-26 | 回滚演练 | 网页端再发一次同一提交得到 `32e5950f`，回到 `71dcf420` 再切回 `32e5950f`，见第 4 节；线上是 `32e5950f` |
 | 2026-10-27 | 发布 | deployment `148d09eb`，commit `6c95283` + `f4b814d`：落地页写上六个工具（Quilt 落地页 `ab29e3f4`、Privacy `815ed92c`，标题、meta、分享图、JSON-LD、llms.txt 同步）；导航跳转后内容停在页头下方 24px（原来多空出区块上边距 120px），页头上滚满 120px 才出现，手机菜单点后收起；健康检查通过，浏览器冒烟无报错，导航检查 12 项全过 |
 | 2026-10-27 | 发布 | deployment `58e025d7`，commit `298c9f3`：安装段复制按钮复制后宽度不变，旧文字淡出、「Copied successfully!」淡入 2 秒；健康检查通过，浏览器冒烟无报错，复制按钮检查 18 项全过 |
+| 2026-10-27 | 发布令牌 | `site/deploy.sh`、`app/deploy.sh` 改用只有 Pages 发布权限的 `IMBO_PAGES_DEPLOY_TOKEN`；代码推 GitHub 私有仓 `Bearisbug/imbo-web` 存档 |
