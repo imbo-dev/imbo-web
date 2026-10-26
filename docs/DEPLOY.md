@@ -68,3 +68,5 @@ N/A — 本站没有数据库。
 | 2026-10-26 | 跳转 | 新增 `www` 记录、www 跳转规则、pages.dev 跳转列表与规则（见第 1 节「跳转规则」）；curl 实测都是一跳 301，部署地址仍 200 |
 | 2026-10-26 | 发布 | deployment `6d7b451d`，commit `8c60f4d`：首屏引言、Safety、Pricing 按 Quilt 新稿；新增 `/privacy`、`/terms` 与 404 页（未知路径返回 404 状态码）；健康检查通过，线上 `/privacy` 出现 React 水合报错 #418 |
 | 2026-10-26 | 发布 | deployment `9c4666db`，commit `32c2e3a`：预渲染页面加 `<!--email_off-->`，修掉上一行的水合报错；健康检查通过，浏览器冒烟无报错 |
+| 2026-10-26 | 发布 | deployment `3620e38a`，commit `614c505`：首屏、安装段、Pricing、FAQ、Terms 写上年付 $10（Quilt 落地页 `06a14f1e`、Terms `67941218`），meta、llms.txt、JSON-LD 加年付；健康检查通过，浏览器冒烟无报错 |
+| 2026-10-26 | 发布 | deployment `80d6a376`，commit `8dd1bfc`：隐私政策第 2、3、6、8 节写明 Cloudflare Web Analytics（Quilt Privacy `86c13007`）；健康检查通过，浏览器冒烟无报错 |
