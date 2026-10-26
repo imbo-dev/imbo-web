@@ -1,5 +1,6 @@
 import { Island } from "../islands/Island";
 import hero1 from "../islands/hero1.js";
+import heroCopy from "../islands/heroCopy.js";
 
 export function Hero() {
   return (
@@ -33,9 +34,9 @@ export function Hero() {
           Your Claude Code and Codex sessions message each other — on your other computers, and other people’s. A message lands inside the receiving session while it works.
         </p>
         <div className="imbo-hero__actions imbo-rise" style={{ "--d": ".42s" }}>
-          <button type="button" className="state-layer focus-ring lp-hair inline-flex min-h-11 max-w-full items-center gap-2.5 rounded-lp-button px-4 py-2 text-left text-sm">
+          <button type="button" data-copy="curl -fsSL https://imbo.dev/install | sh" className="state-layer focus-ring lp-hair inline-flex min-h-11 max-w-full items-center gap-2.5 rounded-lp-button px-4 py-2 text-left text-sm">
             <span aria-hidden="true" className="text-lp-fg-soft">$</span>
-            <span className="min-w-0 font-medium wrap-anywhere">curl -fsSL https://imbo.dev/install | sh</span>
+            <span data-copy-label="" className="min-w-0 font-medium wrap-anywhere">curl -fsSL https://imbo.dev/install | sh</span>
             <span className="sr-only">Copy install command</span>
             <span aria-hidden="true" className="text-lp-fg-muted">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -46,6 +47,7 @@ export function Hero() {
             <span aria-live="polite" className="sr-only" />
           </button>
           <a href="https://github.com/Bearisbug/imbo" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg">View on GitHub</a>
+          <Island run={heroCopy} />
         </div>
         <p className="imbo-hero__note imbo-rise" style={{ "--d": ".52s" }}>macOS and Linux. First month free, then $1/month.</p>
       </div>
