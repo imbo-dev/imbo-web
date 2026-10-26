@@ -2,10 +2,11 @@ import { Island } from "../islands/Island";
 import siteHeader1 from "../islands/siteHeader1.js";
 import siteHeader2 from "../islands/siteHeader2.js";
 import siteHeader3 from "../islands/siteHeader3.js";
+import siteHeaderHide from "../islands/siteHeaderHide.js";
 
 export function SiteHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 pt-3 lg:pt-4">
+    <header data-autohide="" className="fixed inset-x-0 top-0 z-50 pt-3 lg:pt-4">
     <div className="lp-container">
       <nav aria-label="Main" data-lp-nav="true" className="relative mx-auto w-full max-w-[60rem] font-['JetBrains_Mono'] text-sm text-on-surface bg-background select-none">
         {"\n"}
@@ -183,6 +184,7 @@ export function SiteHeader() {
         {"\n"}
       </nav>
     </div>
+    <Island run={siteHeaderHide} />
   </header>
   );
 }

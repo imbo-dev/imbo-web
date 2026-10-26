@@ -58,3 +58,22 @@ html {
   --radius-md: 4px;
   --radius-lg: 8px;
 }
+
+/* 顶栏下滚收起、上滚出现（siteHeaderHide.js 切 data-hidden）；键盘焦点进入顶栏时始终显示。出快于进（MOTION-015） */
+header[data-autohide] {
+  transition: transform var(--semantic-motion-duration-slow) var(--semantic-motion-easing-emphasized);
+}
+header[data-autohide][data-hidden]:not(:focus-within) {
+  transform: translateY(calc(-100% - 1rem));
+  transition-duration: var(--semantic-motion-duration-base);
+}
+@media (prefers-reduced-motion: reduce) {
+  header[data-autohide] {
+    transition: opacity var(--semantic-motion-duration-fast) linear;
+  }
+  header[data-autohide][data-hidden]:not(:focus-within) {
+    transform: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
