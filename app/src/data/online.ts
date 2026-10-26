@@ -2,13 +2,15 @@ import { z } from "zod"
 import * as c from "./contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page } from "./layer"
 
-// The server's browser API. Paths are relative: the dev server proxies /v1 to imbo-server (vite.config.ts), so the
-// session cookie and the Origin check both see one site. Every body is parsed with its contract schema.
+// The server's browser API. In dev the paths stay relative and Vite proxies /v1 to imbo-server (vite.config.ts); the
+// built page on app.imbo.dev calls api.imbo.dev, which allows that one origin with cookies. Every body is parsed with
+// its contract schema.
+const API = import.meta.env.DEV ? "" : "https://api.imbo.dev"
 
 async function call<T extends z.ZodType>(schema: T, method: string, path: string, body?: unknown): Promise<z.infer<T>> {
   let r: Response
   try {
-    r = await fetch(path, {
+    r = await fetch(API + path, {
       method,
       credentials: "include",
       headers: body === undefined ? undefined : { "content-type": "application/json" },
@@ -56,5 +58,5 @@ export const online = {
   checkout: async (plan) => (await call(c.checkout, "POST", "/v1/billing/checkout", { plan })).checkout_url,
   portal: async () => (await call(c.portal, "POST", "/v1/billing/portal")).portal_url,
   // The response carries Content-Disposition: attachment, so a plain link downloads it.
-  fileUrl: (f) => `/v1/files/${encodeURIComponent(f.id)}`,
+  fileUrl: (f) => `${API}/v1/files/${encodeURIComponent(f.id)}`,
 } satisfies DataLayer
