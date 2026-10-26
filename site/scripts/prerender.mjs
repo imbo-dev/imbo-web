@@ -9,7 +9,9 @@ for (const [name, fn] of pages) {
   const file = `${root}dist/${name}`;
   const html = fs.readFileSync(file, "utf8");
   if (!html.includes("<!--app-->")) throw new Error(`dist/${name} has no <!--app--> marker`);
-  fs.writeFileSync(file, html.replace("<!--app-->", fn()));
+  // Cloudflare's Email Address Obfuscation (on for the imbo.dev zone) rewrites addresses into [email protected] markup that
+  // React then fails to hydrate (error #418), so mark the body to be left alone.
+  fs.writeFileSync(file, html.replace("<!--app-->", fn()).replace("<body>", "<body><!--email_off-->").replace("</body>", "<!--/email_off--></body>"));
   console.log(`prerendered dist/${name}`);
 }
 fs.rmSync(`${root}dist-ssr`, { recursive: true });
