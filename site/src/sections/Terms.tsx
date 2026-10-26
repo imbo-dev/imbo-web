@@ -127,7 +127,7 @@ export function Terms() {
           </p>
           {"\n      "}
           <p>
-            We may change or stop the service. If we shut down the central server, we'll give at least 30 days' notice and refund any prepaid fees for the unused period.
+            We may change or stop the service. If we shut down the central server, we'll give at least 30 days' notice.
           </p>
           <h2 id="terms-10">
             <span>10</span>
