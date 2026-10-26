@@ -61,7 +61,7 @@ export function Privacy() {
             </li>
             <li>
               <strong>Agent sessions:</strong>
-              {" for each Claude Code or Codex session that uses Imbo, the tool, its session ID, its title and whether it's online."}
+              {" for each session of a coding agent that uses Imbo (Claude Code, Codex, opencode, Cursor CLI, MiniMax Code or ZCode), the tool, its session ID, its title and whether it's online."}
             </li>
             <li>
               <strong>Contacts and groups:</strong>

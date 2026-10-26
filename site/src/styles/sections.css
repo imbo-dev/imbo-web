@@ -13,7 +13,9 @@
 .imbo-hero__block{display:flex;flex-direction:column;align-items:center}
 .imbo-hero__badge{--ring:2.5rem;display:inline-flex;align-items:center;margin:0 0 1.75rem}
 .imbo-hero__ring{position:relative;display:grid;place-items:center;flex-shrink:0;width:var(--ring);height:var(--ring);padding:.25rem;border-radius:999px;background:var(--lp-surface-2)}
-.imbo-hero__ring+.imbo-hero__ring,.imbo-hero__pill{margin-left:calc(var(--ring) * -0.42)}
+@media (max-width:30rem){.imbo-hero__pill-lead{display:none}}
+.imbo-hero__ring+.imbo-hero__ring{margin-left:calc(var(--ring) * -0.22)}
+.imbo-hero__pill{margin-left:calc(var(--ring) * -0.42)}
 .imbo-hero__mark{display:grid;place-items:center;width:100%;height:100%;border-radius:999px;background:var(--lp-bg)}.imbo-hero__mark svg{width:1.125rem;height:1.125rem}
 .imbo-hero__pill{display:flex;align-items:center;height:var(--ring);padding:0 1rem 0 calc(var(--ring) * 0.58);border-radius:999px;background:var(--lp-surface-2);color:var(--lp-fg-muted);font-size:.8125rem;white-space:nowrap}
 .imbo-hero__title{margin:0;font-family:"Geist Pixel Circle",var(--lp-font-display);font-size:var(--lp-hero-size);font-weight:400;line-height:var(--lp-hero-leading);letter-spacing:0;text-wrap:balance;color:var(--lp-fg)}

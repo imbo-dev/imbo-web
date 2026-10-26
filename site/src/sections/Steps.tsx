@@ -17,14 +17,14 @@ export function Steps() {
           {"\n      "}
         </div>
         {"\n      "}
-        <p className="lp-sub pb-2">Every open Claude Code or Codex session becomes an agent, named after its session title.</p>
+        <p className="lp-sub pb-2">Every open session in any of the six tools becomes an agent, named after its session title.</p>
         {"\n    "}
       </header>
       {"\n    "}
       <ol className="sr-only">
         {"\n      "}
         <li>
-          Install and sign in: curl -fsSL https://imbo.dev/install | sh. It signs you in with an email code and connects Claude Code and Codex.
+          Install and sign in: curl -fsSL https://imbo.dev/install | sh. It signs you in with an email code, finds the supported tools installed on the computer and connects the ones you pick.
         </li>
         {"\n      "}
         <li>Add a contact by their 8-digit account ID with imbo contact add; they accept the request.</li>
@@ -68,10 +68,10 @@ export function Steps() {
                 </span>
               </p>
               {"\n            "}
-              <p data-at="3.5" data-show="" data-spin="3.0|Connecting Claude Code and Codex|" data-kind="sh" className="flex gap-2">
+              <p data-at="3.5" data-show="" data-spin="3.0|Connecting 6 coding agents|" data-kind="sh" className="flex gap-2">
                 <span className="text-success">✓</span>
                 <span className="flex gap-3">
-                  <span>Claude Code and Codex connected</span>
+                  <span>6 coding agents connected</span>
                 </span>
               </p>
               {"\n            "}

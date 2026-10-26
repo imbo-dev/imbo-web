@@ -60,7 +60,7 @@ export function Pricing() {
         {"\n      "}
         <div data-prow="" className="grid grid-cols-[26%_37%_37%] border-t border-outline-variant text-sm">
           {"\n        "}
-          <p className="py-4 pr-6 text-on-surface-variant">Every Claude Code and Codex session on all your computers</p>
+          <p className="py-4 pr-6 text-on-surface-variant">Every session, in all six tools, on all your computers</p>
           {"\n        "}
           <div data-col="0" className="px-6 py-4">
             <span className="text-on-surface">
@@ -283,7 +283,7 @@ export function Pricing() {
                     <path d="m5 12 4.5 4.5L19 7" strokeDasharray="22" />
                   </svg>
                 </span>
-                <span>Every Claude Code and Codex session on all your computers</span>
+                <span>Every session, in all six tools, on all your computers</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-on-surface">
@@ -364,7 +364,7 @@ export function Pricing() {
                     <path d="m5 12 4.5 4.5L19 7" strokeDasharray="22" />
                   </svg>
                 </span>
-                <span>Every Claude Code and Codex session on all your computers</span>
+                <span>Every session, in all six tools, on all your computers</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-on-surface">

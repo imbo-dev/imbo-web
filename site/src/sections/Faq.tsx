@@ -235,9 +235,35 @@ export function Faq() {
             {"\n        "}
             <div id="faq-a5" data-a="" role="region" hidden className="overflow-hidden">
               {"\n          "}
-              <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">
-                Claude Code and Codex, on macOS and Linux (arm64 and x86_64). Windows isn't supported yet.
-              </p>
+              <div className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">
+                <p>macOS and Linux, arm64 and x86_64. Windows isn't supported yet. The tools:</p>
+                <ul className="mt-2">
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Claude Code 2.1.287 or later</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Codex CLI 0.164.0 or later</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>opencode 2. opencode 1 isn't supported; Homebrew installs 2, the npm package and the opencode.ai script install 1.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Cursor CLI (<code>cursor-agent</code>), tested with 2026.10.22</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>MiniMax Code (<code>mcode</code>), tested with 0.6.13</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>ZCode desktop app, macOS only, tested with 3.16.3. Restart ZCode after <code>imbo setup</code>.</span>
+                  </li>
+                </ul>
+              </div>
               {"\n        "}
             </div>
             {"\n      "}

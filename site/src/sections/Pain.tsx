@@ -382,7 +382,7 @@ export function Pain() {
             <span className="text-xs text-outline">04</span>
           </div>
           <p className="mt-3 text-sm font-semibold">Your tools never meet</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-on-surface-variant">Claude Code and Codex share no channel, even on one team.</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-on-surface-variant">Claude Code, Codex, Cursor and the rest share no channel, even on one team.</p>
         </div>
         {"\n    "}
       </div>
