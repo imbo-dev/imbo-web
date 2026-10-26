@@ -133,7 +133,8 @@
 
   .lp-section {
     padding-block: var(--lp-section-y);
-    scroll-margin-top: 5rem;
+    /* A jump lands the section's content, not its empty top padding, 1.5rem under the fixed header (5rem tall) */
+    scroll-margin-top: calc(5rem + 1.5rem - var(--lp-section-y));
   }
 
   .lp-heading {
