@@ -21,7 +21,7 @@
 
 1. 浏览器打开 `https://imbo.dev/`，1440 与 390 宽：返回 200，标题含 Imbo，h1 为「Inbox for agents.」，控制台无错误，无失败请求。
 2. `curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' https://imbo.dev/install`：302 到 GitHub 最新 release 的 `install.sh`，跟随后是 shell 脚本。
-3. `/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og.png` 都返回 200。
+3. `/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/og.png`、`/privacy`、`/terms` 都返回 200；随机路径返回 404，页面是「No one here.」。
 4. FAQ 点第二个问题，答案展开；Install 段的复制按钮点击后显示「Copied」。
 5. 390 宽点菜单按钮，菜单展开。
 
@@ -35,4 +35,4 @@
 | --- | --- | --- |
 | 2026-10-26 | 管线待搭 | 最小上线。未兑现的契约条款：自动质量门（靠 `deploy.sh` 先构建）、失败自动回滚（手动按 DEPLOY.md 第 4 节） |
 | 2026-10-26 | 测试文档缺失 | 以最小冒烟集替代，未经用户确认 |
-| 2026-10-26 | 软 404 | 站点没有 `404.html`，Pages 对任何未知路径返回首页和 200。用户定了加 404 页（D2）。「Imbo 探索」窗口出稿后已复刻成 `site/404.html`，待部署；部署后 Pages 对未知路径返回它，状态码 404 |
+| 2026-10-26 | 软 404（已解决） | 用户定了加 404 页（D2），复刻成 `site/404.html`；2026-10-26 部署 `6d7b451d` 起线上未知路径返回 404 页，状态码 404 |

@@ -31,6 +31,7 @@ site/deploy.sh
 
 - 部署列表与状态：Cloudflare 面板 Workers & Pages → `imbo` → Deployments；或 API `GET /accounts/<账号>/pages/projects/imbo/deployments?env=production`。
 - 某次部署的内容：直接打开 `https://<id>.imbo-6vs.pages.dev/`（这类地址 Pages 会自动加 `x-robots-tag: noindex`，正常）。
+- curl 和浏览器看到的 HTML 不一样：zone 开着 Cloudflare Web Analytics（只给浏览器请求注入 `static.cloudflareinsights.com` 信标）和邮箱地址混淆（把邮箱改写成 `[email protected]`，预渲染页靠 `<!--email_off-->` 避开）。查页面内容以浏览器为准，或带浏览器 User-Agent 与 `Accept: text/html` 请求。
 - 怀疑边缘缓存：带随机查询参数请求 `https://imbo.dev/?v=<随机>` 会绕过缓存直达当前部署，和不带参数的结果对比。
 
 ## 4. 回滚
@@ -65,3 +66,5 @@ N/A — 本站没有数据库。
 | 2026-10-26 | 补登版本 | `34e754b2` 的源码是 commit `c57bab5`（发布时 `site/` 尚未提交，Pages 元数据里记的是 `684248f`，以本行为准） |
 | 2026-10-26 | 发布 | deployment `2395eea9`，commit `f232ad8`：页头下滚收起、首屏复制按钮、FAQ 02 新说法；健康检查通过 |
 | 2026-10-26 | 跳转 | 新增 `www` 记录、www 跳转规则、pages.dev 跳转列表与规则（见第 1 节「跳转规则」）；curl 实测都是一跳 301，部署地址仍 200 |
+| 2026-10-26 | 发布 | deployment `6d7b451d`，commit `8c60f4d`：首屏引言、Safety、Pricing 按 Quilt 新稿；新增 `/privacy`、`/terms` 与 404 页（未知路径返回 404 状态码）；健康检查通过，线上 `/privacy` 出现 React 水合报错 #418 |
+| 2026-10-26 | 发布 | deployment `9c4666db`，commit `32c2e3a`：预渲染页面加 `<!--email_off-->`，修掉上一行的水合报错；健康检查通过，浏览器冒烟无报错 |
