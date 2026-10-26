@@ -123,6 +123,32 @@ export function Pricing() {
         </div>
         <div data-prow="" className="grid grid-cols-[26%_37%_37%] border-t border-outline-variant text-sm">
           {"\n        "}
+          <p className="py-4 pr-6 text-on-surface-variant">Client runs on</p>
+          {"\n        "}
+          <div data-col="0" className="px-6 py-4">
+            <span>macOS and Linux, arm64 and x86_64. No Windows yet.</span>
+          </div>
+          {"\n        "}
+          <div data-col="1" className="px-6 py-4">
+            <span>macOS and Linux, arm64 and x86_64. No Windows yet.</span>
+          </div>
+          {"\n      "}
+        </div>
+        <div data-prow="" className="grid grid-cols-[26%_37%_37%] border-t border-outline-variant text-sm">
+          {"\n        "}
+          <p className="py-4 pr-6 text-on-surface-variant">Files</p>
+          {"\n        "}
+          <div data-col="0" className="px-6 py-4">
+            <span>Up to 20 files and 100 MB per message, 1 GB a day per account</span>
+          </div>
+          {"\n        "}
+          <div data-col="1" className="px-6 py-4">
+            <span>Up to 20 files and 100 MB per message, 1 GB a day per account</span>
+          </div>
+          {"\n      "}
+        </div>
+        <div data-prow="" className="grid grid-cols-[26%_37%_37%] border-t border-outline-variant text-sm">
+          {"\n        "}
           <p className="py-4 pr-6 text-on-surface-variant">Server</p>
           {"\n        "}
           <div data-col="0" className="px-6 py-4">
@@ -202,10 +228,10 @@ export function Pricing() {
                 <p className="pr-14 text-outline"># on your server</p>
                 {"\n          "}
                 <pre className="mt-1 overflow-x-auto font-[inherit]">
-                  {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=imbo.example.com \\\n  -e IMBO_SMTP_URL=smtps://… \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=example.com \\\n  ghcr.io/bearisbug/imbo-server:latest"}
+                  {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"}
                 </pre>
                 {"\n          "}
-                <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=imbo.example.com \\\n  -e IMBO_SMTP_URL=smtps://… \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=example.com \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                   <span data-copy-label="">Copy</span>
                 </button>
                 {"\n        "}
@@ -214,11 +240,9 @@ export function Pricing() {
                 {"\n          "}
                 <p className="pr-14 text-outline"># on each computer</p>
                 {"\n          "}
-                <pre className="mt-1 overflow-x-auto font-[inherit]">
-                  {"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://imbo.example.com"}
-                </pre>
+                <pre className="mt-1 overflow-x-auto font-[inherit]">{"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://<your-domain>"}</pre>
                 {"\n          "}
-                <button type="button" data-copy={"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://imbo.example.com"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                <button type="button" data-copy={"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://<your-domain>"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                   <span data-copy-label="">Copy</span>
                 </button>
                 {"\n        "}
@@ -276,6 +300,14 @@ export function Pricing() {
                   </svg>
                 </span>
                 <span>Messages wait until they're delivered</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="w-32 shrink-0 text-on-surface-variant">Client runs on</span>
+                <span>macOS and Linux, arm64 and x86_64. No Windows yet.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="w-32 shrink-0 text-on-surface-variant">Files</span>
+                <span>Up to 20 files and 100 MB per message, 1 GB a day per account</span>
               </li>
               <li className="flex gap-3">
                 <span className="w-32 shrink-0 text-on-surface-variant">Server</span>
@@ -351,6 +383,14 @@ export function Pricing() {
                 <span>Messages wait until they're delivered</span>
               </li>
               <li className="flex gap-3">
+                <span className="w-32 shrink-0 text-on-surface-variant">Client runs on</span>
+                <span>macOS and Linux, arm64 and x86_64. No Windows yet.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="w-32 shrink-0 text-on-surface-variant">Files</span>
+                <span>Up to 20 files and 100 MB per message, 1 GB a day per account</span>
+              </li>
+              <li className="flex gap-3">
                 <span className="w-32 shrink-0 text-on-surface-variant">Server</span>
                 <span>One container on your machine, with its own PostgreSQL</span>
               </li>
@@ -375,10 +415,10 @@ export function Pricing() {
                   <p className="pr-14 text-outline"># on your server</p>
                   {"\n          "}
                   <pre className="mt-1 overflow-x-auto font-[inherit]">
-                    {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=imbo.example.com \\\n  -e IMBO_SMTP_URL=smtps://… \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=example.com \\\n  ghcr.io/bearisbug/imbo-server:latest"}
+                    {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"}
                   </pre>
                   {"\n          "}
-                  <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=imbo.example.com \\\n  -e IMBO_SMTP_URL=smtps://… \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=example.com \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                  <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                     <span data-copy-label="">Copy</span>
                   </button>
                   {"\n        "}
@@ -387,11 +427,9 @@ export function Pricing() {
                   {"\n          "}
                   <p className="pr-14 text-outline"># on each computer</p>
                   {"\n          "}
-                  <pre className="mt-1 overflow-x-auto font-[inherit]">
-                    {"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://imbo.example.com"}
-                  </pre>
+                  <pre className="mt-1 overflow-x-auto font-[inherit]">{"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://<your-domain>"}</pre>
                   {"\n          "}
-                  <button type="button" data-copy={"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://imbo.example.com"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                  <button type="button" data-copy={"curl -fsSL https://imbo.dev/install | sh\nimbo setup --server https://<your-domain>"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                     <span data-copy-label="">Copy</span>
                   </button>
                   {"\n        "}

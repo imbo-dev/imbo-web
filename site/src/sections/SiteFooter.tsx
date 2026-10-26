@@ -1,4 +1,5 @@
-export function SiteFooter() {
+// base: see SiteHeader
+export function SiteFooter({ base = "" }: { base?: string }) {
   return (
     <footer className="lp-hair-t relative z-10">
     <div className="lp-container grid gap-10 py-14 md:grid-cols-[1.4fr_repeat(var(--cols),1fr)_1.2fr]" style={{ "--cols": "2" }}>
@@ -15,13 +16,13 @@ export function SiteFooter() {
         <h2 className="text-sm font-semibold">Product</h2>
         <ul className="mt-4 flex flex-col gap-1">
           <li>
-            <a href="#steps" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">How it works</a>
+            <a href={base + "#steps"} className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">How it works</a>
           </li>
           <li>
-            <a href="#pricing" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Pricing</a>
+            <a href={base + "#pricing"} className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Pricing</a>
           </li>
           <li>
-            <a href="#faq" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">FAQ</a>
+            <a href={base + "#faq"} className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">FAQ</a>
           </li>
         </ul>
       </nav>
@@ -43,7 +44,13 @@ export function SiteFooter() {
         </ul>
       </nav>
     </div>
-    <div className="lp-container lp-hair-t py-6 text-xs text-lp-fg-soft">Imbo is open source under Apache-2.0.</div>
+    <div className="lp-container lp-hair-t flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-6 text-xs text-lp-fg-soft">
+      <p>Imbo is open source under Apache-2.0.</p>
+      <nav aria-label="Legal" className="flex gap-5">
+        <a href="/privacy" className="focus-ring rounded-sm hover:text-lp-fg">Privacy</a>
+        <a href="/terms" className="focus-ring rounded-sm hover:text-lp-fg">Terms</a>
+      </nav>
+    </div>
   </footer>
   );
 }

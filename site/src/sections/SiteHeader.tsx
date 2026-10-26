@@ -4,7 +4,8 @@ import siteHeader2 from "../islands/siteHeader2.js";
 import siteHeader3 from "../islands/siteHeader3.js";
 import siteHeaderHide from "../islands/siteHeaderHide.js";
 
-export function SiteHeader() {
+// base: prefix for the in-page anchors; the 404 page passes "/" so they lead back to the landing page
+export function SiteHeader({ base = "" }: { base?: string }) {
   return (
     <header data-autohide="" className="fixed inset-x-0 top-0 z-50 pt-3 lg:pt-4">
     <div className="lp-container">
@@ -81,19 +82,19 @@ export function SiteHeader() {
             <ul className="hidden items-center lg:flex gap-1">
               {"\n"}
               <li>
-                <a href="#steps" data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <a href={base + "#steps"} data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <span data-scramble-text="">How it works</span>
                 </a>
               </li>
               {"\n"}
               <li>
-                <a href="#pricing" data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <a href={base + "#pricing"} data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <span data-scramble-text="">Pricing</span>
                 </a>
               </li>
               {"\n"}
               <li>
-                <a href="#faq" data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <a href={base + "#faq"} data-scramble="" className="group flex items-center h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <span data-scramble-text="">FAQ</span>
                 </a>
               </li>
@@ -126,7 +127,7 @@ export function SiteHeader() {
               Sign in
             </a>
             {"\n"}
-            <a href="#install" className="max-sm:hidden inline-flex items-center justify-center h-9 px-3 rounded-md bg-primary text-on-primary text-sm font-medium whitespace-nowrap hover:opacity-90 active:scale-[0.97] transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            <a href={base + "#install"} className="max-sm:hidden inline-flex items-center justify-center h-9 px-3 rounded-md bg-primary text-on-primary text-sm font-medium whitespace-nowrap hover:opacity-90 active:scale-[0.97] transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
               <span aria-hidden="true" className="pr-1.5">$</span>
               Install
               <span aria-hidden="true" className="ml-1 inline-block w-2 h-4 bg-on-primary animate-pulse" />
@@ -144,19 +145,19 @@ export function SiteHeader() {
           <div aria-hidden="true" className="px-3 pb-1 text-xs text-on-surface-variant">~/imbo.dev $ ls</div>
           <ul className="flex flex-col">
             <li>
-              <a href="#steps" className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
+              <a href={base + "#steps"} className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
                 <span aria-hidden="true" className="text-outline">{">"}</span>
                 How it works
               </a>
             </li>
             <li>
-              <a href="#pricing" className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
+              <a href={base + "#pricing"} className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
                 <span aria-hidden="true" className="text-outline">{">"}</span>
                 Pricing
               </a>
             </li>
             <li>
-              <a href="#faq" className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
+              <a href={base + "#faq"} className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
                 <span aria-hidden="true" className="text-outline">{">"}</span>
                 FAQ
               </a>
@@ -174,7 +175,7 @@ export function SiteHeader() {
               </a>
             </li>
           </ul>
-          <a href="#install" className="mt-2 w-full inline-flex items-center justify-center h-11 px-5 rounded-md bg-primary text-on-primary text-base font-medium whitespace-nowrap sm:hidden">
+          <a href={base + "#install"} className="mt-2 w-full inline-flex items-center justify-center h-11 px-5 rounded-md bg-primary text-on-primary text-base font-medium whitespace-nowrap sm:hidden">
             <span aria-hidden="true" className="pr-2">$</span>
             Install
           </a>

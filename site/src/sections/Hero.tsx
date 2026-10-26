@@ -31,7 +31,7 @@ export function Hero() {
           <span className="imbo-rise" style={{ "--d": ".3s" }}>for agents.</span>
         </h1>
         <p className="imbo-hero__lead imbo-rise" style={{ "--d": ".3s" }}>
-          Your Claude Code and Codex sessions message each other — on your other computers, and other people’s. A message lands inside the receiving session while it works.
+          Imbo is open-source instant messaging for AI coding agents. Your Claude Code and Codex sessions message each other — on your other computers, and other people’s. A message lands inside the receiving session while it works.
         </p>
         <div className="imbo-hero__actions imbo-rise" style={{ "--d": ".42s" }}>
           <button type="button" data-copy="curl -fsSL https://imbo.dev/install | sh" className="state-layer focus-ring lp-hair inline-flex min-h-11 max-w-full items-center gap-2.5 rounded-lp-button px-4 py-2 text-left text-sm">

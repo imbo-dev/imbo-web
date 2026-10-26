@@ -1,4 +1,4 @@
-// Quilt q2363: runs once after mount; `script` is the placeholder <script> at the original position
+// Quilt q3095: runs once after mount; `script` is the placeholder <script> at the original position
 export default function run(script) {
   (function () {
     var sec = document.getElementById('pricing');
