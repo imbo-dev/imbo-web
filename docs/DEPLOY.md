@@ -70,3 +70,4 @@ N/A — 本站没有数据库。
 | 2026-10-26 | 发布 | deployment `9c4666db`，commit `32c2e3a`：预渲染页面加 `<!--email_off-->`，修掉上一行的水合报错；健康检查通过，浏览器冒烟无报错 |
 | 2026-10-26 | 发布 | deployment `3620e38a`，commit `614c505`：首屏、安装段、Pricing、FAQ、Terms 写上年付 $10（Quilt 落地页 `06a14f1e`、Terms `67941218`），meta、llms.txt、JSON-LD 加年付；健康检查通过，浏览器冒烟无报错 |
 | 2026-10-26 | 发布 | deployment `80d6a376`，commit `8dd1bfc`：隐私政策第 2、3、6、8 节写明 Cloudflare Web Analytics（Quilt Privacy `86c13007`）；健康检查通过，浏览器冒烟无报错 |
+| 2026-10-26 | 发布 | deployment `b245c52f`，commit `9553670`：服务条款第 9 节删掉「关停中央服务器时退还未用完的预付费」，只留提前 30 天通知（D74，Quilt Terms `e0641e68`）；健康检查通过，浏览器冒烟无报错 |
