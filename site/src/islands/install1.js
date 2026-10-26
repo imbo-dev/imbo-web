@@ -27,13 +27,7 @@ export default function run(script) {
       }, { threshold: threshold || 0.35 }).observe(sec);
       return { restart: function () { t0 = performance.now(); if (visible && !raf) raf = requestAnimationFrame(frame); } };
     }
-$$('[data-copy]').forEach(function (b) {
-      var label = b.querySelector('[data-copy-label]'), orig = label.textContent;
-      b.addEventListener('click', function () {
-        var done = function () { label.textContent = 'Copied'; clearTimeout(b._t); b._t = setTimeout(function () { label.textContent = orig; }, 1500); };
-        if (navigator.clipboard) navigator.clipboard.writeText(b.getAttribute('data-copy')).then(done);
-      });
-    });
+    // the copy button is handled by installCopy.js (site-only)
     var CMD = 'curl -fsSL https://imbo.dev/install | sh', CPS = 30, T0 = 0.4, TYPE_END = T0 + CMD.length / CPS;
     var typed = sec.querySelector('[data-typed]'), caret = sec.querySelector('[data-caret]'), caret2 = sec.querySelector('[data-caret2]');
     var lines = $$('[data-line]'), dot = sec.querySelector('[data-dot]'), ping = sec.querySelector('[data-ping]');

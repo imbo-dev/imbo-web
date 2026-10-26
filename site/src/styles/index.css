@@ -77,3 +77,42 @@ header[data-autohide][data-hidden]:not(:has(:focus-visible)) {
     pointer-events: none;
   }
 }
+
+/* 安装段复制按钮（installCopy.js 切 data-copied）：两层文字叠在同一格，按钮宽度取较宽的一层，复制前后不变；
+   旧文字上移淡出、新文字自下淡入，减少动效时只淡入淡出 */
+[data-copy-swap] {
+  display: grid;
+}
+[data-copy-swap] > * {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  /* the label coming in starts after the one going out has mostly faded, so the two never read on top of each other */
+  transition:
+    opacity var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard) var(--semantic-motion-duration-fast),
+    translate var(--semantic-motion-duration-slow) var(--semantic-motion-easing-emphasized) var(--semantic-motion-duration-fast);
+}
+[data-copy-done],
+[data-copied] [data-copy-idle] {
+  opacity: 0;
+  transition-duration: var(--semantic-motion-duration-fast);
+  transition-delay: 0s;
+}
+[data-copied] [data-copy-done] {
+  opacity: 1;
+  transition-duration: var(--semantic-motion-duration-base), var(--semantic-motion-duration-slow);
+  transition-delay: var(--semantic-motion-duration-fast);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-copy-done] {
+    translate: 0 0.5rem;
+  }
+  [data-copied] [data-copy-idle] {
+    translate: 0 -0.5rem;
+  }
+  [data-copied] [data-copy-done] {
+    translate: none;
+  }
+}

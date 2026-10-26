@@ -1,5 +1,6 @@
 import { Island } from "../islands/Island";
 import install1 from "../islands/install1.js";
+import installCopy from "../islands/installCopy.js";
 
 export function Install() {
   return (
@@ -28,12 +29,24 @@ export function Install() {
             <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
               {"\n          "}
               <button type="button" data-copy="curl -fsSL https://imbo.dev/install | sh" className="inline-flex h-12 items-center gap-2.5 rounded-lp-button bg-background px-6 text-sm font-medium text-on-background transition-transform active:scale-[0.97]">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="8" y="8" width="12" height="12" rx="2" />
-                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-                </svg>
-                <span data-copy-label="">Copy install command</span>
+                <span data-copy-swap="">
+                  <span data-copy-idle="">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="8" y="8" width="12" height="12" rx="2" />
+                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                    </svg>
+                    Copy install command
+                  </span>
+                  <span data-copy-done="" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    Copied successfully!
+                  </span>
+                </span>
+                <span aria-live="polite" className="sr-only" />
               </button>
+              <Island run={installCopy} />
               {"\n          "}
               <a href="https://github.com/Bearisbug/imbo" className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline">
                 View on GitHub
