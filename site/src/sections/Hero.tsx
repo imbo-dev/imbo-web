@@ -49,7 +49,7 @@ export function Hero() {
           <a href="https://github.com/Bearisbug/imbo" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg">View on GitHub</a>
           <Island run={heroCopy} />
         </div>
-        <p className="imbo-hero__note imbo-rise" style={{ "--d": ".52s" }}>macOS and Linux. First month free, then $1/month.</p>
+        <p className="imbo-hero__note imbo-rise" style={{ "--d": ".52s" }}>macOS and Linux. First month free, then $1/month or $10/year.</p>
       </div>
     </div>
     <script type="text/plain" />

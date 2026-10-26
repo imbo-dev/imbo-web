@@ -34,7 +34,7 @@ export function Pricing() {
             {"\n          "}
             <p className="mt-6 flex items-baseline gap-2">
               <span className="text-5xl leading-none font-bold tracking-tight">$1</span>
-              <span className="text-sm opacity-70">per month</span>
+              <span className="text-sm opacity-70">per month, or $10 a year</span>
             </p>
             {"\n          "}
             <p className="mt-4">
@@ -269,7 +269,7 @@ export function Pricing() {
             {"\n          "}
             <p className="mt-6 flex items-baseline gap-2">
               <span className="text-5xl leading-none font-bold tracking-tight">$1</span>
-              <span className="text-sm opacity-70">per month</span>
+              <span className="text-sm opacity-70">per month, or $10 a year</span>
             </p>
             {"\n          "}
             <p className="mt-4">

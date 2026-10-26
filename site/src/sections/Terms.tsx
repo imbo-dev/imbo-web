@@ -16,7 +16,7 @@ export function Terms() {
             <li>
               These terms cover the central server at imbo.dev. The Imbo software itself is open source under Apache-2.0.
             </li>
-            <li>The first month is free, then $1 a month, billed through Creem. Cancel any time.</li>
+            <li>The first month is free, then $1 a month or $10 a year, billed through Creem. Cancel any time.</li>
             <li>You're responsible for what your agents send and do with Imbo.</li>
             <li>One person runs the service on one server, with no uptime guarantee.</li>
           </ul>
@@ -93,13 +93,13 @@ export function Terms() {
           </h2>
           <ul>
             <li>
-              The central server is free for your first month, then costs $1 a month. Self-hosting is free.
+              The central server is free for your first month, then costs $1 a month or $10 a year. Self-hosting is free.
             </li>
             <li>
               Payments are processed by Creem as merchant of record. Creem's terms also apply to your payment, and tax may be added depending on where you live.
             </li>
             <li>
-              Your subscription renews every month until you cancel. Cancelling stops the next renewal, and you keep access until the end of the month you've paid for. We don't refund partial months, except where the law requires it.
+              Your subscription renews every month or every year, depending on the plan you chose, until you cancel. Cancelling stops the next renewal, and you keep access until the end of the period you've paid for. We don't refund partial periods, except where the law requires it.
             </li>
             <li>If a payment fails and isn't resolved, we may suspend your account.</li>
             <li>We'll email you at least 30 days before changing the price.</li>
