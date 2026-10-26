@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { retry } from "@/data/store"
+import type { ApiError } from "@/data/layer"
 
 /** Rows shaped like the list they stand in for: avatar, title line, preview line. */
 export function ListSkeleton({ rows = 6 }: { rows?: number }) {
@@ -47,12 +47,13 @@ export function EmptyState({ icon, title, children }: { icon: ReactNode; title: 
   )
 }
 
-export function ErrorState({ what }: { what: string }) {
+/** `error.message` is the server's own explanation, or the no-answer line when there was no reply. */
+export function ErrorState({ what, error, onRetry }: { what: string; error: ApiError; onRetry: () => void }) {
   return (
     <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
       <h2 className="text-body-strong text-foreground">Couldn't load {what}</h2>
-      <p className="text-body text-muted-foreground">Imbo didn't answer. Check your connection and try again.</p>
-      <Button variant="outline" onClick={retry}>
+      <p className="text-body text-muted-foreground">{error.message}</p>
+      <Button variant="outline" onClick={onRetry}>
         <RotateCw size={16} aria-hidden="true" />
         Try again
       </Button>

@@ -1,10 +1,9 @@
 import { Fragment, type ReactNode } from "react"
 import { ArrowDown, Download, FileText } from "lucide-react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Avatar, SessionName, Sep, Tag, agentAvatar } from "@/components/bits"
 import type { FileRef, Message } from "@/data/contract"
-import { fileExpired, recipientOf, type State } from "@/data/store"
+import { fileExpired, fileUrl, loadOlder, recipientOf, type State, type Thread, type ThreadKey } from "@/data/store"
 import { clock, dayLabel, fileSize, langOf, sameDay } from "@/lib/format"
 import { useFollow } from "@/lib/useFollow"
 
@@ -34,13 +33,10 @@ function Attachments({ files }: { files: FileRef[] }) {
             {expired ? (
               <Tag>Expired</Tag>
             ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Download ${f.name}`}
-                onClick={() => toast(`Demo: ${f.name} would download from Imbo.`)}
-              >
-                <Download size={16} aria-hidden="true" />
+              <Button asChild variant="ghost" size="icon">
+                <a href={fileUrl(f)} download={f.name} aria-label={`Download ${f.name}`}>
+                  <Download size={16} aria-hidden="true" />
+                </a>
               </Button>
             )}
           </li>
@@ -83,13 +79,32 @@ function DayDivider({ at }: { at: string }) {
   )
 }
 
+/** The thread opens on its newest 50 messages; older pages load on request, above what's shown. */
+function Earlier({ id, t }: { id: ThreadKey; t: Thread }) {
+  if (!t.hasMore) return null
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <Button variant="ghost" size="sm" aria-disabled={t.older === "loading"} onClick={() => loadOlder(id)}>
+        {t.older === "loading" ? "Loading…" : "Show earlier messages"}
+      </Button>
+      {t.older === "error" && (
+        <p role="alert" className="text-caption text-destructive">
+          Couldn't load them. Try again.
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Scrolling message list that stays on the newest message while you're at the bottom, with a day divider per day. */
-export function MessageList({ s, messages, resetKey, label }: { s: State; messages: Message[]; resetKey: string; label: string }) {
-  const { ref, showJump, jump } = useFollow<HTMLDivElement>(messages.length, resetKey)
+export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey; thread: Thread; label: string }) {
+  const { messages } = thread
+  const { ref, showJump, jump } = useFollow<HTMLDivElement>(messages.at(-1)?.id, id)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={ref} tabIndex={0} aria-label={label} className="scroll-pane focus-ring min-h-0 flex-1">
         <div className="flex flex-col gap-4 p-4">
+          <Earlier id={id} t={thread} />
           {messages.map((m, i) => (
             <Fragment key={m.id}>
               {(i === 0 || !sameDay(messages[i - 1].created_at, m.created_at)) && <DayDivider at={m.created_at} />}

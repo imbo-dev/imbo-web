@@ -1,11 +1,14 @@
+import { useEffect } from "react"
 import { LogOut, TriangleAlert, UserRound } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AppStage } from "@/components/Stage"
 import { Wordmark } from "@/components/Wordmark"
 import { Avatar, CopyId } from "@/components/bits"
-import { billingOf, pendingTotal, signOut, useStore, type State } from "@/data/store"
+import { messageOf } from "@/data/layer"
+import { dataOf, pendingTotal, refreshList, signOut, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
 import { AccountPane, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, PendingBadge, SessionList, SessionPane } from "./views"
@@ -31,12 +34,7 @@ function AccountMenu({ s }: { s: State }) {
           <UserRound size={16} aria-hidden="true" />
           Account and plan
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            signOut()
-            navigate("/login", { replace: true })
-          }}
-        >
+        <DropdownMenuItem onSelect={() => signOut().catch((e) => toast.error(messageOf(e)))}>
           <LogOut size={16} aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
@@ -50,9 +48,9 @@ function AccountMenu({ s }: { s: State }) {
  * started, or while a subscription renews normally; an inactive account gets the strip below.
  */
 function PlanStatus({ s }: { s: State }) {
-  const b = billingOf(s)
+  const b = dataOf(s.billing)
+  if (!b?.enabled) return null
   const sub = b.subscription
-  if (!b.enabled) return null
   const [text, action] =
     b.access.state === "trial"
       ? [<>Trial: <span className="tabular-nums">{daysUntil(b.trial_ends_at!)}</span> days left</>, "Subscribe"]
@@ -82,8 +80,8 @@ function PlanStatus({ s }: { s: State }) {
 }
 
 function EndedStrip({ s }: { s: State }) {
-  const b = billingOf(s)
-  if (!b.enabled || b.access.state !== "expired") return null
+  const b = dataOf(s.billing)
+  if (!b?.enabled || b.access.state !== "expired") return null
   return (
     <div role="status" className="flex flex-none items-center gap-3 border-b-(length:--semantic-layout-hairline) border-border bg-muted px-4 py-2">
       <TriangleAlert size={16} aria-hidden="true" className="flex-none text-(--semantic-color-feedback-warning)" />
@@ -104,7 +102,7 @@ const TABS = [
 ] as const
 
 function Tabs({ s, tab }: { s: State; tab: Tab }) {
-  const pending = s.status === "ready" ? pendingTotal(s) : 0
+  const pending = pendingTotal(s)
   return (
     <nav aria-label="Sections" className="flex flex-none border-b-(length:--semantic-layout-hairline) border-border px-2">
       {TABS.map((t) => (
@@ -126,9 +124,15 @@ function Tabs({ s, tab }: { s: State; tab: Tab }) {
 
 export function Inbox({ tab, item }: { tab: Tab; item?: string }) {
   const s = useStore()
+  useEffect(() => {
+    if (tab === "sessions") refreshList("agents")
+    if (tab === "contacts") refreshList("contacts")
+  }, [tab])
   if (!s.account) return null
   const detail = !!item || tab === "account"
   const listTab = tab === "account" ? "chats" : tab
+  // Nothing in this tab's list yet: the right pane says how things get here.
+  const list = dataOf<unknown[]>(listTab === "chats" ? s.conversations : listTab === "sessions" ? s.agents : s.contacts)
 
   return (
     <AppStage>
@@ -158,7 +162,7 @@ export function Inbox({ tab, item }: { tab: Tab; item?: string }) {
         <main className={cn("flex min-h-0 min-w-0 flex-col", !detail && "max-sm:hidden")}>
           {tab === "account" ? (
             <AccountPane s={s} />
-          ) : !item && s.status === "empty" ? (
+          ) : !item && list?.length === 0 ? (
             <GetStarted />
           ) : !item ? (
             <NothingOpen>

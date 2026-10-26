@@ -1,28 +1,31 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { ArrowLeft, Bot, ExternalLink, FlaskConical, Lock, MessageSquare, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
 import type { Billing, MyAgent } from "@/data/contract"
+import { messageOf, type Plan } from "@/data/layer"
 import {
   PRICES,
-  agentMessages,
-  billingOf,
-  contacts,
+  checkout,
   conversationOf,
   conversationTitle,
   conversationWith,
-  conversations,
+  dataOf,
   isMe,
-  messagesOf,
-  myAgents,
-  pendingRequests,
+  loadThread,
+  openThread,
+  portalUrl,
+  retry,
   signOut,
+  watchCheckout,
+  type Load,
   type State,
+  type ThreadKey,
 } from "@/data/store"
 import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
-import { navigate, onLinkClick } from "@/lib/router"
+import { onLinkClick } from "@/lib/router"
 import { MessageList, PaneHeader } from "./messages"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
 
@@ -98,9 +101,10 @@ export function GetStarted() {
 // ── Chats ────────────────────────────────────────────────────────────────────
 
 export function ChatList({ s, open }: { s: State; open?: string }) {
-  if (s.status === "loading") return <ListSkeleton />
-  if (s.status === "error") return <ErrorState what="chats" />
-  if (s.status === "empty")
+  const l = s.conversations
+  if (l.status === "loading") return <ListSkeleton />
+  if (l.status === "error") return <ErrorState what="chats" error={l.error} onRetry={() => retry("conversations")} />
+  if (!l.data.length)
     return (
       <EmptyState icon={<MessageSquare size={24} />} title="No chats yet">
         <p>Chats show up here when your sessions message a contact, or a contact's sessions message yours.</p>
@@ -111,7 +115,7 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
     )
   return (
     <nav aria-label="Chats" className="flex flex-col gap-0.5 p-2">
-      {conversations(s).map((c) => {
+      {l.data.map((c) => {
         const title = conversationTitle(c)
         const last = c.last_message
         const who = !last ? "" : isMe(s, last.from.account_id) ? "You" : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? "Terminal")
@@ -142,14 +146,18 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
 }
 
 export function ChatPane({ s, id }: { s: State; id: string }) {
+  const key: ThreadKey = `c:${Number(id)}`
+  useEffect(() => {
+    if (/^\d+$/.test(id)) return openThread(key)
+  }, [id, key])
   const back = <BackLink to="/chats" label="Back to chats" />
-  const early = paneState(s, back, "chat")
+  const early = paneState(s.conversations, back, "chat", () => retry("conversations"))
   if (early) return early
   const c = conversationOf(s, Number(id))
-  if (!c || s.status !== "ready") return <NotFound back={back} what="chat" />
+  if (!c) return <NotFound back={back} what="chat" />
 
   const title = conversationTitle(c)
-  const peer = c.peer && contacts().find((p) => p.id === c.peer?.id)
+  const peer = c.peer && dataOf(s.contacts)?.find((p) => p.id === c.peer?.id)
   return (
     <>
       <PaneHeader back={back}>
@@ -183,7 +191,7 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
           </p>
         </div>
       </PaneHeader>
-      <MessageList s={s} messages={messagesOf(s, c.id)} resetKey={id} label={`Messages with ${title}`} />
+      <ThreadBody s={s} id={key} label={`Messages with ${title}`} />
       <ReadOnlyNote />
     </>
   )
@@ -214,9 +222,9 @@ function NotFound({ back, what }: { back: ReactNode; what: string }) {
   )
 }
 
-/** Loading and failed states every detail pane shares; null when the data is there to render. */
-function paneState(s: State, back: ReactNode, what: string, body: ReactNode = <ThreadSkeleton />) {
-  if (s.status === "loading")
+/** Loading and failed states every detail pane shares while its list loads; null when the list is there. */
+function paneState(l: Load<unknown>, back: ReactNode, what: string, onRetry: () => void, body: ReactNode = <ThreadSkeleton />) {
+  if (l.status === "loading")
     return (
       <>
         <PaneHeader back={back}>
@@ -226,7 +234,7 @@ function paneState(s: State, back: ReactNode, what: string, body: ReactNode = <T
       </>
     )
   // The header only carries the back link here, which phones need and wide screens don't show.
-  if (s.status === "error")
+  if (l.status === "error")
     return (
       <>
         <div className="sm:hidden">
@@ -235,11 +243,25 @@ function paneState(s: State, back: ReactNode, what: string, body: ReactNode = <T
           </PaneHeader>
         </div>
         <div className="grid flex-1 place-items-center">
-          <ErrorState what={`this ${what}`} />
+          <ErrorState what={`this ${what}`} error={l.error} onRetry={onRetry} />
         </div>
       </>
     )
   return null
+}
+
+/** The messages of a chat or session under its header: skeleton, failure with retry, `empty`, or the list. */
+function ThreadBody({ s, id, label, empty }: { s: State; id: ThreadKey; label: string; empty?: ReactNode }) {
+  const t = s.threads[id]
+  if (!t || t.status === "loading") return <ThreadSkeleton />
+  if (t.status === "error")
+    return (
+      <div className="grid flex-1 place-items-center">
+        <ErrorState what="the messages" error={t.error} onRetry={() => loadThread(id)} />
+      </div>
+    )
+  if (!t.data.messages.length && empty) return empty
+  return <MessageList s={s} id={id} thread={t.data} label={label} />
 }
 
 // ── Sessions ─────────────────────────────────────────────────────────────────
@@ -256,9 +278,10 @@ function ToolLine({ x }: { x: MyAgent }) {
 }
 
 export function SessionList({ s, open }: { s: State; open?: string }) {
-  if (s.status === "loading") return <ListSkeleton rows={4} />
-  if (s.status === "error") return <ErrorState what="sessions" />
-  if (s.status === "empty")
+  const l = s.agents
+  if (l.status === "loading") return <ListSkeleton rows={4} />
+  if (l.status === "error") return <ErrorState what="sessions" error={l.error} onRetry={() => retry("agents")} />
+  if (!l.data.length)
     return (
       <EmptyState icon={<Bot size={24} />} title="No sessions yet">
         <p>After you install Imbo, every Claude Code, Codex, opencode, Cursor, MiniMax Code or ZCode session on that computer shows up here.</p>
@@ -269,7 +292,7 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
     )
   return (
     <nav aria-label="My sessions" className="flex flex-col gap-0.5 p-2">
-      {myAgents().map((x) => (
+      {l.data.map((x) => (
         <ListRow key={x.id} href={`/sessions/${x.id}`} current={x.id === open}>
           <Avatar kind="agent" />
           <span className="col-span-2 min-w-0">
@@ -287,12 +310,13 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
 }
 
 export function SessionPane({ s, id }: { s: State; id: string }) {
+  const key: ThreadKey = `a:${id}`
+  useEffect(() => openThread(key), [key])
   const back = <BackLink to="/sessions" label="Back to sessions" />
-  const early = paneState(s, back, "session")
+  const early = paneState(s.agents, back, "session", () => retry("agents"))
   if (early) return early
-  const x = myAgents().find((a) => a.id === id)
-  if (!x || s.status !== "ready") return <NotFound back={back} what="session" />
-  const log = agentMessages(s, id)
+  const x = dataOf(s.agents)?.find((a) => a.id === id)
+  if (!x) return <NotFound back={back} what="session" />
   return (
     <>
       <PaneHeader back={back} end={<Presence s={x} />}>
@@ -306,13 +330,16 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
           </p>
         </div>
       </PaneHeader>
-      {log.length ? (
-        <MessageList s={s} messages={log} resetKey={id} label={`Messages sent and received by ${x.title}`} />
-      ) : (
-        <div className="flex-1">
-          <EmptyState icon={<MessageSquare size={24} />} title="Nothing sent or received yet" />
-        </div>
-      )}
+      <ThreadBody
+        s={s}
+        id={key}
+        label={`Messages sent and received by ${x.title}`}
+        empty={
+          <div className="flex-1">
+            <EmptyState icon={<MessageSquare size={24} />} title="Nothing sent or received yet" />
+          </div>
+        }
+      />
       <ReadOnlyNote />
     </>
   )
@@ -320,8 +347,8 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
-function PendingRequests() {
-  const n = pendingRequests()
+/** API-009, count only: requests are answered in a terminal. */
+function PendingRequests({ n }: { n: number }) {
   if (!n) return null
   return (
     <div className="mx-2 mt-2 flex gap-3 rounded-md border-(length:--semantic-layout-hairline) border-border px-2 py-2">
@@ -340,9 +367,10 @@ function PendingRequests() {
 }
 
 export function ContactList({ s, open }: { s: State; open?: string }) {
-  if (s.status === "loading") return <ListSkeleton rows={3} />
-  if (s.status === "error") return <ErrorState what="contacts" />
-  if (s.status === "empty")
+  const l = s.contacts
+  if (l.status === "loading") return <ListSkeleton rows={3} />
+  if (l.status === "error") return <ErrorState what="contacts" error={l.error} onRetry={() => retry("contacts")} />
+  if (!l.data.length)
     return (
       <EmptyState icon={<Users size={24} />} title="No contacts yet">
         <p>Ask someone for their 8-digit account ID, then add them from a terminal:</p>
@@ -351,9 +379,9 @@ export function ContactList({ s, open }: { s: State; open?: string }) {
     )
   return (
     <>
-      <PendingRequests />
+      <PendingRequests n={s.requests} />
       <nav aria-label="Contacts" className="flex flex-col gap-0.5 p-2">
-        {contacts().map((p) => {
+        {l.data.map((p) => {
           const online = p.sessions.filter((x) => x.online).length
           return (
             <ListRow key={p.id} href={`/contacts/${p.id}`} current={String(p.id) === open}>
@@ -377,11 +405,11 @@ export function ContactList({ s, open }: { s: State; open?: string }) {
 
 export function ContactPane({ s, id }: { s: State; id: string }) {
   const back = <BackLink to="/contacts" label="Back to contacts" />
-  const early = paneState(s, back, "contact", <ListSkeleton rows={3} />)
+  const early = paneState(s.contacts, back, "contact", () => retry("contacts"), <ListSkeleton rows={3} />)
   if (early) return early
-  const p = contacts().find((c) => String(c.id) === id)
-  if (!p || s.status !== "ready") return <NotFound back={back} what="contact" />
-  const chat = conversationWith(p.id)
+  const p = dataOf(s.contacts)?.find((c) => String(c.id) === id)
+  if (!p) return <NotFound back={back} what="contact" />
+  const chat = conversationWith(s, p.id)
   return (
     <>
       <PaneHeader
@@ -440,26 +468,27 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
 
 // ── Account ──────────────────────────────────────────────────────────────────
 
-type Cycle = "monthly" | "yearly"
-
 /** Both buttons stay unavailable from the click until checkout opens or fails (docs/DESIGN.md「网页的界面状态」). */
 function Subscribe() {
-  const [opening, setOpening] = useState<Cycle>()
-  const checkout = (cycle: Cycle) => {
+  const [opening, setOpening] = useState<Plan>()
+  const go = async (plan: Plan) => {
     if (opening) return
-    setOpening(cycle)
-    setTimeout(() => {
+    setOpening(plan)
+    try {
+      if (!(await checkout(plan))) setOpening(undefined)
+    } catch (e) {
       setOpening(undefined)
-      toast(`Demo: this opens Creem checkout for ${cycle === "monthly" ? `${PRICES.monthly} a month` : `${PRICES.yearly} a year`}.`)
-    }, 800)
+      toast.error(messageOf(e))
+      retry("billing")
+    }
   }
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
-        <Button aria-disabled={!!opening} onClick={() => checkout("yearly")}>
+        <Button aria-disabled={!!opening} onClick={() => go("yearly")}>
           {opening === "yearly" ? "Opening checkout…" : `${PRICES.yearly} a year`}
         </Button>
-        <Button variant="outline" aria-disabled={!!opening} onClick={() => checkout("monthly")}>
+        <Button variant="outline" aria-disabled={!!opening} onClick={() => go("monthly")}>
           {opening === "monthly" ? "Opening checkout…" : `${PRICES.monthly} a month`}
         </Button>
       </div>
@@ -468,12 +497,32 @@ function Subscribe() {
   )
 }
 
+/** Creem's customer page opens in a new tab (API-034). */
 function ManageSubscription({ note }: { note: string }) {
+  const [opening, setOpening] = useState(false)
+  const open = async () => {
+    if (opening) return
+    setOpening(true)
+    // Opened during the click so pop-up blockers allow it; it gets its address once the server answers.
+    const tab = window.open("", "_blank")
+    try {
+      const url = await portalUrl()
+      if (tab) {
+        tab.opener = null
+        tab.location.href = url
+      } else location.assign(url)
+    } catch (e) {
+      tab?.close()
+      toast.error(messageOf(e))
+    } finally {
+      setOpening(false)
+    }
+  }
   return (
     <>
       <div>
-        <Button variant="outline" onClick={() => toast("Demo: this opens the Creem customer portal.")}>
-          Manage subscription
+        <Button variant="outline" aria-disabled={opening} onClick={open}>
+          {opening ? "Opening…" : "Manage subscription"}
           <ExternalLink size={14} aria-hidden="true" />
         </Button>
       </div>
@@ -484,8 +533,8 @@ function ManageSubscription({ note }: { note: string }) {
 
 const cycleName = (plan: string) => (plan === "monthly" ? "Monthly" : plan === "yearly" ? "Yearly" : plan)
 
-/** The Plan row, one branch per API-032 state. */
-function PlanDetails({ b }: { b: Billing }) {
+/** The Plan row, one branch per API-032 state. `confirming`: back from checkout, waiting for the payment notice. */
+function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
   const sub = b.subscription
   switch (b.access.state) {
     case "free":
@@ -497,7 +546,7 @@ function PlanDetails({ b }: { b: Billing }) {
             Free trial, <span className="tabular-nums">{daysUntil(b.trial_ends_at!)}</span> days left
           </p>
           <p className="text-caption text-muted-foreground">Subscribing starts the paid plan right away. Trial days left don't carry over.</p>
-          <Subscribe />
+          {!confirming && <Subscribe />}
         </>
       )
     case "paid":
@@ -551,7 +600,7 @@ function PlanDetails({ b }: { b: Billing }) {
             Since {longDate(b.access.until!)}
           </p>
           <p className="text-caption text-muted-foreground">Your sessions can't send messages until you subscribe. You can still read history and download files.</p>
-          <Subscribe />
+          {!confirming && <Subscribe />}
         </>
       )
   }
@@ -566,11 +615,55 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+function PlanRow({ s }: { s: State }) {
+  const l = s.billing
+  if (l.status === "loading")
+    return (
+      <Row label="Plan">
+        <span className="skeleton h-4 w-48" />
+      </Row>
+    )
+  if (l.status === "error")
+    return (
+      <Row label="Plan">
+        <p className="text-muted-foreground">{l.error.message}</p>
+        <div>
+          <Button variant="outline" size="sm" onClick={() => retry("billing")}>
+            Try again
+          </Button>
+        </div>
+      </Row>
+    )
+  const b = l.data
+  if (!b.enabled) return null
+  return (
+    <Row label="Plan">
+      {b.mode === "test" && (
+        <p className="flex items-start gap-2 text-caption text-muted-foreground">
+          <FlaskConical size={14} aria-hidden="true" className="mt-0.5 flex-none text-(--semantic-color-feedback-warning)" />
+          Test mode: checkout takes test card numbers and never charges.
+        </p>
+      )}
+      {s.checkout && (
+        <p role="status" className="text-caption text-muted-foreground">
+          {s.checkout === "waiting" ? "Confirming your payment…" : "Payment received. Your plan will update here shortly."}
+        </p>
+      )}
+      <PlanDetails b={b} confirming={!!s.checkout} />
+    </Row>
+  )
+}
+
 export function AccountPane({ s }: { s: State }) {
+  // Creem sends the payer back to /account?checkout=done.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("checkout") !== "done") return
+    history.replaceState(null, "", "/account")
+    watchCheckout()
+  }, [])
   const a = s.account
   if (!a) return null
-  const b = billingOf(s)
-  const n = pendingRequests()
+  const n = s.requests
   return (
     <>
       <PaneHeader back={<BackLink to="/chats" label="Back to chats" />}>
@@ -587,17 +680,7 @@ export function AccountPane({ s }: { s: State }) {
           </div>
           <p className="text-caption text-muted-foreground">People add you as a contact with this ID.</p>
         </Row>
-        {b.enabled && (
-          <Row label="Plan">
-            {b.mode === "test" && (
-              <p className="flex items-start gap-2 text-caption text-muted-foreground">
-                <FlaskConical size={14} aria-hidden="true" className="mt-0.5 flex-none text-(--semantic-color-feedback-warning)" />
-                Test mode: checkout takes test card numbers and never charges.
-              </p>
-            )}
-            <PlanDetails b={b} />
-          </Row>
-        )}
+        <PlanRow s={s} />
         {n > 0 && (
           <Row label="Requests">
             <p>
@@ -610,13 +693,7 @@ export function AccountPane({ s }: { s: State }) {
           </Row>
         )}
         <div className="border-t-(length:--semantic-layout-hairline) border-border pt-4">
-          <Button
-            variant="outline"
-            onClick={() => {
-              signOut()
-              navigate("/login", { replace: true })
-            }}
-          >
+          <Button variant="outline" onClick={() => signOut().catch((e) => toast.error(messageOf(e)))}>
             Sign out
           </Button>
         </div>

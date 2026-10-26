@@ -2,7 +2,7 @@ import { z } from "zod"
 
 // What the web app reads from the server, in the server's own field names. Shapes follow
 // crates/imbo-proto/src/api.rs (the `web` and `billing` sections and the types they use); meaning follows docs/DESIGN.md §8.
-// One schema per response shape; the mock builds these shapes and the browser API will be parsed with them.
+// One schema per response shape; the mock builds these shapes and every server response is parsed with them.
 
 const time = z.string() // ISO 8601
 const accountId = z.number() // 8 digits
@@ -81,6 +81,24 @@ export const billing = z.object({
   subscription: z.object({ plan: z.string(), status: z.string(), paid_until: time }).optional(),
 })
 
+/** Error bodies are problem+json. `type` is the stable part (`/errors/code-invalid`); `detail` is written for people. */
+export const problem = z.object({ type: z.string(), title: z.string(), status: z.number(), detail: z.string().optional() })
+
+/** API-001 */
+export const codeSent = z.object({ retry_after_s: z.number() })
+/** API-028 */
+export const webLogin = z.object({ account, new_account: z.boolean() })
+/** API-009, as the web calls it: pending requests sent to me. */
+export const requests = z.object({ requests: z.array(z.object({ id: z.number(), kind: z.string(), from: accountRef, status: z.string() })) })
+/** API-033, API-034 */
+export const checkout = z.object({ checkout_url: z.string() })
+export const portal = z.object({ portal_url: z.string() })
+
+// List responses wrap their items.
+export const conversations = z.object({ conversations: z.array(conversation) })
+export const myAgents = z.object({ agents: z.array(myAgent) })
+export const contacts = z.object({ contacts: z.array(contact) })
+
 export type Account = z.infer<typeof account>
 export type AgentRef = z.infer<typeof agentRef>
 export type MyAgent = z.infer<typeof myAgent>
@@ -89,3 +107,6 @@ export type FileRef = z.infer<typeof file>
 export type Message = z.infer<typeof message>
 export type Conversation = z.infer<typeof conversation>
 export type Billing = z.infer<typeof billing>
+export type MessagesPage = z.infer<typeof messagesPage>
+export type Me = z.infer<typeof me>
+export type WebLogin = z.infer<typeof webLogin>

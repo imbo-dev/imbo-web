@@ -96,7 +96,7 @@ export function incomingMessage(n: number): Message {
 export type BillingPreset = "free" | "trial" | "paid" | "ending" | "past_due" | "expired"
 
 /** API-032 for each demo state. `enabled: false` is the self-hosted case. When paid, `access.until` is `paid_until`. */
-export function billingFor(preset: BillingPreset, mode: "live" | "test", enabled: boolean, trialDays = 23): Billing {
+export function billingFor(preset: BillingPreset, mode: "live" | "test", enabled: boolean, trialDays = 23, plan: "monthly" | "yearly" = "monthly"): Billing {
   if (!enabled) return { enabled, access: { state: "free" } }
   const plus = (days: number) => iso(now + days * DAY)
   switch (preset) {
@@ -104,8 +104,10 @@ export function billingFor(preset: BillingPreset, mode: "live" | "test", enabled
       return { enabled, mode, access: { state: "free" } }
     case "trial":
       return { enabled, mode, access: { state: "trial", until: plus(trialDays) }, trial_ends_at: plus(trialDays) }
-    case "paid":
-      return { enabled, mode, access: { state: "paid", until: plus(30) }, trial_ends_at: plus(-10), subscription: { plan: "monthly", status: "active", paid_until: plus(30) } }
+    case "paid": {
+      const until = plus(plan === "yearly" ? 365 : 30)
+      return { enabled, mode, access: { state: "paid", until }, trial_ends_at: plus(-10), subscription: { plan, status: "active", paid_until: until } }
+    }
     case "ending":
       return { enabled, mode, access: { state: "paid", until: plus(12) }, trial_ends_at: plus(-30), subscription: { plan: "yearly", status: "scheduled_cancel", paid_until: plus(12) } }
     case "past_due":

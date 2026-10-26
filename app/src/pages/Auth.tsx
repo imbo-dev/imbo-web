@@ -8,19 +8,25 @@ import { PixelSwap } from "@/components/PixelSwap"
 import { AuthStage } from "@/components/Stage"
 import { Wordmark } from "@/components/Wordmark"
 import { Command, CopyId } from "@/components/bits"
-import { checkCode, hasAccount, signIn, useStore } from "@/data/store"
+import { ApiError, messageOf } from "@/data/layer"
+import { dataOf, requestCode, useStore, verify } from "@/data/store"
 import { emailSchema, nameSchema, problem } from "@/data/schema"
+import { daysUntil } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
 
-// Sign-in and sign-up are one flow, as in the terminal (docs/DESIGN.md REQ-002, REQ-003): email → 6-digit code → a
-// name if the email is new. The two pages only differ in their wording; an existing email on /register just signs in.
+// Sign-in and sign-up are one flow, as in the terminal (FLOW-WEB-LOGIN): email → 6-digit code → a name if the
+// email is new. The two pages only differ in their wording; an existing email on /register just signs in. Once the
+// server accepts, the store holds the account and the router moves on (/welcome for a new account).
 
 type Mode = "login" | "register"
 type Page = Mode | "welcome"
-type Step = { kind: "email" } | { kind: "code"; email: string } | { kind: "name"; email: string }
+/** `resendAt`: when the server takes another code request for this email (it allows one a minute). */
+type Step =
+  | { kind: "email" }
+  | { kind: "code"; email: string; resendAt: number; error?: string }
+  | { kind: "name"; email: string; code: string; resendAt: number }
 
-const RESEND_SECONDS = 60 // the server refuses a new code for the same email within a minute
-const MAX_TRIES = 5 // the fifth wrong code locks this one
+const CODE_ERRORS = ["/errors/code-invalid", "/errors/code-expired", "/errors/code-locked"]
 
 /** /login, /register and /welcome share one card, so moving between them (and between steps) is one pixel swap. */
 export function AuthFlow({ page }: { page: Page }) {
@@ -30,11 +36,6 @@ export function AuthFlow({ page }: { page: Page }) {
     setStepPage(page)
     setStep({ kind: "email" })
   }
-  const finish = (email: string) => {
-    signIn(email)
-    navigate("/chats", { replace: true })
-  }
-
   return (
     <AuthStage wide={page === "welcome"}>
       <PixelSwap swapKey={page === "welcome" ? page : `${page}:${step.kind}`}>
@@ -42,20 +43,16 @@ export function AuthFlow({ page }: { page: Page }) {
         {page === "welcome" ? (
           <Welcome />
         ) : step.kind === "email" ? (
-          <EmailStep mode={page} onSent={(email) => setStep({ kind: "code", email })} />
+          <EmailStep mode={page} onSent={(email, wait) => setStep({ kind: "code", email, resendAt: Date.now() + wait * 1000 })} />
         ) : step.kind === "code" ? (
           <CodeStep
-            email={step.email}
+            key={step.error}
+            step={step}
             onBack={() => setStep({ kind: "email" })}
-            onVerified={() => (hasAccount(step.email) ? finish(step.email) : setStep({ kind: "name", email: step.email }))}
+            onNeedName={(code, resendAt) => setStep({ kind: "name", email: step.email, code, resendAt })}
           />
         ) : (
-          <NameStep
-            onDone={(name) => {
-              signIn(step.email, name)
-              navigate("/welcome", { replace: true })
-            }}
-          />
+          <NameStep step={step} onCodeError={(error) => setStep({ kind: "code", email: step.email, resendAt: step.resendAt, error })} />
         )}
       </PixelSwap>
     </AuthStage>
@@ -85,10 +82,7 @@ function FieldError({ id, children }: { id: string; children?: string }) {
   )
 }
 
-/** Simulated round trip so the pending state is visible in the demo. */
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string) => void }) {
+function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resendAfter: number) => void }) {
   const id = useId()
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string>()
@@ -104,8 +98,14 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string) => vo
     setError(err)
     if (err) return input.current?.focus()
     setSending(true)
-    await wait(700)
-    onSent(email.trim())
+    try {
+      const r = await requestCode(email.trim())
+      onSent(email.trim(), r.retry_after_s)
+    } catch (e) {
+      setSending(false)
+      setError(messageOf(e))
+      input.current?.focus()
+    }
   }
 
   return (
@@ -155,43 +155,71 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string) => vo
   )
 }
 
-function CodeStep({ email, onBack, onVerified }: { email: string; onBack: () => void; onVerified: () => void }) {
+/** Seconds until `at`, worked out from the clock on every tick, so a background tab can't slow it down. */
+function useSecondsUntil(at: number) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const tick = () => setNow(Date.now())
+    tick()
+    const t = setInterval(() => (tick(), Date.now() >= at && clearInterval(t)), 1000)
+    document.addEventListener("visibilitychange", tick)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener("visibilitychange", tick)
+    }
+  }, [at])
+  return Math.max(0, Math.ceil((at - now) / 1000))
+}
+
+function CodeStep({
+  step,
+  onBack,
+  onNeedName,
+}: {
+  step: Extract<Step, { kind: "code" }>
+  onBack: () => void
+  onNeedName: (code: string, resendAt: number) => void
+}) {
   const id = useId()
   const [code, setCode] = useState("")
-  const [error, setError] = useState<string>()
-  const [tries, setTries] = useState(0)
+  const [error, setError] = useState(step.error)
+  const [locked, setLocked] = useState(false)
   const [checking, setChecking] = useState(false)
-  const [cooldown, setCooldown] = useState(RESEND_SECONDS)
+  const [resendAt, setResendAt] = useState(step.resendAt)
+  const [sending, setSending] = useState(false)
   const [resent, setResent] = useState(false)
-  const locked = tries >= MAX_TRIES
+  const cooldown = useSecondsUntil(resendAt)
 
-  useEffect(() => {
-    if (cooldown <= 0) return
-    const t = setTimeout(() => setCooldown(cooldown - 1), 1000)
-    return () => clearTimeout(t)
-  }, [cooldown])
-
-  const verify = async (value: string) => {
+  const check = async (value: string) => {
     if (checking) return
     setChecking(true)
-    await wait(500)
-    setChecking(false)
-    const r = checkCode(value)
-    if (r === "ok") return onVerified()
-    setCode("")
-    if (r === "expired") return setError("This code has expired. Send a new one.")
-    const n = tries + 1
-    setTries(n)
-    setError(n >= MAX_TRIES ? "Too many wrong codes. Send a new one." : "That code doesn't match. Check the newest email from Imbo.")
+    try {
+      await verify(step.email, value)
+    } catch (e) {
+      setChecking(false)
+      if (e instanceof ApiError && e.type === "/errors/name-required") return onNeedName(value, resendAt)
+      setCode("")
+      if (e instanceof ApiError && e.type === "/errors/code-locked") setLocked(true)
+      setError(messageOf(e))
+    }
   }
 
-  const resend = () => {
-    if (cooldown > 0) return
-    setCooldown(RESEND_SECONDS)
-    setTries(0)
-    setError(undefined)
-    setCode("")
-    setResent(true)
+  const resend = async () => {
+    if (cooldown > 0 || sending) return
+    setSending(true)
+    try {
+      const r = await requestCode(step.email)
+      setResendAt(Date.now() + r.retry_after_s * 1000)
+      setLocked(false)
+      setError(undefined)
+      setCode("")
+      setResent(true)
+    } catch (e) {
+      if (e instanceof ApiError && e.retryAfter) setResendAt(Date.now() + e.retryAfter * 1000)
+      setError(messageOf(e))
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -201,7 +229,7 @@ function CodeStep({ email, onBack, onVerified }: { email: string; onBack: () => 
         Use a different email
       </Button>
       <Heading title="Check your email">
-        We sent a code to <span className="text-foreground wrap-anywhere">{email}</span>. It expires in 10 minutes.
+        We sent a code to <span className="text-foreground wrap-anywhere">{step.email}</span>. It expires in 10 minutes.
       </Heading>
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-code`}>Code</Label>
@@ -219,7 +247,7 @@ function CodeStep({ email, onBack, onVerified }: { email: string; onBack: () => 
             setCode(v)
             if (v) setResent(false)
           }}
-          onComplete={verify}
+          onComplete={check}
         >
           <InputOTPGroup>
             {Array.from({ length: 6 }, (_, i) => (
@@ -232,14 +260,15 @@ function CodeStep({ email, onBack, onVerified }: { email: string; onBack: () => 
           {checking ? "Checking…" : resent ? "We sent a new code." : ""}
         </p>
       </div>
-      <Button variant="outline" aria-disabled={cooldown > 0} onClick={resend} className="mt-2 w-full tabular-nums">
-        {cooldown > 0 ? `Send a new code in ${cooldown} s` : "Send a new code"}
+      <Button variant="outline" aria-disabled={cooldown > 0 || sending} onClick={resend} className="mt-2 w-full tabular-nums">
+        {sending ? "Sending code…" : cooldown > 0 ? `Send a new code in ${cooldown} s` : "Send a new code"}
       </Button>
     </>
   )
 }
 
-function NameStep({ onDone }: { onDone: (name: string) => void }) {
+/** The code is kept from the step before: the server didn't use it up when it asked for a name. */
+function NameStep({ step, onCodeError }: { step: Extract<Step, { kind: "name" }>; onCodeError: (message: string) => void }) {
   const id = useId()
   const [name, setName] = useState("")
   const [error, setError] = useState<string>()
@@ -255,8 +284,14 @@ function NameStep({ onDone }: { onDone: (name: string) => void }) {
     setError(err)
     if (err) return input.current?.focus()
     setSaving(true)
-    await wait(600)
-    onDone(name.trim())
+    try {
+      await verify(step.email, step.code, name.trim())
+    } catch (e) {
+      setSaving(false)
+      if (e instanceof ApiError && CODE_ERRORS.includes(e.type)) return onCodeError(e.message)
+      setError(messageOf(e))
+      input.current?.focus()
+    }
   }
 
   return (
@@ -289,11 +324,14 @@ function NameStep({ onDone }: { onDone: (name: string) => void }) {
 
 /** After sign-up: the new account ID, the trial, and the one command that connects a computer. */
 function Welcome() {
-  const { account } = useStore()
+  const { account, billing } = useStore()
+  const b = dataOf(billing)
   if (!account) return null
   return (
     <>
-      <Heading title={`You're in, ${account.name}.`}>Your 30-day free trial has started.</Heading>
+      <Heading title={`You're in, ${account.name}.`}>
+        {b?.enabled && b.access.state === "trial" && b.access.until && `Your ${daysUntil(b.access.until)}-day free trial has started.`}
+      </Heading>
       <div className="flex flex-col gap-6">
         <section className="flex flex-col gap-1">
           <h2 className="text-label text-foreground">Your account ID</h2>

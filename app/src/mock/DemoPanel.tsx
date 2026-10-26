@@ -1,12 +1,20 @@
-import { useId } from "react"
+import { useId, useSyncExternalStore } from "react"
 import { SlidersHorizontal, X } from "lucide-react"
 import { Popover, ToggleGroup } from "radix-ui"
 import { Button } from "@/components/ui/button"
-import { receive, setBillingOn, setMode, setPreset, setStatus, signIn, useStore, type BillingPreset, type Status } from "@/data/store"
-import { navigate } from "@/lib/router"
+import { begin, refresh, reload, retry, useStore } from "@/data/store"
+import type { BillingPreset } from "./data"
+import { controls, receive, setControls, skipSignIn, subscribe, type Controls, type Status } from "./layer"
 
 // Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, and drop in
-// a new message the way the ~10 s poll will. "off" is a server without Creem, e.g. self-hosted. Not part of the product.
+// a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted. Only in the mock build.
+
+/** Change what the fixtures answer, then ask again the way the page would. */
+function change(patch: Partial<Controls>) {
+  setControls(patch)
+  if ("status" in patch) reload()
+  else retry("billing")
+}
 
 function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: readonly T[]; onChange: (v: T) => void }) {
   const id = useId()
@@ -38,6 +46,7 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
 
 export function DemoPanel() {
   const s = useStore()
+  const c = useSyncExternalStore(subscribe, () => controls)
   const titleId = useId()
   return (
     <Popover.Root>
@@ -71,30 +80,33 @@ export function DemoPanel() {
           </div>
           {s.account ? (
             <>
-              <Choice<BillingPreset> label="Plan" value={s.preset} options={["free", "trial", "paid", "ending", "past_due", "expired"]} onChange={setPreset} />
+              <Choice<BillingPreset>
+                label="Plan"
+                value={c.preset}
+                options={["free", "trial", "paid", "ending", "past_due", "expired"]}
+                onChange={(preset) => change({ preset })}
+              />
               <Choice
                 label="Billing"
-                value={s.billingOn ? s.mode : "off"}
+                value={c.billingOn ? c.mode : "off"}
                 options={["live", "test", "off"] as const}
-                onChange={(v) => {
-                  setBillingOn(v !== "off")
-                  if (v !== "off") setMode(v)
-                }}
+                onChange={(v) => change(v === "off" ? { billingOn: false } : { billingOn: true, mode: v })}
               />
-              <Choice<Status> label="Data" value={s.status} options={["ready", "loading", "empty", "error"]} onChange={setStatus} />
-              <Button variant="outline" onClick={receive} disabled={s.status !== "ready"}>
+              <Choice<Status> label="Data" value={c.status} options={["ready", "loading", "empty", "error"]} onChange={(status) => change({ status })} />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  receive()
+                  refresh()
+                }}
+                disabled={c.status !== "ready"}
+              >
                 New message from Mia
               </Button>
             </>
           ) : (
             <Popover.Close asChild>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  signIn("dana@example.com")
-                  navigate("/chats", { replace: true })
-                }}
-              >
+              <Button variant="outline" onClick={() => begin(skipSignIn())}>
                 Skip sign-in as Dana
               </Button>
             </Popover.Close>
