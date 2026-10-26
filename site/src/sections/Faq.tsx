@@ -116,7 +116,7 @@ export function Faq() {
             <div id="faq-a1" data-a="" role="region" hidden className="overflow-hidden">
               {"\n          "}
               <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">
-                No. Messages from other sessions are not instructions from you. The receiving agent is told to ask you before deleting files or data, sending things out, spending money or touching production.
+                Yes, within limits. When another session asks for something, your agent does it and may reply to the sender without checking with you. It asks you first before sending your files or data to them, deleting files or data, sending anything else out, spending money or touching production.
               </p>
               {"\n        "}
             </div>
