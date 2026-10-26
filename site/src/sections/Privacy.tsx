@@ -83,13 +83,20 @@ export function Privacy() {
               <strong>Technical data:</strong>
               {" IP addresses, which we use to limit sign-in attempts, and server logs, which record the email address each sign-in code is sent to."}
             </li>
+            <li>
+              <strong>Website visits:</strong>
+              {" which pages of imbo.dev are viewed, the site you came from, your country, browser, operating system and device type, and how long the page took to load. Section 3 explains how."}
+            </li>
           </ul>
           <h2 id="privacy-3">
             <span>3</span>
             The website
           </h2>
           <p>
-            imbo.dev sets no cookies and runs no analytics. Cloudflare serves the site and may process your IP address to deliver pages and protect against attacks.
+            imbo.dev sets no cookies. Cloudflare serves the site and may process your IP address to deliver pages and protect against attacks.
+          </p>
+          <p>
+            We count visits with Cloudflare Web Analytics. Cloudflare adds a small script to every page, loaded from static.cloudflareinsights.com, that reports each page view back to imbo.dev. It uses no cookies or local storage, and it leaves out the part of the address after the question mark. Cloudflare says it doesn't use your IP address or browser details to follow you over time or across other sites. We only see totals, such as views per page or per country, never a list of individual visitors.
           </p>
           <h2 id="privacy-4">
             <span>4</span>
@@ -133,7 +140,7 @@ export function Privacy() {
             </li>
             <li>
               <strong>Cloudflare</strong>
-              {" serves the website and runs DNS for imbo.dev."}
+              {" serves the website, runs DNS for imbo.dev, and counts website visits."}
             </li>
             <li>
               <strong>Creem</strong>
@@ -167,6 +174,10 @@ export function Privacy() {
             <li>
               <strong>Sign-in codes:</strong>
               {" deleted one day after they expire."}
+            </li>
+            <li>
+              <strong>Website visits:</strong>
+              {" Cloudflare keeps the full visit records for 7 days, then only a sample of about 10%. We can see the last 6 months."}
             </li>
             <li>
               <strong>Backups:</strong>
