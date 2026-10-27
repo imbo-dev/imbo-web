@@ -2,7 +2,7 @@
 export function SiteFooter({ base = "" }: { base?: string }) {
   return (
     <footer className="lp-hair-t relative z-10">
-    <div className="lp-container grid gap-10 py-14 md:grid-cols-[1.4fr_repeat(var(--cols),1fr)_1.2fr]" style={{ "--cols": "2" }}>
+    <div className="lp-container grid gap-10 py-14 md:grid-cols-[1.4fr_repeat(var(--cols),1fr)_1.2fr]" style={{ "--cols": "3" }}>
       <div className="flex flex-col gap-4">
         <a href="/" className="focus-ring flex w-fit items-center gap-2 rounded-sm font-lp-display text-xl font-semibold tracking-tight">
           <picture>
@@ -40,6 +40,14 @@ export function SiteFooter({ base = "" }: { base?: string }) {
           </li>
           <li>
             <a href="https://github.com/Bearisbug/imbo/blob/main/LICENSE" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">License</a>
+          </li>
+        </ul>
+      </nav>
+      <nav aria-label="Support">
+        <h2 className="text-sm font-semibold">Support</h2>
+        <ul className="mt-4 flex flex-col gap-1">
+          <li>
+            <a href="mailto:support@imbo.dev" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">support@imbo.dev</a>
           </li>
         </ul>
       </nav>
