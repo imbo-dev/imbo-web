@@ -3,13 +3,18 @@ import { cn } from "@/lib/cn"
 import { AsciiRain } from "./AsciiRain"
 
 // The landing page's character rain behind everything. The app sits in one fixed window in the middle of the screen;
-// on phones the window takes the whole screen.
-export function AppStage({ children }: { children: ReactNode }) {
+// on phones the window takes the whole screen. `wide`: the admin pages' 72 rem window.
+export function AppStage({ children, wide }: { children: ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 overflow-hidden">
       <AsciiRain />
       <div className="relative z-10 grid size-full place-items-center sm:p-6">
-        <div className="flex size-full flex-col overflow-hidden bg-background sm:h-[min(100%,46rem)] sm:w-[min(100%,50rem)] sm:rounded-lg sm:border sm:border-border sm:shadow-overlay">
+        <div
+          className={cn(
+            "flex size-full flex-col overflow-hidden bg-background sm:h-[min(100%,46rem)] sm:rounded-lg sm:border sm:border-border sm:shadow-overlay",
+            wide ? "sm:w-[min(100%,72rem)]" : "sm:w-[min(100%,50rem)]"
+          )}
+        >
           {children}
         </div>
       </div>

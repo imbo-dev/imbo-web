@@ -7,14 +7,16 @@ import { ApiError, NO_ANSWER, type DataLayer, type Page } from "./layer"
 // its contract schema.
 const API = import.meta.env.DEV ? "" : "https://api.imbo.dev"
 
+/** `body` goes as JSON, except a Blob (a picture), which goes as is with its own type. */
 async function call<T extends z.ZodType>(schema: T, method: string, path: string, body?: unknown): Promise<z.infer<T>> {
   let r: Response
+  const raw = body instanceof Blob
   try {
     r = await fetch(API + path, {
       method,
       credentials: "include",
-      headers: body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined ? undefined : { "content-type": raw ? body.type : "application/json" },
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, "network", NO_ANSWER)
@@ -41,12 +43,13 @@ async function call<T extends z.ZodType>(schema: T, method: string, path: string
 }
 
 const get = <T extends z.ZodType>(schema: T, path: string) => call(schema, "GET", path)
+const none = z.undefined()
 const query = (p: Page = {}) => (p.before ? `?before=${p.before}` : p.after ? `?after=${p.after}` : "")
 
 export const online = {
   requestCode: (email) => call(c.codeSent, "POST", "/v1/auth/code", { email }),
   signIn: (email, code, name) => call(c.webLogin, "POST", "/v1/web/session", { email, code, name }),
-  signOut: () => call(z.undefined(), "DELETE", "/v1/web/session"),
+  signOut: () => call(none, "DELETE", "/v1/web/session"),
   me: () => get(c.me, "/v1/me"),
   conversations: async () => (await get(c.conversations, "/v1/conversations")).conversations,
   messages: (id, page) => get(c.messagesPage, `/v1/conversations/${id}/messages${query(page)}`),
@@ -64,4 +67,23 @@ export const online = {
   portal: async () => (await call(c.portal, "POST", "/v1/billing/portal")).portal_url,
   // The response carries Content-Disposition: attachment, so a plain link downloads it.
   fileUrl: (f) => `${API}/v1/files/${encodeURIComponent(f.id)}`,
+  groups: async () => (await get(c.groups, "/v1/groups")).groups,
+  setAvatar: async (picture) => (await call(c.avatar, "PUT", "/v1/me/avatar", picture)).avatar_url,
+  removeAvatar: () => call(none, "DELETE", "/v1/me/avatar"),
+  avatarUrl: (url) => (url.startsWith("/") ? API + url : url),
+  block: async (account_id) => (await call(c.blocked, "POST", "/v1/blocks", { account_id })).block,
+  unblock: (id) => call(none, "DELETE", `/v1/blocks/${id}`),
+  blocks: async () => (await get(c.blocks, "/v1/blocks")).blocks,
+  report: async (account_id, reason, note, group_id) =>
+    (await call(c.reported, "POST", "/v1/reports", { account_id, reason, note: note || undefined, group_id })).report.id,
+  admin: {
+    reports: (status, page) => get(c.reportsPage, `/v1/admin/reports?status=${status}&page=${page}`),
+    report: async (id) => (await get(c.reportOne, `/v1/admin/reports/${id}`)).report,
+    resolve: (id, action) => call(c.resolved, "POST", `/v1/admin/reports/${id}/resolve`, { action }),
+    accounts: (q, page) => get(c.adminAccountsPage, `/v1/admin/accounts?${new URLSearchParams({ ...(q && { q }), page: String(page) })}`),
+    ban: (id) => call(c.banned, "POST", `/v1/admin/accounts/${id}/ban`),
+    unban: async (id) => (await call(c.adminAccountOne, "DELETE", `/v1/admin/accounts/${id}/ban`)).account,
+    deleteAccount: (id) => call(none, "DELETE", `/v1/admin/accounts/${id}`, { confirm: "DELETE" }),
+    stats: () => get(c.stats, "/v1/admin/stats"),
+  },
 } satisfies DataLayer

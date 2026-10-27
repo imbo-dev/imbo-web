@@ -11,18 +11,19 @@ import { messageOf } from "@/data/layer"
 import { dataOf, pendingTotal, refreshList, signOut, unreadTotal, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
-import { AccountPane, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, PendingBadge, SessionList, SessionPane } from "./views"
+import { BlocksPane, SafetyDialogs } from "./safety"
+import { AccountPane, BackLink, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, NotFound, PendingBadge, SessionList, SessionPane } from "./views"
 
 export type Tab = "chats" | "sessions" | "contacts" | "account"
 
 const goAccount = () => navigate("/account")
 
-function AccountMenu({ s }: { s: State }) {
+export function AccountMenu({ s }: { s: State }) {
   const a = s.account!
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="state-layer focus-ring flex-none rounded-full" aria-label="Account menu">
-        <Avatar kind="person" label={a.name} />
+        <Avatar kind="person" label={a.name} src={a.avatar_url} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel className="flex flex-col">
@@ -124,14 +125,15 @@ function Tabs({ s, tab }: { s: State; tab: Tab }) {
   )
 }
 
-export function Inbox({ tab, item }: { tab: Tab; item?: string }) {
+/** `missing`: an address that isn't one of the inbox's pages, shown as not found in the right pane. */
+export function Inbox({ tab, item, missing }: { tab: Tab; item?: string; missing?: boolean }) {
   const s = useStore()
   useEffect(() => {
     if (tab === "sessions") refreshList("agents")
     if (tab === "contacts") refreshList("contacts")
   }, [tab])
   if (!s.account) return null
-  const detail = !!item || tab === "account"
+  const detail = !!item || tab === "account" || !!missing
   const listTab = tab === "account" ? "chats" : tab
   // Nothing in this tab's list yet: the right pane says how things get here.
   const list = dataOf<unknown[]>(listTab === "chats" ? s.conversations : listTab === "sessions" ? s.agents : s.contacts)
@@ -162,7 +164,11 @@ export function Inbox({ tab, item }: { tab: Tab; item?: string }) {
           </div>
         </aside>
         <main className={cn("flex min-h-0 min-w-0 flex-col", !detail && "max-sm:hidden")}>
-          {tab === "account" ? (
+          {missing ? (
+            <NotFound back={<BackLink to="/chats" label="Back to chats" />} what="page" />
+          ) : tab === "account" && item === "blocks" ? (
+            <BlocksPane back={<BackLink to="/account" label="Back to account" />} />
+          ) : tab === "account" ? (
             <AccountPane s={s} />
           ) : !item && list?.length === 0 ? (
             <GetStarted />
@@ -179,6 +185,7 @@ export function Inbox({ tab, item }: { tab: Tab; item?: string }) {
           )}
         </main>
       </div>
+      <SafetyDialogs s={s} />
     </AppStage>
   )
 }

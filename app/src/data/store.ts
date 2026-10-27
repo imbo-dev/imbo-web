@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react"
-import type { Account, Billing, Contact, Conversation, FileRef, Message, MyAgent } from "./contract"
-import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "./layer"
+import type { Account, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent } from "./contract"
+import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
+import { shrinkPicture } from "@/lib/picture"
 import { navigate } from "@/lib/router"
 
 // The only module components read data from. It loads what the pages show through the data layer, keeps it in one
@@ -36,6 +37,10 @@ export type State = {
   conversations: Load<Conversation[]>
   agents: Load<MyAgent[]>
   contacts: Load<Contact[]>
+  /** The accounts I blocked, newest first (API-060). */
+  blocks: Load<Block[]>
+  /** The groups I'm in, with their members (API-019): the group header and the profile card read them. */
+  groups: Load<Group[]>
   requests: number
   threads: Partial<Record<ThreadKey, Load<Thread>>>
   outbox: Partial<Record<ThreadKey, Outgoing[]>>
@@ -56,6 +61,8 @@ const fresh = (account: Account | null | undefined, isNew = false): State => ({
   conversations: LOADING,
   agents: LOADING,
   contacts: LOADING,
+  blocks: LOADING,
+  groups: LOADING,
   requests: 0,
   threads: {},
   outbox: {},
@@ -87,12 +94,14 @@ function expired(e: unknown) {
 
 // ── Lists ────────────────────────────────────────────────────────────────────
 
-type ListKey = "billing" | "conversations" | "agents" | "contacts"
+type ListKey = "billing" | "conversations" | "agents" | "contacts" | "blocks" | "groups"
 const fetchers: { [K in ListKey]: () => Promise<State[K] extends Load<infer T> ? T : never> } = {
   billing: () => api.billing(),
   conversations: () => api.conversations(),
   agents: () => api.agents(),
   contacts: () => api.contacts(),
+  blocks: () => api.blocks(),
+  groups: () => api.groups(),
 }
 
 // Each slot counts its requests, so a slow earlier answer never overwrites a later one.
@@ -124,8 +133,8 @@ async function loadRequests() {
 }
 
 export const retry = (key: ListKey) => load(key)
-/** Opening the Sessions or Contacts tab brings presence up to date. */
-export function refreshList(key: "agents" | "contacts") {
+/** Opening the Sessions or Contacts tab brings presence up to date; opening a group's members, who's in it. */
+export function refreshList(key: "agents" | "contacts" | "blocks" | "groups") {
   load(key, true)
   if (key === "contacts") loadRequests()
 }
@@ -304,6 +313,96 @@ const drafts = new Map<ThreadKey, string>()
 export const draftOf = (key: ThreadKey) => drafts.get(key) ?? ""
 export const keepDraft = (key: ThreadKey, text: string) => void (text ? drafts.set(key, text) : drafts.delete(key))
 
+// ── Picture, blocks and reports ──────────────────────────────────────────────
+
+/** Something the page waits on: a 401 signs out; anything else comes back as an ApiError for the page to show. */
+async function act<T>(f: () => Promise<T>): Promise<T> {
+  try {
+    return await f()
+  } catch (e) {
+    expired(e)
+    throw asApiError(e)
+  }
+}
+
+export const PICTURE_TYPES = ["image/jpeg", "image/png"]
+const UNREADABLE = "Imbo can't read that image. Pick a JPEG or PNG."
+
+/** API-045. Throws ApiError; a file the browser can't read as a JPEG or PNG fails here like the server would. */
+export async function uploadPicture(file: Blob) {
+  let picture: Blob
+  try {
+    if (!PICTURE_TYPES.includes(file.type)) throw new Error(file.type)
+    picture = await shrinkPicture(file)
+  } catch {
+    throw new ApiError(422, "/errors/image-invalid", UNREADABLE)
+  }
+  const avatar_url = await act(() => api.setAvatar(picture))
+  if (state.account) set({ account: { ...state.account, avatar_url } })
+}
+/** API-046 */
+export async function removePicture() {
+  await act(() => api.removeAvatar())
+  if (state.account) set({ account: { ...state.account, avatar_url: undefined } })
+}
+/** An `avatar_url` as an `<img>` can load it. */
+export const pictureSrc = (url?: string) => (url ? api.avatarUrl(url) : undefined)
+
+/**
+ * Blocking takes back what hadn't arrived and hides their group messages (FLOW-BLOCK S3, S5), unblocking shows those
+ * again: the lists that mark the block load again, and so do the chats already loaded.
+ */
+function afterBlock() {
+  load("blocks", true)
+  load("contacts", true)
+  load("conversations", true)
+  const threads = { ...state.threads }
+  for (const key of Object.keys(threads) as ThreadKey[]) if (key.startsWith("c:") && key !== openKey) delete threads[key]
+  set({ threads })
+  if (openKey?.startsWith("c:")) reloadQuietly(openKey)
+}
+/** The newest page again, in place of what's shown, without a skeleton in between. */
+async function reloadQuietly(key: ThreadKey) {
+  const n = turn(key)
+  try {
+    const p = await fetchPage(key)
+    if (seq[key] === n) setThread(key, ready({ messages: p.messages, hasMore: p.has_more, older: "idle" }))
+  } catch (e) {
+    expired(e)
+  }
+}
+/** API-058. Throws ApiError. */
+export async function block(accountId: number) {
+  await act(() => api.block(accountId))
+  afterBlock()
+}
+/** API-059. Throws ApiError; someone no longer on the list (unblocked elsewhere) counts as done. */
+export async function unblock(accountId: number) {
+  try {
+    await act(() => api.unblock(accountId))
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 404)) throw e
+  }
+  afterBlock()
+}
+export const isBlocked = (s: State, accountId: number) => !!dataOf(s.blocks)?.some((b) => b.account.id === accountId)
+
+/** API-061. Resolves to the report's number; throws ApiError (409 `/errors/already-reported` among them). */
+export const report = (accountId: number, reason: ReportReason, note?: string, groupId?: number) =>
+  act(() => api.report(accountId, reason, note, groupId))
+
+/** API-062 to API-070, for the admin pages: what they show stays in the pages. A 401 signs out here too. */
+export const admin: DataLayer["admin"] = {
+  reports: (status, page) => act(() => api.admin.reports(status, page)),
+  report: (id) => act(() => api.admin.report(id)),
+  resolve: (id, action) => act(() => api.admin.resolve(id, action)),
+  accounts: (q, page) => act(() => api.admin.accounts(q, page)),
+  ban: (id) => act(() => api.admin.ban(id)),
+  unban: (id) => act(() => api.admin.unban(id)),
+  deleteAccount: (id) => act(() => api.admin.deleteAccount(id)),
+  stats: () => act(() => api.admin.stats()),
+}
+
 // ── Polling ──────────────────────────────────────────────────────────────────
 
 let timer: ReturnType<typeof setInterval> | undefined
@@ -432,6 +531,7 @@ export const conversationWith = (s: State, accountId: number) =>
   dataOf(s.conversations)?.find((c) => c.kind === "direct" && c.peer?.id === accountId)?.id
 
 export const contactOf = (s: State, accountId: number) => dataOf(s.contacts)?.find((p) => p.id === accountId)
+export const groupOf = (s: State, groupId: number) => dataOf(s.groups)?.find((g) => g.id === groupId)
 /** The peer's session a direct chat sends to, while it's still one of theirs; otherwise their terminal inbox. */
 export const chosenSession = (s: State, c: Conversation) => {
   const short = s.sendTo[c.id]

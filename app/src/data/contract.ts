@@ -10,13 +10,24 @@ const accountId = z.number() // 8 digits
 /** API-004 `access`, also inside API-032. `until`: trial end, paid-through date (no grace days), or when access ended; absent for free. */
 export const access = z.object({ state: z.enum(["free", "trial", "paid", "expired"]), until: time.optional() })
 
-/** An account; `email` comes only with my own. */
-export const account = z.object({ id: accountId, name: z.string(), email: z.string().optional() })
+/**
+ * An account; `email` comes only with my own, `admin` only on an admin's own (ROLE-Admin). `avatar_url` is absent
+ * without a picture; a server without a domain sends it relative (`/v1/avatars/<id>.jpg`, API-045).
+ */
+export const account = z.object({
+  id: accountId,
+  name: z.string(),
+  email: z.string().optional(),
+  avatar_url: z.string().optional(),
+  admin: z.boolean().default(false),
+})
 /** API-004 getMe, as called from a web login (no `device`). `access` is absent from servers older than 0.2.7. */
 export const me = z.object({ account, access: access.optional() })
 
 export const accountRef = z.object({ id: accountId, name: z.string() })
 export const groupRef = z.object({ id: z.number(), name: z.string() })
+/** An account or group with its picture; no `avatar_url` without one, or while the account is banned. */
+export const profile = z.object({ id: z.number(), name: z.string(), avatar_url: z.string().optional() })
 
 /** A session as it appears on a message (`from.agent`, `to`). `to.tool` is `terminal` when it went to a terminal inbox. */
 export const agentRef = z.object({ id: z.string(), short_id: z.string(), title: z.string(), tool: z.string() })
@@ -34,9 +45,19 @@ export const myAgent = agentRef.extend({
   unread: z.number().default(0),
 })
 
-/** API-012 listContacts. A contact's sessions have no id and no computer name. `active` is false when their access ended. */
+/**
+ * API-012 listContacts. A contact's sessions have no id and no computer name. `active` is false when their access
+ * ended or the account is banned. `blocked`: I blocked them (RULE-013).
+ */
 export const sessionInfo = z.object({ short_id: z.string(), title: z.string(), tool: z.string(), online: z.boolean(), last_online_at: time.optional() })
-export const contact = z.object({ id: accountId, name: z.string(), sessions: z.array(sessionInfo), active: z.boolean().default(true) })
+export const contact = z.object({
+  id: accountId,
+  name: z.string(),
+  sessions: z.array(sessionInfo),
+  active: z.boolean().default(true),
+  avatar_url: z.string().optional(),
+  blocked: z.boolean().default(false),
+})
 
 /** API-026 `file`; downloads (API-027) return 404 after `expires_at`. */
 export const file = z.object({ id: z.string(), name: z.string(), size: z.number(), sha256: z.string(), expires_at: time })
@@ -72,8 +93,8 @@ export const messagesPage = z.object({ messages: z.array(message), has_more: z.b
 export const conversation = z.object({
   id: z.number(),
   kind: z.enum(["direct", "group"]),
-  peer: accountRef.optional(),
-  group: groupRef.optional(),
+  peer: profile.optional(),
+  group: profile.optional(),
   last_message: z.object({ id: z.number(), from: sender, preview: z.string(), created_at: time }).optional(),
   pending: z.number(),
 })
@@ -107,6 +128,84 @@ export const sentToAgent = z.object({ message })
 /** API-044 markAgentRead */
 export const marked = z.object({ marked: z.number() })
 
+/** API-019 listGroups, for a group's members. `active` as in API-012. */
+export const member = z.object({ id: accountId, name: z.string(), avatar_url: z.string().optional(), active: z.boolean().default(true) })
+export const group = z.object({ id: z.number(), name: z.string(), owner: accountRef.nullish(), members: z.array(member), avatar_url: z.string().optional() })
+
+/** API-045 */
+export const avatar = z.object({ avatar_url: z.string() })
+/** API-058, API-060: who I blocked and when. */
+export const block = z.object({ account: profile, created_at: time })
+export const blocked = z.object({ block })
+/** API-061 */
+export const reported = z.object({ report: z.object({ id: z.number(), created_at: time }) })
+
+// Admin (API-062–070). Only ROLE-Admin gets answers; anyone else gets 404.
+
+/** A reporter or the reported account. `email` and `avatar_changed` (picture changed since the report) come with API-063 only. */
+export const reportParty = z.object({
+  id: accountId,
+  name: z.string(),
+  avatar_url: z.string().optional(),
+  banned: z.boolean(),
+  email: z.string().optional(),
+  avatar_changed: z.boolean().optional(),
+})
+/** Copied into the report when it was made. `request_note`: the note on a contact request. Files: name and size only. */
+export const reportMessage = z.object({
+  kind: z.string(),
+  from: accountRef,
+  body: z.string(),
+  files: z.array(z.object({ name: z.string(), size: z.number() })).default([]),
+  created_at: time,
+})
+/**
+ * API-062 item; API-063 adds `note`, `messages`, `action` and `resolved_at`. `reason`: `spam`, `harassment`,
+ * `inappropriate_avatar` or `other`. `status`: `open`, `actioned` or `dismissed`. `action`: `ban`, `remove_avatar`, `dismiss`.
+ */
+export const report = z.object({
+  id: z.number(),
+  reporter: reportParty,
+  target: reportParty,
+  group: groupRef.optional(),
+  reason: z.string(),
+  status: z.string(),
+  created_at: time,
+  note: z.string().optional(),
+  messages: z.array(reportMessage).optional(),
+  action: z.string().optional(),
+  resolved_at: time.optional(),
+})
+export const reportsPage = z.object({ reports: z.array(report), total: z.number() })
+export const reportOne = z.object({ report })
+/** API-064; `subscription_canceled` only for `ban`. */
+export const resolved = z.object({ report, subscription_canceled: z.boolean().optional() })
+/** API-065 item. `subscription`: the latest one, absent when there's none. */
+export const adminAccount = z.object({
+  id: accountId,
+  name: z.string(),
+  email: z.string(),
+  avatar_url: z.string().optional(),
+  created_at: time,
+  access,
+  subscription: z.object({ status: z.string(), paid_until: time }).optional(),
+  last_active_at: time.optional(),
+  banned_at: time.optional(),
+  admin: z.boolean(),
+})
+export const adminAccountsPage = z.object({ accounts: z.array(adminAccount), total: z.number() })
+export const adminAccountOne = z.object({ account: adminAccount })
+/** API-066 */
+export const banned = z.object({ account: adminAccount, subscription_canceled: z.boolean() })
+/** API-068. `days`: the last 30 Beijing-time days, oldest first; `paid` has no daily history. */
+export const stats = z.object({
+  accounts: z.number(),
+  active_7d: z.number(),
+  paid: z.number(),
+  messages_today: z.number(),
+  days: z.array(z.object({ date: z.string(), accounts: z.number(), active_7d: z.number(), messages: z.number() })),
+})
+
 /** API-001 */
 export const codeSent = z.object({ retry_after_s: z.number() })
 /** API-028 */
@@ -121,6 +220,8 @@ export const portal = z.object({ portal_url: z.string() })
 export const conversations = z.object({ conversations: z.array(conversation) })
 export const myAgents = z.object({ agents: z.array(myAgent) })
 export const contacts = z.object({ contacts: z.array(contact) })
+export const groups = z.object({ groups: z.array(group) })
+export const blocks = z.object({ blocks: z.array(block) })
 
 export type Account = z.infer<typeof account>
 export type AgentRef = z.infer<typeof agentRef>
@@ -134,3 +235,16 @@ export type MessagesPage = z.infer<typeof messagesPage>
 export type Me = z.infer<typeof me>
 export type WebLogin = z.infer<typeof webLogin>
 export type Sent = z.infer<typeof sent>
+export type Profile = z.infer<typeof profile>
+export type Group = z.infer<typeof group>
+export type Member = z.infer<typeof member>
+export type Block = z.infer<typeof block>
+export type ReportParty = z.infer<typeof reportParty>
+export type Report = z.infer<typeof report>
+export type ReportMessage = z.infer<typeof reportMessage>
+export type ReportsPage = z.infer<typeof reportsPage>
+export type Resolved = z.infer<typeof resolved>
+export type AdminAccount = z.infer<typeof adminAccount>
+export type AdminAccountsPage = z.infer<typeof adminAccountsPage>
+export type Banned = z.infer<typeof banned>
+export type Stats = z.infer<typeof stats>

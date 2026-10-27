@@ -1,8 +1,30 @@
-import type { Billing, Contact, Conversation, FileRef, Me, Message, MessagesPage, MyAgent, Sent, WebLogin } from "./contract"
+import type {
+  AdminAccount,
+  AdminAccountsPage,
+  Banned,
+  Billing,
+  Block,
+  Contact,
+  Conversation,
+  FileRef,
+  Group,
+  Me,
+  Message,
+  MessagesPage,
+  MyAgent,
+  Report,
+  ReportsPage,
+  Resolved,
+  Sent,
+  Stats,
+  WebLogin,
+} from "./contract"
 
 /** Which messages to fetch: the newest page by default, or only those before or after a message number. */
 export type Page = { before?: number; after?: number }
 export type Plan = "monthly" | "yearly"
+export type ReportReason = "spam" | "harassment" | "inappropriate_avatar" | "other"
+export type ResolveAction = "ban" | "remove_avatar" | "dismiss"
 
 /**
  * Everything the app asks the server for (docs/DESIGN.md §8, as the web may call it). The normal build talks to `/v1`
@@ -29,6 +51,37 @@ export type DataLayer = {
   checkout(plan: Plan): Promise<string>
   portal(): Promise<string>
   fileUrl(f: FileRef): string
+  /** API-019: the groups I'm in, with their members. */
+  groups(): Promise<Group[]>
+  /** API-045: a JPEG or PNG up to 5 MB; resolves to the new `avatar_url`. API-046 removes it. */
+  setAvatar(picture: Blob): Promise<string>
+  removeAvatar(): Promise<void>
+  /** A picture address as the page can load it: a server without a domain sends it relative to itself. */
+  avatarUrl(url: string): string
+  /** API-058, API-059, API-060 */
+  block(accountId: number): Promise<Block>
+  unblock(accountId: number): Promise<void>
+  blocks(): Promise<Block[]>
+  /** API-061: `groupId` when reporting someone from a group. */
+  report(accountId: number, reason: ReportReason, note?: string, groupId?: number): Promise<number>
+  admin: {
+    /** API-062, 50 a page, newest first. */
+    reports(status: "open" | "all", page: number): Promise<ReportsPage>
+    /** API-063 */
+    report(id: number): Promise<Report>
+    /** API-064 */
+    resolve(id: number, action: ResolveAction): Promise<Resolved>
+    /** API-065: `q` is an account ID or part of an email. */
+    accounts(q: string, page: number): Promise<AdminAccountsPage>
+    /** API-066: again on a banned account only retries canceling the subscription. */
+    ban(id: number): Promise<Banned>
+    /** API-067 */
+    unban(id: number): Promise<AdminAccount>
+    /** API-070: banned accounts only. */
+    deleteAccount(id: number): Promise<void>
+    /** API-068 */
+    stats(): Promise<Stats>
+  }
 }
 
 /** A refused request: problem+json `type` (`/errors/…`) and the server's `detail`. Status 0 means no answer at all. */

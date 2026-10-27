@@ -35,6 +35,11 @@ export function ago(t: string) {
 export const fileSize = (b: number) =>
   b < 1024 ? `${b} B` : b < 1_048_576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1_048_576).toFixed(1)} MB`
 
+/** "Oct 26" */
+export const shortDate = (t: string) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+/** "Oct 27, 09:52" */
+export const dateTime = (t: string) => `${shortDate(t)}, ${clock(t)}`
+
 export const longDate = (t: string) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 
 /** Whole days from now until `t`, never below 0. */

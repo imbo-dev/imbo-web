@@ -73,11 +73,27 @@ body {
 .otp-caret { animation: otp-caret 1s steps(2, start) infinite; }
 @keyframes otp-caret { to { visibility: hidden; } }
 
+/* Dialogs (components/ui/dialog.tsx): the scrim fades; the panel fades in and rises a little, or slides up as a sheet
+   on phones; closing is a quicker fade. Reduced motion keeps only the fades. The gutter is kept on both edges so the
+   padding stays even where scrollbars take space. */
+.dialog-panel { scrollbar-gutter: stable both-edges; }
+.dialog-scrim[data-state="open"] { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
+.dialog-scrim[data-state="closed"], .dialog-panel[data-state="closed"] { animation: fade-out var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
+.dialog-panel[data-state="open"] { animation: dialog-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-emphasized); }
+@media (width < 40rem) {
+  .dialog-panel[data-state="open"] { animation: sheet-in var(--semantic-motion-duration-slow) var(--semantic-motion-easing-emphasized); }
+}
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(0.5rem) scale(0.98); } }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+
 /* Skeleton rows pulse while loading; with reduced motion they stay as static shapes. */
 .skeleton { background: var(--semantic-color-surface-selected); border-radius: var(--semantic-radius-sm); animation: skeleton 1.4s ease-in-out infinite; }
 @keyframes skeleton { 50% { opacity: 0.45; } }
 
 @media (prefers-reduced-motion: reduce) {
   .otp-caret, .skeleton { animation: none; }
+  .dialog-panel[data-state="open"] { animation: fade-in var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
   .composer-shell, .composer-shell[data-dir="shrink"] { transition-duration: var(--semantic-motion-duration-fast); }
 }

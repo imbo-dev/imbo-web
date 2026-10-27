@@ -13,6 +13,8 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground",
         secondary: "bg-secondary text-secondary-foreground",
         outline: "border border-input bg-transparent text-foreground",
+        // Outlined, never filled: white on the dark theme's error pink is 2.67:1 (brand/DESIGN.md「危险操作按钮」).
+        destructive: "border border-destructive bg-transparent text-destructive",
         ghost: "bg-transparent text-muted-foreground",
         link: "h-auto px-0 text-foreground underline underline-offset-4",
       },

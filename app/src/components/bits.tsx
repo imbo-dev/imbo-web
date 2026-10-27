@@ -1,20 +1,27 @@
+import { useState } from "react"
 import { Bot, Check, Copy, Hash, SquareTerminal } from "lucide-react"
+import { pictureSrc } from "@/data/store"
 import { cn } from "@/lib/cn"
 import { ago } from "@/lib/format"
 import { useCopy } from "@/lib/useCopy"
 
-// Round 32 px avatar on the selected surface (brand/examples/source/product.css .avatar).
-export function Avatar({ kind, label, size = "md" }: { kind: "agent" | "terminal" | "group" | "person"; label?: string; size?: "sm" | "md" }) {
+const AVATAR_SIZES = { sm: "size-6 text-caption", md: "size-8", lg: "size-10 text-body", xl: "size-16 text-heading3" }
+
+/**
+ * Round avatar on the selected surface (brand/examples/source/product.css .avatar), 24 to 64 px. A person or group
+ * with a picture (`src`, the API's `avatar_url`) shows it cropped round; without one, or when it doesn't load, the
+ * first letter of `label`. Sessions and terminals keep their icon.
+ */
+export function Avatar({ kind, label, size = "md", src }: { kind: "agent" | "terminal" | "group" | "person"; label?: string; size?: keyof typeof AVATAR_SIZES; src?: string }) {
+  const url = pictureSrc(src)
+  const [broken, setBroken] = useState<string>()
   const Icon = kind === "agent" ? Bot : kind === "terminal" ? SquareTerminal : kind === "group" ? Hash : null
+  const box = cn("inline-grid flex-none place-items-center overflow-hidden rounded-full bg-accent text-label text-foreground", AVATAR_SIZES[size])
+  if (url && broken !== url && (kind === "person" || kind === "group"))
+    return <img src={url} alt="" aria-hidden="true" draggable={false} onError={() => setBroken(url)} className={cn(box, "object-cover")} />
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-grid flex-none place-items-center rounded-full bg-accent text-label text-foreground",
-        size === "sm" ? "size-6 text-caption" : "size-8"
-      )}
-    >
-      {Icon ? <Icon size={size === "sm" ? 14 : 16} /> : label?.slice(0, 1).toUpperCase()}
+    <span aria-hidden="true" className={box}>
+      {Icon ? <Icon size={size === "sm" ? 14 : size === "md" ? 16 : 20} /> : label?.slice(0, 1).toUpperCase()}
     </span>
   )
 }

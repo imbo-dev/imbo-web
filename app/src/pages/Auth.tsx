@@ -74,7 +74,24 @@ function Heading({ title, children }: { title: string; children?: React.ReactNod
   )
 }
 
-function FieldError({ id, children }: { id: string; children?: string }) {
+/**
+ * What a refused sign-in says. A banned account (`/errors/account-banned`, FLOW-BAN) gets the server's words with the
+ * email address in them as a link.
+ */
+function refusalOf(e: unknown): React.ReactNode {
+  if (!(e instanceof ApiError) || e.type !== "/errors/account-banned") return messageOf(e)
+  return e.message.split(/(\S+@\S+\.[a-z]{2,})(?=\.?(?:\s|$))/i).map((part, i) =>
+    i % 2 ? (
+      <a key={i} href={`mailto:${part}`} className="focus-ring rounded-sm underline underline-offset-4">
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  )
+}
+
+function FieldError({ id, children }: { id: string; children?: React.ReactNode }) {
   return (
     <p id={id} role="alert" className="min-h-5 text-caption text-destructive">
       {children}
@@ -85,7 +102,7 @@ function FieldError({ id, children }: { id: string; children?: string }) {
 function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resendAfter: number) => void }) {
   const id = useId()
   const [email, setEmail] = useState("")
-  const [error, setError] = useState<string>()
+  const [error, setError] = useState<React.ReactNode>()
   const [tried, setTried] = useState(false)
   const [sending, setSending] = useState(false)
   const input = useRef<HTMLInputElement>(null)
@@ -103,7 +120,7 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resen
       onSent(email.trim(), r.retry_after_s)
     } catch (e) {
       setSending(false)
-      setError(messageOf(e))
+      setError(refusalOf(e))
       input.current?.focus()
     }
   }
@@ -182,7 +199,7 @@ function CodeStep({
 }) {
   const id = useId()
   const [code, setCode] = useState("")
-  const [error, setError] = useState(step.error)
+  const [error, setError] = useState<React.ReactNode>(step.error)
   const [locked, setLocked] = useState(false)
   const [checking, setChecking] = useState(false)
   const [resendAt, setResendAt] = useState(step.resendAt)
@@ -200,7 +217,7 @@ function CodeStep({
       if (e instanceof ApiError && e.type === "/errors/name-required") return onNeedName(value, resendAt)
       setCode("")
       if (e instanceof ApiError && e.type === "/errors/code-locked") setLocked(true)
-      setError(messageOf(e))
+      setError(refusalOf(e))
     }
   }
 

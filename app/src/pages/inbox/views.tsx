@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, UserPlus, Users } from "lucide-react"
+import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, ShieldCheck, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import {
   conversationTitle,
   conversationWith,
   dataOf,
+  isBlocked,
   isMe,
   loadThread,
   openThread,
@@ -31,11 +32,12 @@ import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
 import { onLinkClick } from "@/lib/router"
 import { Composer, RecipientPicker, SendingClosed } from "./composer"
 import { MessageList, PaneHeader } from "./messages"
+import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
 
 const INSTALL = "curl -fsSL https://imbo.dev/install | sh"
 
-function BackLink({ to, label }: { to: string; label: string }) {
+export function BackLink({ to, label }: { to: string; label: string }) {
   return (
     <Button asChild variant="ghost" size="icon">
       <a href={to} onClick={onLinkClick} aria-label={label}>
@@ -128,7 +130,7 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
         const who = !last ? "" : isMe(s, last.from.account_id) ? "You" : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? "Terminal")
         return (
           <ListRow key={c.id} href={`/chats/${c.id}`} current={String(c.id) === open}>
-            <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} />
+            <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
             <span className="min-w-0">
               <span className="block truncate text-body">{title}</span>
               {last && (
@@ -165,10 +167,11 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
 
   const title = conversationTitle(c)
   const peer = c.peer && contactOf(s, c.peer.id)
-  return (
-    <>
-      <PaneHeader back={back} end={c.kind === "direct" && peer?.active && <RecipientPicker s={s} c={c} />}>
-        <Avatar kind={c.group ? "group" : "person"} label={title} />
+  // I blocked them: nothing to pick a recipient for (FLOW-BLOCK S5).
+  const blocked = !!c.peer && isBlocked(s, c.peer.id)
+  const header = (end: ReactNode, count?: ReactNode) => (
+      <PaneHeader back={back} end={end}>
+        <Avatar kind={c.group ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-body-strong text-foreground">{title}</h1>
@@ -181,7 +184,11 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
           </div>
           <p className="flex min-w-0 items-center gap-2 overflow-hidden text-caption whitespace-nowrap text-muted-foreground">
             {c.group ? (
-              <span className="tabular-nums">#{c.group.id}</span>
+              <>
+                <span className="tabular-nums">#{c.group.id}</span>
+                <Sep />
+                {count}
+              </>
             ) : c.peer ? (
               <>
                 <a href={`/contacts/${c.peer.id}`} onClick={onLinkClick} className="focus-ring rounded-sm tabular-nums underline-offset-4 hover:underline">
@@ -198,6 +205,23 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
           </p>
         </div>
       </PaneHeader>
+  )
+  return (
+    <>
+      {c.group ? (
+        <GroupMembers s={s} c={c}>
+          {({ stack, count }) => header(stack, count)}
+        </GroupMembers>
+      ) : (
+        header(
+          c.peer && (
+            <span className="flex flex-none items-center gap-1">
+              {peer?.active && !blocked && <RecipientPicker s={s} c={c} />}
+              <PeerMenu s={s} who={c.peer} />
+            </span>
+          )
+        )
+      )}
       <ThreadBody s={s} id={key} label={`Messages with ${title}`} />
       <ChatComposer s={s} c={c} title={title} />
     </>
@@ -214,6 +238,19 @@ function sendingPaused(s: State) {
 function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: string }) {
   const key: ThreadKey = `c:${c.id}`
   if (s.threads[key]?.status !== "ready") return null
+  const who = c.peer
+  if (who && isBlocked(s, who.id))
+    return (
+      <SendingClosed
+        action={
+          <Button variant="outline" size="sm" onClick={() => unblockNow(who)}>
+            Unblock
+          </Button>
+        }
+      >
+        You blocked {title}. Unblock {title} to send messages.
+      </SendingClosed>
+    )
   const paused = sendingPaused(s)
   if (paused) return <SendingClosed>{paused}</SendingClosed>
   if (c.kind === "group") return <Composer key={key} threadKey={key} to={addressOf(s, c)} label={title} />
@@ -233,7 +270,7 @@ function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: strin
   )
 }
 
-function NotFound({ back, what }: { back: ReactNode; what: string }) {
+export function NotFound({ back, what }: { back: ReactNode; what: string }) {
   return (
     <>
       <PaneHeader back={back}>
@@ -422,12 +459,14 @@ export function ContactList({ s, open }: { s: State; open?: string }) {
           const online = p.sessions.filter((x) => x.online).length
           return (
             <ListRow key={p.id} href={`/contacts/${p.id}`} current={String(p.id) === open}>
-              <Avatar kind="person" label={p.name} />
+              <Avatar kind="person" label={p.name} src={p.avatar_url} />
               <span className="min-w-0">
                 <span className="block truncate text-body">{p.name}</span>
                 <span className="block text-caption tabular-nums text-muted-foreground">ID {p.id}</span>
               </span>
-              {p.active ? (
+              {isBlocked(s, p.id) ? (
+                <BlockedTag />
+              ) : p.active ? (
                 <span className="text-caption whitespace-nowrap text-(--semantic-color-text-tertiary)">{online ? `${online} online` : "Offline"}</span>
               ) : (
                 <Tag>Inactive</Tag>
@@ -447,25 +486,30 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
   const p = dataOf(s.contacts)?.find((c) => String(c.id) === id)
   if (!p) return <NotFound back={back} what="contact" />
   const chat = conversationWith(s, p.id)
+  const blocked = isBlocked(s, p.id)
   return (
     <>
       <PaneHeader
         back={back}
         end={
-          chat && (
-            <Button asChild variant="outline" size="sm">
-              <a href={`/chats/${chat}`} onClick={onLinkClick}>
-                <MessageSquare size={14} aria-hidden="true" />
-                Open chat
-              </a>
-            </Button>
-          )
+          <span className="flex flex-none items-center gap-1">
+            {chat && (
+              <Button asChild variant="outline" size="sm">
+                <a href={`/chats/${chat}`} onClick={onLinkClick}>
+                  <MessageSquare size={14} aria-hidden="true" />
+                  Open chat
+                </a>
+              </Button>
+            )}
+            <PeerMenu s={s} who={p} />
+          </span>
         }
       >
-        <Avatar kind="person" label={p.name} />
+        <Avatar kind="person" label={p.name} src={p.avatar_url} size="lg" />
         <div className="min-w-0">
           <h1 className="flex min-w-0 items-center gap-2 text-body-strong text-foreground">
             <span className="truncate">{p.name}</span>
+            {blocked && <BlockedTag />}
             {!p.active && <Tag>Inactive</Tag>}
           </h1>
           <div className="-ml-1.5">
@@ -474,6 +518,7 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
         </div>
       </PaneHeader>
       <section aria-labelledby="contact-sessions" className="scroll-pane min-h-0 flex-1 p-4">
+        {blocked && <BlockedNote who={p} />}
         <h2 id="contact-sessions" className="mb-2 text-label text-muted-foreground">
           Sessions
         </h2>
@@ -707,6 +752,9 @@ export function AccountPane({ s }: { s: State }) {
         <h1 className="text-body-strong text-foreground">Account</h1>
       </PaneHeader>
       <div className="scroll-pane min-h-0 flex-1 px-4 pb-6">
+        <Row label="Picture">
+          <PictureField s={s} />
+        </Row>
         <Row label="Name">{a.name}</Row>
         <Row label="Email">
           <span className="wrap-anywhere">{a.email}</span>
@@ -718,6 +766,25 @@ export function AccountPane({ s }: { s: State }) {
           <p className="text-caption text-muted-foreground">People add you as a contact with this ID.</p>
         </Row>
         <PlanRow s={s} />
+        <Row label="Blocked">
+          <BlockedField s={s} />
+        </Row>
+        {a.admin && (
+          <Row label="Admin">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2">
+                <ShieldCheck size={16} aria-hidden="true" className="text-muted-foreground" />
+                You're an Imbo admin.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <a href="/admin" onClick={onLinkClick}>
+                  Open admin
+                </a>
+              </Button>
+            </div>
+            <p className="text-caption text-muted-foreground">Reports, users and the dashboard.</p>
+          </Row>
+        )}
         {n > 0 && (
           <Row label="Requests">
             <p>

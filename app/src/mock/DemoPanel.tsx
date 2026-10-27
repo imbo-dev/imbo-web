@@ -4,11 +4,12 @@ import { Popover, ToggleGroup } from "radix-ui"
 import { Button } from "@/components/ui/button"
 import { begin, refresh, reload, retry, useStore } from "@/data/store"
 import type { BillingPreset } from "./data"
-import { controls, receive, setControls, skipSignIn, subscribe, type Controls, type Sending, type Status } from "./layer"
+import { controls, receive, setControls, skipSignIn, subscribe, type Cancel, type Controls, type Picture, type Sending, type Status } from "./layer"
 
 // Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, whether sends
-// go through, and drop in a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted.
-// Only in the mock build.
+// go through or the peer blocked Dana, what the next picture upload meets, whether a ban cancels the subscription, and
+// drop in a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted. Only in the
+// mock build.
 
 /** Change what the fixtures answer, then ask again the way the page would. */
 function change(patch: Partial<Controls>) {
@@ -94,7 +95,16 @@ export function DemoPanel() {
                 onChange={(v) => change(v === "off" ? { billingOn: false } : { billingOn: true, mode: v })}
               />
               <Choice<Status> label="Data" value={c.status} options={["ready", "loading", "empty", "error"]} onChange={(status) => change({ status })} />
-              <Choice<Sending> label="Sending" value={c.sending} options={["ok", "refused"]} onChange={(sending) => setControls({ sending })} />
+              <Choice<Sending> label="Sending" value={c.sending} options={["ok", "refused", "blocked"]} onChange={(sending) => setControls({ sending })} />
+              <Choice<Picture>
+                label="Next picture"
+                value={c.picture}
+                options={["ok", "too-large", "unreadable", "limit"]}
+                onChange={(picture) => setControls({ picture })}
+              />
+              {s.account.admin && (
+                <Choice<Cancel> label="Canceling a subscription" value={c.cancel} options={["ok", "fails"]} onChange={(cancel) => setControls({ cancel })} />
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
@@ -107,14 +117,22 @@ export function DemoPanel() {
               </Button>
             </>
           ) : (
-            <Popover.Close asChild>
-              <Button variant="outline" onClick={() => begin(skipSignIn())}>
-                Skip sign-in as Dana
-              </Button>
-            </Popover.Close>
+            <>
+              <Popover.Close asChild>
+                <Button variant="outline" onClick={() => begin(skipSignIn())}>
+                  Skip sign-in as Dana
+                </Button>
+              </Popover.Close>
+              <Popover.Close asChild>
+                <Button variant="outline" onClick={() => begin(skipSignIn(true))}>
+                  Skip sign-in as Imbo Support (admin)
+                </Button>
+              </Popover.Close>
+            </>
           )}
           <p className="text-caption text-muted-foreground">
-            Sign-in: dana@example.com has an account, any other email signs up. Codes: 000000 is wrong, 111111 has expired, other 6 digits work.
+            Sign-in: dana@example.com and support@imbo.dev (admin) have accounts, kai@example.org is banned, any other email signs
+            up. Codes: 000000 is wrong, 111111 has expired, other 6 digits work.
           </p>
         </Popover.Content>
       </Popover.Portal>

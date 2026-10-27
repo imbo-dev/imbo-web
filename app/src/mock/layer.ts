@@ -1,4 +1,4 @@
-import type { Account, Message, MessagesPage, Sent } from "@/data/contract"
+import type { Account, AdminAccount, Block, Message, MessagesPage, Profile, Report, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -7,8 +7,15 @@ import * as f from "./data"
 // 401 when signed out). Loaded only when VITE_USE_MOCK=1. The Demo panel (./DemoPanel.tsx) changes `controls`.
 
 export type Status = "ready" | "loading" | "empty" | "error"
-/** `refused`: the server turns every send down, as when it's over the rate limit. */
-export type Sending = "ok" | "refused"
+/**
+ * `refused`: the server turns every send down, as when it's over the rate limit. `blocked`: the peer of a direct chat
+ * blocked Dana (`/errors/blocked`).
+ */
+export type Sending = "ok" | "refused" | "blocked"
+/** What the server makes of the next picture: taken, over 5 MB, unreadable, or the 20th change today. */
+export type Picture = "ok" | "too-large" | "unreadable" | "limit"
+/** Whether canceling a banned account's Creem subscription works (API-066, API-070). */
+export type Cancel = "ok" | "fails"
 export type Controls = {
   status: Status
   preset: f.BillingPreset
@@ -17,11 +24,24 @@ export type Controls = {
   mode: "live" | "test"
   billingOn: boolean
   sending: Sending
+  picture: Picture
+  cancel: Cancel
   live: Message[]
   pendingExtra: Record<number, number>
 }
 
-export let controls: Controls = { status: "ready", preset: "trial", plan: "monthly", mode: "live", billingOn: true, sending: "ok", live: [], pendingExtra: {} }
+export let controls: Controls = {
+  status: "ready",
+  preset: "trial",
+  plan: "monthly",
+  mode: "live",
+  billingOn: true,
+  sending: "ok",
+  picture: "ok",
+  cancel: "ok",
+  live: [],
+  pendingExtra: {},
+}
 const listeners = new Set<() => void>()
 export const subscribe = (l: () => void) => (listeners.add(l), () => listeners.delete(l))
 export function setControls(patch: Partial<Controls>) {
@@ -30,7 +50,7 @@ export function setControls(patch: Partial<Controls>) {
 }
 
 // The signed-in account stands in for the session cookie, so it survives a refresh.
-const SAVED = "imbo-demo-account-v4"
+const SAVED = "imbo-demo-account-v5"
 function saved(): Account | null {
   try {
     return accountSchema.nullable().parse(JSON.parse(sessionStorage.getItem(SAVED) ?? "null"))
@@ -73,6 +93,23 @@ async function data<T>(value: () => T, empty: T): Promise<T> {
 }
 
 const allMessages = () => [...f.messages, ...controls.live]
+
+// ── Blocks ──
+// Who Dana blocked. Their group messages are left out of her view, and a direct chat with them can't send.
+
+let myBlocks: Block[] = [...f.blocks]
+const blockedByMe = (id: number) => myBlocks.some((b) => b.account.id === id)
+/** Everyone Dana can see a profile of, with their picture. */
+const profiles: Profile[] = [
+  { id: 31570264, name: "Mia", avatar_url: f.pictures.mia },
+  { id: 77120458, name: "Leo" },
+  { id: 50928413, name: "Ivy" },
+  f.bob,
+  f.kai,
+  { ...f.rex, avatar_url: f.pictures.rex },
+]
+/** What Dana is shown of a thread: messages in a group from someone she blocked are hidden (RULE-013). */
+const visible = (m: Message) => !(m.conversation.kind === "group" && blockedByMe(m.from.account_id))
 
 /** Same paging as the server: up to 50, oldest first, `has_more` when more lie beyond the page. */
 function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
@@ -124,11 +161,16 @@ export const mock = {
     const key = email.trim().toLowerCase()
     const age = (Date.now() - (codeSentAt[key] ?? 0)) / 1000
     if (age < 60) throw new ApiError(429, "/errors/rate-limited", "A code was just sent. Wait a minute before asking again.", Math.ceil(60 - age))
+    if (key === f.bannedEmail)
+      throw new ApiError(403, "/errors/account-banned", "This account has been banned. If you think this is a mistake, write to support@imbo.dev.")
     codeSentAt[key] = Date.now()
     codeTries[key] = 0
     return { retry_after_s: 60 }
   },
-  /** dana@example.com has an account; any other email is new. Code 000000 is wrong, 111111 has expired. */
+  /**
+   * dana@example.com and support@imbo.dev (the admin) have accounts; any other email is new. Code 000000 is wrong,
+   * 111111 has expired.
+   */
   async signIn(email, code, name) {
     await wait(500)
     const key = email.trim().toLowerCase()
@@ -138,12 +180,13 @@ export const mock = {
       if (tries >= 5) throw new ApiError(429, "/errors/code-locked", "Too many wrong codes. Request a new code.")
       throw new ApiError(400, "/errors/code-invalid", `Wrong code. ${5 - tries} tries left.`)
     }
-    if (key === f.account.email) {
-      setMe(f.account)
-      return { account: f.account, new_account: false }
-    }
+    for (const a of [f.account, f.adminAccount])
+      if (key === a.email) {
+        setMe(a)
+        return { account: a, new_account: false }
+      }
     if (!name) throw new ApiError(422, "/errors/name-required", "New account: choose a name first.")
-    const account = { id: f.newAccountId, name, email: email.trim() }
+    const account = { id: f.newAccountId, name, email: email.trim(), admin: false }
     setMe(account)
     return { account, new_account: true }
   },
@@ -161,11 +204,13 @@ export const mock = {
         f.conversations
           .map((c) => {
             const last = allMessages()
-              .filter((m) => m.conversation.id === c.id)
+              .filter((m) => m.conversation.id === c.id && visible(m))
               .at(-1)
+            // Blocking took back what hadn't arrived yet (API-058).
+            const takenBack = c.peer && blockedByMe(c.peer.id)
             return {
               ...c,
-              pending: c.pending + (controls.pendingExtra[c.id] ?? 0),
+              pending: takenBack ? 0 : c.pending + (controls.pendingExtra[c.id] ?? 0),
               last_message: last && { id: last.id, from: last.from, preview: (last.body || last.files.map((x) => x.name).join(", ")).slice(0, 100), created_at: last.created_at },
             }
           })
@@ -174,14 +219,14 @@ export const mock = {
     ),
   messages: async (id, p) => {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
-    return data(() => page(allMessages().filter((m) => m.conversation.id === id), p), { messages: [], has_more: false })
+    return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)), p), { messages: [], has_more: false })
   },
   agents: () => data(() => f.myAgents.map((a) => ({ ...a, unread: unread[a.id].length })), []),
   agentMessages: async (id, p) => {
     if (!f.myAgents.some((a) => a.id === id)) throw new ApiError(404, "/errors/not-found", "No such session.")
     return data(() => page(allMessages().filter((m) => m.from.agent?.id === id || m.to?.id === id).map(withState), p), { messages: [], has_more: false })
   },
-  contacts: () => data(() => f.contacts, []),
+  contacts: () => data(() => f.contacts.map((c) => ({ ...c, blocked: blockedByMe(c.id) })), []),
   /** Direct: `<account>` is their terminal inbox, `<account>/<short ID>` one of their sessions, which answers 2.5 s later. */
   async send(to, body, cid) {
     const done = sentByCid.get(cid)
@@ -191,6 +236,8 @@ export const mock = {
     const [peerId, short] = to.split("/")
     const peer = group ? undefined : f.contacts.find((p) => String(p.id) === peerId)
     if (!group && !peer) throw new ApiError(403, "/errors/not-contact", `${to} isn't one of your contacts.`)
+    if (peer && blockedByMe(peer.id)) throw new ApiError(403, "/errors/unblock-first", `You blocked ${peer.name}. Unblock them first.`)
+    if (peer && controls.sending === "blocked") throw new ApiError(403, "/errors/blocked", `${peer.name} doesn't accept your messages.`)
     if (peer && !peer.active) throw new ApiError(403, "/errors/recipient-inactive", `${peer.name}'s account is inactive.`)
     const chat = group ?? f.conversations.find((c) => c.peer?.id === peer!.id)
     if (!chat) throw new ApiError(404, "/errors/recipient-not-found", `No conversation with ${to}.`)
@@ -259,7 +306,200 @@ export const mock = {
     return "https://www.creem.io/"
   },
   fileUrl: (file) => `data:text/plain;charset=utf-8,${encodeURIComponent(`Demo file: ${file.name}\n`)}`,
+  groups: () => data(() => f.groups, []),
+  /** Shows the very picture picked (the server would send back its 512 px square). */
+  async setAvatar(picture) {
+    const a = signedIn()
+    await wait(700)
+    if (controls.picture === "too-large") throw new ApiError(413, "/errors/file-too-large", "The picture can be at most 5 MB (5242880 bytes).")
+    if (controls.picture === "unreadable") throw new ApiError(422, "/errors/image-invalid", "Only JPEG and PNG pictures can be avatars; convert it to JPEG or PNG first.")
+    if (controls.picture === "limit") throw new ApiError(429, "/errors/rate-limited", "You can change pictures 20 times a day. Try again later.", 3600)
+    const avatar_url = URL.createObjectURL(picture)
+    setMe({ ...a, avatar_url })
+    return avatar_url
+  },
+  async removeAvatar() {
+    const a = signedIn()
+    await wait(400)
+    setMe({ ...a, avatar_url: undefined })
+  },
+  avatarUrl: (url) => url,
+  async block(id) {
+    const a = signedIn()
+    await wait(400)
+    if (id === a.id) throw new ApiError(400, "/errors/invalid-request", "You can't block yourself.")
+    const who = profiles.find((p) => p.id === id)
+    if (!who) throw new ApiError(404, "/errors/account-not-found", `No account with ID ${id}.`)
+    const had = myBlocks.find((b) => b.account.id === id)
+    if (had) return had
+    const b = { account: who, created_at: new Date().toISOString() }
+    myBlocks = [b, ...myBlocks]
+    return b
+  },
+  async unblock(id) {
+    signedIn()
+    await wait(350)
+    if (!blockedByMe(id)) throw new ApiError(404, "/errors/not-found", `You haven't blocked ${id}.`)
+    myBlocks = myBlocks.filter((b) => b.account.id !== id)
+  },
+  blocks: () => data(() => myBlocks, []),
+  async report(id, reason, note, groupId) {
+    const a = signedIn()
+    await wait(600)
+    const target = profiles.find((p) => p.id === id)
+    if (!target) throw new ApiError(404, "/errors/account-not-found", `No account with ID ${id}.`)
+    const group = groupId === undefined ? undefined : f.groups.find((g) => g.id === groupId)
+    if (groupId !== undefined && !group) throw new ApiError(404, "/errors/not-found", `No group #${groupId}.`)
+    if (reports.some((r) => r.reporter.id === a.id && r.target.id === id && r.status === "open"))
+      throw new ApiError(409, "/errors/already-reported", "You already reported this account. It will be handled within 24 hours.")
+    const copied = allMessages()
+      .filter((m) => (group ? m.conversation.group?.id === group.id && m.from.account_id === id : m.conversation.kind === "direct" && m.conversation.peer?.id === id))
+      .slice(-20)
+      .map((m) => ({ kind: "message", from: { id: m.from.account_id, name: m.from.name }, body: m.body, files: m.files.map((x) => ({ name: x.name, size: x.size })), created_at: m.created_at }))
+    const r: Report = {
+      id: Math.max(...reports.map((x) => x.id)) + 1,
+      reporter: { id: a.id, name: a.name, avatar_url: a.avatar_url, banned: false },
+      target: { ...target, banned: false, email: `${target.name.toLowerCase()}@example.com` },
+      ...(group && { group: { id: group.id, name: group.name } }),
+      reason,
+      status: "open",
+      created_at: new Date().toISOString(),
+      ...(note && { note }),
+      messages: copied,
+    }
+    reports = [r, ...reports]
+    return r.id
+  },
+  admin: {
+    async reports(status, n) {
+      adminOnly()
+      await wait(300)
+      const list = reports.filter((r) => status === "all" || r.status === "open")
+      return { reports: list.slice((n - 1) * 50, n * 50).map((r) => summary(current(r))), total: list.length }
+    },
+    async report(id) {
+      adminOnly()
+      await wait(250)
+      return current(reportById(id))
+    },
+    async resolve(id, action) {
+      adminOnly()
+      await wait(500)
+      const r = reportById(id)
+      if (r.status !== "open") throw new ApiError(409, "/errors/report-closed", `Report ${id} was already handled.`)
+      let canceled: boolean | undefined
+      if (action === "ban") canceled = banAccount(r.target.id)
+      if (action === "remove_avatar") takePicture(r.target.id)
+      close(r, action === "dismiss" ? "dismissed" : "actioned", action === "dismiss" ? undefined : action)
+      return { report: current(r), ...(canceled !== undefined && { subscription_canceled: canceled }) }
+    },
+    async accounts(q, n) {
+      adminOnly()
+      await wait(300)
+      const key = q.trim().toLowerCase()
+      if (key) {
+        const hits = everyone().filter((x) => String(x.id) === key || x.email.toLowerCase().includes(key))
+        return { accounts: hits.slice((n - 1) * 50, n * 50), total: hits.length }
+      }
+      const total = named.length + FILLERS
+      const from = (n - 1) * 50
+      const accounts = Array.from({ length: Math.max(0, Math.min(50, total - from)) }, (_, k) => from + k).map((i) => (i < named.length ? named[i] : filler(i - named.length)))
+      return { accounts, total }
+    },
+    async ban(id) {
+      adminOnly()
+      await wait(500)
+      const canceled = banAccount(id)
+      return { account: accountById(id), subscription_canceled: canceled }
+    },
+    async unban(id) {
+      adminOnly()
+      await wait(400)
+      const x = accountById(id)
+      x.banned_at = undefined
+      return x
+    },
+    async deleteAccount(id) {
+      adminOnly()
+      await wait(600)
+      const x = accountById(id)
+      if (!x.banned_at) throw new ApiError(400, "/errors/invalid-request", "Only a banned account can be deleted here. Ban it first.")
+      if (x.subscription?.status === "active" && controls.cancel === "fails")
+        throw new ApiError(502, "/errors/upstream", "Couldn't cancel the subscription on Creem, so nothing was deleted.")
+      named = named.filter((a) => a.id !== id)
+      deleted.add(id)
+    },
+    async stats() {
+      adminOnly()
+      await wait(400)
+      return f.stats()
+    },
+  },
 } satisfies DataLayer
+
+// ── Admin ──
+// Reports, accounts and their bans as the admin pages see them; only support@imbo.dev gets answers.
+
+let reports: Report[] = structuredClone(f.reports)
+let named: AdminAccount[] = structuredClone(f.namedAccounts)
+const deleted = new Set<number>()
+/** Made-up sign-ups behind the named ones, so Users has pages to turn; made when a page shows them. */
+const FILLERS = f.ACCOUNT_TOTAL - f.namedAccounts.length
+const fillers = new Map<number, AdminAccount>()
+const filler = (i: number) => fillers.get(i) ?? fillers.set(i, f.fillerAccount(i)).get(i)!
+const everyone = () => [...named, ...fillers.values()]
+
+/** Anyone but an admin gets the same 404 as a path that doesn't exist. */
+function adminOnly() {
+  const a = signedIn()
+  if (!a.admin) throw new ApiError(404, "/errors/not-found", "Not found.")
+  return a
+}
+const accountById = (id: number) => {
+  const x = everyone().find((a) => a.id === id)
+  if (!x) throw new ApiError(404, "/errors/account-not-found", `No account with ID ${id}.`)
+  return x
+}
+/** API-064 `remove_avatar`: gone from Users and from every profile Dana sees. */
+function takePicture(id: number) {
+  const x = everyone().find((a) => a.id === id)
+  if (x) x.avatar_url = undefined
+  const p = profiles.find((a) => a.id === id)
+  if (p) p.avatar_url = undefined
+}
+function reportById(id: number) {
+  const r = reports.find((x) => x.id === id)
+  if (!r) throw new ApiError(404, "/errors/not-found", `No report ${id}.`)
+  return r
+}
+/** A party as it is now: banned or not, picture or not; a deleted account has no name. */
+function asNow(p: Report["target"]): Report["target"] {
+  if (deleted.has(p.id)) return { ...p, name: "", avatar_url: undefined, banned: false }
+  const x = everyone().find((a) => a.id === p.id)
+  return x ? { ...p, banned: !!x.banned_at, avatar_url: x.avatar_url } : p
+}
+const current = (r: Report): Report => ({ ...r, reporter: asNow(r.reporter), target: asNow(r.target) })
+/** API-062 leaves out what only API-063 has. */
+const summary = ({ note: _n, messages: _m, action: _a, resolved_at: _r, ...r }: Report): Report => ({
+  ...r,
+  reporter: { ...r.reporter, email: undefined, avatar_changed: undefined },
+  target: { ...r.target, email: undefined, avatar_changed: undefined },
+})
+function close(r: Report, status: string, action?: string) {
+  Object.assign(r, { status, action, resolved_at: new Date().toISOString() })
+}
+/**
+ * API-066: bans, closes the other open reports on them, and cancels a live subscription unless the Cancel control
+ * says Creem fails. Again on a banned account only retries the cancel. Resolves to whether nothing is left to cancel.
+ */
+function banAccount(id: number) {
+  const x = accountById(id)
+  if (x.admin) throw new ApiError(403, "/errors/forbidden", "Admins can't ban an admin.")
+  x.banned_at ??= new Date().toISOString()
+  for (const r of reports) if (r.target.id === id && r.status === "open") close(r, "actioned", "ban")
+  if (x.subscription?.status === "active" && controls.cancel === "ok") x.subscription = { ...x.subscription, status: "canceled" }
+  return x.subscription?.status !== "active"
+}
 
 /** What a poll would bring in: a message to an offline session, so it also waits for delivery. */
 export function receive() {
@@ -268,5 +508,9 @@ export function receive() {
   setControls({ live: [...controls.live, m], pendingExtra: { ...controls.pendingExtra, [c]: (controls.pendingExtra[c] ?? 0) + 1 } })
 }
 
-/** The Demo panel's shortcut past sign-in. */
-export const skipSignIn = () => (setMe(f.account), f.account)
+/** The Demo panel's shortcut past sign-in, as Dana or as the admin. */
+export function skipSignIn(admin = false) {
+  const a = admin ? f.adminAccount : f.account
+  setMe(a)
+  return a
+}

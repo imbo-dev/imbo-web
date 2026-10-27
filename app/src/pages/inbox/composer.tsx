@@ -126,13 +126,16 @@ export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey;
   )
 }
 
-/** In place of the text box when nothing can be sent from here. */
-export function SendingClosed({ children }: { children: ReactNode }) {
+/** In place of the text box when nothing can be sent from here; `action` is a button that would fix it. */
+export function SendingClosed({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <p className="flex flex-none items-center gap-2 border-t-(length:--semantic-layout-hairline) border-border px-4 py-3 text-caption text-muted-foreground">
-      <Pause size={14} aria-hidden="true" className="flex-none" />
-      <span className="text-pretty">{children}</span>
-    </p>
+    <div className="flex flex-none items-center gap-3 border-t-(length:--semantic-layout-hairline) border-border px-4 py-3">
+      <p className="flex min-w-0 flex-1 items-center gap-2 text-caption text-muted-foreground">
+        <Pause size={14} aria-hidden="true" className="flex-none" />
+        <span className="text-pretty">{children}</span>
+      </p>
+      {action}
+    </div>
   )
 }
 

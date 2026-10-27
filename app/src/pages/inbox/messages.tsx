@@ -3,6 +3,7 @@ import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "l
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Avatar, SessionName, Sep, Tag, agentAvatar } from "@/components/bits"
+import { SenderName, unblockNow } from "./safety"
 import type { FileRef, Message } from "@/data/contract"
 import type { ApiError } from "@/data/layer"
 import {
@@ -90,7 +91,9 @@ export function MessageRow({ s, m }: { s: State; m: Message }) {
       <Avatar kind={agentAvatar(m.from.agent?.tool)} />
       <div className="min-w-0">
         <header className="flex min-w-0 items-baseline gap-2">
-          <SessionName owner={m.from.name} title={m.from.agent?.title ?? "Terminal"} strong />
+          <SenderName s={s} from={m.from} group={m.conversation.group}>
+            <SessionName owner={m.from.name} title={m.from.agent?.title ?? "Terminal"} strong />
+          </SenderName>
           {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
           <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
             {clock(m.created_at)}
@@ -128,6 +131,10 @@ function refusal(e: ApiError, group: boolean, who: string) {
       return `That session is gone. Send it to ${who}'s inbox instead.`
     case "/errors/recipient-inactive":
       return group ? "No one else in this group can receive messages right now." : `${who}'s account is inactive, so they can't receive messages.`
+    case "/errors/blocked":
+      return `${who} doesn't accept your messages.`
+    case "/errors/unblock-first":
+      return `You blocked ${who}. Unblock ${who} to send messages.`
   }
   return e.status === 0 ? "Check your connection, then try again." : e.message
 }
@@ -172,6 +179,11 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
               {e.type === "/errors/session-not-found" && (
                 <Button variant="ghost" size="sm" onClick={() => resendTo(id, o.cid, o.to.split("/")[0])}>
                   Send to inbox
+                </Button>
+              )}
+              {e.type === "/errors/unblock-first" && (
+                <Button variant="ghost" size="sm" onClick={() => unblockNow({ id: Number(o.to.split("/")[0]), name: to?.owner ?? "" })}>
+                  Unblock
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={() => discard(id, o.cid)}>
