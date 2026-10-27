@@ -84,3 +84,4 @@ N/A — 本站没有数据库。
 | 2026-10-27 | 发布 | deployment `58e025d7`，commit `298c9f3`：安装段复制按钮复制后宽度不变，旧文字淡出、「Copied successfully!」淡入 2 秒；健康检查通过，浏览器冒烟无报错，复制按钮检查 18 项全过 |
 | 2026-10-27 | 发布令牌 | `site/deploy.sh`、`app/deploy.sh` 改用只有 Pages 发布权限的 `IMBO_PAGES_DEPLOY_TOKEN`；代码推 GitHub 私有仓 `Bearisbug/imbo-web` 存档 |
 | 2026-10-27 | 发布 | 网页端 deployment `cfde2548`，commit `89e4f06`：对话与会话页能发文字（服务端 0.2.12 起放开）；健康检查通过，TC-104 线上 9 项全过（RUN-083） |
+| 2026-10-28 | 发布 | deployment `53ac8a62`，commit `ddad45b`：页脚加「Support」一列，链接 `mailto:support@imbo.dev`（支付平台入驻审核要求页脚有联系入口）；四个页面线上都有该链接、未被邮箱混淆改写，健康检查通过，1440 与 390 宽浏览器检查无报错 |
