@@ -76,8 +76,20 @@ export function Privacy() {
               {" files attached to messages, with their names and sizes."}
             </li>
             <li>
+              <strong>Avatars:</strong>
+              {" the pictures you upload for your account and for groups you own. The server crops each one to a square, saves it as a 512×512 JPEG, and removes metadata such as when and where the photo was taken."}
+            </li>
+            <li>
+              <strong>Blocked accounts:</strong>
+              {" the accounts you've blocked."}
+            </li>
+            <li>
+              <strong>Reports:</strong>
+              {" when you report someone, the reason you pick, the note you write, and a copy of the related messages at that moment: the last 20 messages between the two of you if you report from a direct chat, or the last 20 messages that person sent in the group if you report from a group. For files, only their names and sizes are copied."}
+            </li>
+            <li>
               <strong>Payments:</strong>
-              {" when you subscribe, Creem processes your payment. We receive your subscription status and the details Creem shares with sellers to manage it, such as your email address. We never see your card number."}
+              {" when you subscribe, Waffo Pancake processes your payment. We send it your account's email address and ID and the plan you chose, and it tells us your subscription status, the date you've paid until, and whether a payment was refunded. We never see your card number."}
             </li>
             <li>
               <strong>Technical data:</strong>
@@ -106,6 +118,12 @@ export function Privacy() {
             We use it to run Imbo: to sign you in, deliver messages and files to the sessions they're addressed to, show who sent each message, and hold messages until they're delivered. We also use it to bill your subscription, to prevent and investigate abuse, to fix problems, and to email you about your account, security, or changes to the service and these documents.
           </p>
           {"\n      "}
+          <p>
+            {"We review reports to enforce the rules in our "}
+            <a href="/terms">Terms of Service</a>
+            , and may remove an avatar or ban an account that breaks them. A ban signs the account out everywhere at once and cancels any active subscription; payments already made aren't refunded, except where the law requires it. We can delete a banned account. That removes the same data as deleting your own account, and the email address can then be used to sign up again.
+          </p>
+          {"\n      "}
           <p>We don't sell your data, show ads, or use your messages or files to train AI models.</p>
           <h2 id="privacy-5">
             <span>5</span>
@@ -122,6 +140,18 @@ export function Privacy() {
           <p>
             The receiving agent is an AI coding tool. What you send can end up in that tool's context and be processed by its provider, such as Anthropic or OpenAI, under that provider's terms.
           </p>
+          {"\n      "}
+          <p>
+            Your contacts and the members of your groups see your avatar. It's served from a random address, and anyone who has that address can see the picture without signing in.
+          </p>
+          {"\n      "}
+          <p>
+            Only you can see the accounts you've blocked. Someone you've blocked who tries to send you a direct message is told you don't accept their messages.
+          </p>
+          {"\n      "}
+          <p>
+            The messages copied into a report are seen only by the administrators who handle reports. Administrators can't see your other direct messages or group messages. The email that tells us about a new report only says there is one; it contains no messages or names.
+          </p>
           <h2 id="privacy-6">
             <span>6</span>
             Service providers
@@ -136,14 +166,14 @@ export function Privacy() {
             </li>
             <li>
               <strong>Resend</strong>
-              {" sends sign-in code emails."}
+              {" sends sign-in code emails and the notices that tell us about new reports."}
             </li>
             <li>
               <strong>Cloudflare</strong>
               {" serves the website, runs DNS for imbo.dev, and counts website visits."}
             </li>
             <li>
-              <strong>Creem</strong>
+              <strong>Waffo Pancake</strong>
               {" processes payments as merchant of record."}
             </li>
             <li>
@@ -172,6 +202,18 @@ export function Privacy() {
               {" deleted from the server 7 days after upload. Their names and sizes stay with the message."}
             </li>
             <li>
+              <strong>Avatars:</strong>
+              {" until you remove or replace them, or delete your account. A group's picture is deleted when the group is disbanded."}
+            </li>
+            <li>
+              <strong>Blocked accounts:</strong>
+              {" until you unblock them or delete your account."}
+            </li>
+            <li>
+              <strong>Reports:</strong>
+              {" deleted, together with the copied messages, 1 year after the report is resolved. Until then they stay, even if the reporter or the reported person deletes their account."}
+            </li>
+            <li>
               <strong>Sign-in codes:</strong>
               {" deleted one day after they expire."}
             </li>
@@ -195,7 +237,7 @@ export function Privacy() {
           <p>
             {"Email "}
             <a href="mailto:support@imbo.dev">support@imbo.dev</a>
-            {" from your account's email address to get a copy of your data, correct it, or delete your account. We reply within 30 days. Signing out on a computer revokes its token, and you can stop using Imbo at any time."}
+            {" from your account's email address to get a copy of your data, correct it, or delete your account. We reply within 30 days. Signing out on a computer revokes its token, and you can stop using Imbo at any time. You can remove your avatar and unblock accounts whenever you like."}
           </p>
           {"\n      "}
           <p>

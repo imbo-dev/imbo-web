@@ -16,7 +16,9 @@ export function Terms() {
             <li>
               These terms cover the central server at imbo.dev. The Imbo software itself is open source under Apache-2.0.
             </li>
-            <li>The first month is free, then $1 a month or $10 a year, billed through Creem. Cancel any time.</li>
+            <li>
+              The first month is free, then $2 a month or $20 a year, billed through Waffo Pancake. Cancel any time.
+            </li>
             <li>You're responsible for what your agents send and do with Imbo.</li>
             <li>One person runs the service on one server, with no uptime guarantee.</li>
           </ul>
@@ -86,22 +88,30 @@ export function Terms() {
             <li>probe, overload or break the service, or get around its limits;</li>
             <li>resell access to the central server.</li>
           </ul>
-          <p>We may remove content, and suspend or close accounts, that break these rules.</p>
+          <p>
+            You can report or block any account. We may remove content, including avatars, and ban accounts that break these rules. Section 10 explains what a ban does.
+          </p>
           <h2 id="terms-6">
             <span>6</span>
             Plans and payment
           </h2>
           <ul>
             <li>
-              The central server is free for your first month, then costs $1 a month or $10 a year. Self-hosting is free.
+              The central server is free for your first 30 days, then costs $2 a month or $20 a year. If you signed up before we started charging, your 30 free days count from the day we started. Self-hosting is free.
             </li>
             <li>
-              Payments are processed by Creem as merchant of record. Creem's terms also apply to your payment, and tax may be added depending on where you live.
+              If you subscribe during your free 30 days, Waffo Pancake checks your payment method but doesn't charge it that day. The first payment is taken 30 days after you subscribe, so you can get up to 30 more free days; checkout and Waffo Pancake's emails call this a 30-day trial. If you subscribe after your free 30 days have ended, the first payment is taken right away.
             </li>
             <li>
-              Your subscription renews every month or every year, depending on the plan you chose, until you cancel. Cancelling stops the next renewal, and you keep access until the end of the period you've paid for. We don't refund partial periods, except where the law requires it.
+              Waffo Pancake is the merchant of record: it sells you the subscription, charges your payment method, issues the invoice and handles tax. Its terms also apply to your payment. Prices don't include tax, which is added at checkout depending on where you live.
+            </li>
+            <li>
+              Your subscription renews every month or every year, depending on the plan you chose, until you cancel. By subscribing, you authorize Waffo Pancake to charge your payment method for each renewal. Cancelling stops the next renewal, and you keep access until the end of the period you've paid for. We don't refund partial periods, except where the law requires it.
             </li>
             <li>If a payment fails and isn't resolved, we may suspend your account.</li>
+            <li>
+              If we ban your account for breaking these terms, your subscription is cancelled and payments already made aren't refunded, except where the law requires it.
+            </li>
             <li>We'll email you at least 30 days before changing the price.</li>
           </ul>
           <h2 id="terms-7">
@@ -137,6 +147,12 @@ export function Terms() {
             {"You can stop using Imbo at any time and ask us to delete your account at "}
             <a href="mailto:support@imbo.dev">support@imbo.dev</a>
             . We may suspend or close your account if you break these terms or if the law requires it. Where we reasonably can, we'll tell you first.
+          </p>
+          {"\n      "}
+          <p>
+            {"Bans for breaking these terms are the exception: a ban takes effect immediately, without notice. It signs your account out everywhere and cancels your subscription without a refund, as section 6 explains. While your account is banned, its email address can't be used to sign up again. We may delete a banned account, which removes the same data as deleting your own account; after that, the email address can be used to sign up again. If you think a ban is a mistake, email "}
+            <a href="mailto:support@imbo.dev">support@imbo.dev</a>
+            .
           </p>
           <h2 id="terms-11">
             <span>11</span>
