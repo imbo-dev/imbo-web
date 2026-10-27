@@ -8,7 +8,7 @@ import { AppStage } from "@/components/Stage"
 import { Wordmark } from "@/components/Wordmark"
 import { Avatar, CopyId } from "@/components/bits"
 import { messageOf } from "@/data/layer"
-import { dataOf, pendingTotal, refreshList, signOut, useStore, type State } from "@/data/store"
+import { dataOf, pendingTotal, refreshList, signOut, unreadTotal, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
 import { AccountPane, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, PendingBadge, SessionList, SessionPane } from "./views"
@@ -103,6 +103,7 @@ const TABS = [
 
 function Tabs({ s, tab }: { s: State; tab: Tab }) {
   const pending = pendingTotal(s)
+  const unread = unreadTotal(s)
   return (
     <nav aria-label="Sections" className="flex flex-none border-b-(length:--semantic-layout-hairline) border-border px-2">
       {TABS.map((t) => (
@@ -115,6 +116,7 @@ function Tabs({ s, tab }: { s: State; tab: Tab }) {
         >
           {t.label}
           {t.id === "chats" && pending > 0 && <PendingBadge n={pending} small />}
+          {t.id === "sessions" && unread > 0 && <PendingBadge n={unread} small sr={unread === 1 ? "new reply" : "new replies"} />}
           {tab === t.id && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-(--primitive-dimension-ring-width) rounded-full bg-primary" />}
         </a>
       ))}

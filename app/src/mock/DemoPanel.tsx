@@ -4,10 +4,11 @@ import { Popover, ToggleGroup } from "radix-ui"
 import { Button } from "@/components/ui/button"
 import { begin, refresh, reload, retry, useStore } from "@/data/store"
 import type { BillingPreset } from "./data"
-import { controls, receive, setControls, skipSignIn, subscribe, type Controls, type Status } from "./layer"
+import { controls, receive, setControls, skipSignIn, subscribe, type Controls, type Sending, type Status } from "./layer"
 
-// Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, and drop in
-// a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted. Only in the mock build.
+// Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, whether sends
+// go through, and drop in a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted.
+// Only in the mock build.
 
 /** Change what the fixtures answer, then ask again the way the page would. */
 function change(patch: Partial<Controls>) {
@@ -93,6 +94,7 @@ export function DemoPanel() {
                 onChange={(v) => change(v === "off" ? { billingOn: false } : { billingOn: true, mode: v })}
               />
               <Choice<Status> label="Data" value={c.status} options={["ready", "loading", "empty", "error"]} onChange={(status) => change({ status })} />
+              <Choice<Sending> label="Sending" value={c.sending} options={["ok", "refused"]} onChange={(sending) => setControls({ sending })} />
               <Button
                 variant="outline"
                 onClick={() => {

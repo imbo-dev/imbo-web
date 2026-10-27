@@ -108,7 +108,6 @@ try {
   await bobThread.getByText('What replaced user_id?').waitFor();
   const text = await bobThread.textContent();
   ok('direct messages show the receiving session', text.includes('to bob orders-api') && text.includes('to alice checkout') && text.includes('to alice Terminal'));
-  ok('no message input on the web', (await page.locator('textarea, input[type=text]').count()) === 0);
   const href = await page.getByRole('link', { name: 'Download orders-api-v2.3.md' }).getAttribute('href');
   const dl = await page.evaluate((h) => fetch(h).then(async (r) => ({ s: r.status, cd: r.headers.get('content-disposition'), body: await r.text() })), href);
   ok('attachment link downloads the file', dl.s === 200 && /attachment/.test(dl.cd ?? '') && dl.body.includes('customer_id'), `${href} → ${dl.s} ${dl.cd}`);

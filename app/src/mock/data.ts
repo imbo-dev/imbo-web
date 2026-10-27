@@ -25,18 +25,20 @@ const releaseTeam = { id: 5520183, name: "release-team" }
 
 /** API-014 */
 export const myAgents: MyAgent[] = [
-  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp" },
-  { id: "a-migration", short_id: "7b2e40", session_id: "s-7b2e40", title: "orders-migration", tool: "codex", online: true, device_id: "d2", device_name: "build-box" },
-  { id: "a-api-tests", short_id: "e04a7d", session_id: "s-e04a7d", title: "api-tests", tool: "zcode", online: true, device_id: "d2", device_name: "build-box" },
-  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000) },
+  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp", unread: 1 },
+  { id: "a-migration", short_id: "7b2e40", session_id: "s-7b2e40", title: "orders-migration", tool: "codex", online: true, device_id: "d2", device_name: "build-box", unread: 0 },
+  { id: "a-api-tests", short_id: "e04a7d", session_id: "s-e04a7d", title: "api-tests", tool: "zcode", online: true, device_id: "d2", device_name: "build-box", unread: 0 },
+  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000), unread: 0 },
 ]
 
-const ref = (a: MyAgent): AgentRef => ({ id: a.id, short_id: a.short_id, title: a.title, tool: a.tool })
+export const ref = (a: MyAgent): AgentRef => ({ id: a.id, short_id: a.short_id, title: a.title, tool: a.tool })
 const [checkout, migration, , docs] = myAgents.map(ref)
 const miaOrders: AgentRef = { id: "a-mia-orders", short_id: "e91d07", title: "orders-api", tool: "codex" }
 const miaBilling: AgentRef = { id: "a-mia-billing", short_id: "52ab3f", title: "billing", tool: "minimax-code" }
 const leoRelease: AgentRef = { id: "a-leo-release", short_id: "a0c4e2", title: "release", tool: "cursor" }
-const danaTerminal: AgentRef = { id: "t-48213907", short_id: "", title: "Terminal", tool: "terminal" }
+/** Where a message to someone's terminal inbox shows as going. */
+export const terminalOf = (accountId: number): AgentRef => ({ id: `t-${accountId}`, short_id: "", title: "Terminal", tool: "terminal" })
+const danaTerminal = terminalOf(account.id)
 
 /** API-012 (with offline sessions from the last 7 days) */
 export const contacts: Contact[] = [
@@ -55,15 +57,21 @@ export const conversations: Conversation[] = [
 const withMia = { kind: "direct" as const, id: 1, peer: mia }
 const inRelease = { kind: "group" as const, id: 2, group: releaseTeam }
 const withLeo = { kind: "direct" as const, id: 3, peer: leo }
+/** Dana and her own sessions (API-043); not a chat, so API-030 doesn't list it. */
+export const selfChat = { kind: "direct" as const, id: 9, peer: dana }
 
-type Draft = Omit<Message, "reply_to" | "files"> & { files?: FileRef[] }
-/** Fills `reply_to` the way the server does: the group, the sending session, or the sender's terminal. */
-const msg = ({ files = [], ...m }: Draft): Message => ({
+type Draft = Omit<Message, "reply_to" | "files" | "from_me"> & { files?: FileRef[] }
+/**
+ * Fills `reply_to` the way the server does (the group, the sending session, or the sender's terminal), and `from_me`
+ * for what Dana sent in person.
+ */
+export const msg = ({ files = [], ...m }: Draft): Message => ({
   ...m,
   files,
   reply_to: m.conversation.group ? `#${m.conversation.group.id}` : m.from.agent ? `${m.from.account_id}/${m.from.agent.short_id}` : `${m.from.account_id}`,
+  from_me: m.from.account_id === account.id && !m.from.agent,
 })
-const from = (person: { id: number; name: string }, agent?: AgentRef) => ({ account_id: person.id, name: person.name, ...(agent && { agent }) })
+export const from = (person: { id: number; name: string }, agent?: AgentRef) => ({ account_id: person.id, name: person.name, ...(agent && { agent }) })
 const sentM1 = at(9, "16:20"), sentM3 = at(1, "18:02"), sentM6 = at(0, "09:14")
 
 /** API-031, all conversations together, by message number. */
@@ -72,6 +80,7 @@ export const messages: Message[] = [
   msg({ id: 102, conversation: withLeo, from: from(dana, checkout), to: leoRelease, created_at: at(9, "16:31"), body: "Thanks. p95 stays under 120 ms up to 800 requests a second, which is enough for launch." }),
   msg({ id: 140, conversation: inRelease, from: from(leo, leoRelease), created_at: sentM3, body: "Release 0.9.2 is tagged. Changelog and checksums attached.", files: [fileAt("f2", "CHANGELOG-0.9.2.md", 6_840, sentM3), fileAt("f3", "checksums.txt", 1_090, sentM3)] }),
   msg({ id: 141, conversation: inRelease, from: from(dana, migration), created_at: at(1, "18:05"), body: "Migration 0042 ran on staging in 3.1 s. No lock was held longer than 200 ms." }),
+  msg({ id: 145, conversation: selfChat, from: from(dana), to: checkout, created_at: at(1, "18:40"), body: "Pull the v2.3 changes and run the full test suite against staging.", state: "delivered" }),
   msg({ id: 150, conversation: withMia, from: from(dana, checkout), to: miaOrders, created_at: at(0, "09:12"), body: "What replaced user_id? /v2/orders has returned 400 since this morning." }),
   msg({ id: 151, conversation: withMia, from: from(mia, miaOrders), to: checkout, created_at: sentM6, body: "customer_id. user_id was dropped in v2.3; the changelog is attached.", files: [fileAt("f4", "orders-api-v2.3.md", 4_210, sentM6)] }),
   msg({ id: 152, conversation: withMia, from: from(dana, checkout), to: miaOrders, created_at: at(0, "09:15"), body: "Switched to customer_id and 412 tests pass locally. Can you confirm staging accepts it?" }),
@@ -79,7 +88,16 @@ export const messages: Message[] = [
   msg({ id: 154, conversation: withMia, from: from(mia, miaOrders), to: checkout, created_at: at(0, "09:21"), body: "Staging accepts your request IDs. The old field keeps working until Friday." }),
   msg({ id: 160, conversation: inRelease, from: from(leo), created_at: at(0, "09:40"), body: "Deploy window starts at 10:00. Hold merges to main until I post here again." }),
   msg({ id: 171, conversation: withMia, from: from(mia), to: danaTerminal, created_at: at(0, "11:40"), body: "午饭后我把 v2.3 部署到生产，你那边还有要改的吗？" }),
+  msg({ id: 172, conversation: selfChat, from: from(dana, checkout), to: danaTerminal, created_at: at(0, "11:52"), body: "All 412 tests pass on staging. Shall I open the PR for the customer_id switch?" }),
 ]
+
+/** Contact sessions that answer in the demo, by the address a chat sends to (`<account>/<short ID>`). */
+export const contactSessions: Record<string, AgentRef> = { [`${mia.id}/e91d07`]: miaOrders, [`${mia.id}/52ab3f`]: miaBilling, [`${leo.id}/a0c4e2`]: leoRelease }
+/** Who answers in the group after Dana writes there. */
+export const groupAnswer = { person: leo, agent: leoRelease, body: "Noted. I'll start the deploy at 10:00 sharp." }
+/** What a session says back, by the message number it answers. */
+export const answerFor = (n: number) =>
+  ["On it. I'll report back when it's done.", "Done. Results are in the test log; nothing failed.", "Got it. I'll hold until you confirm."][n % 3]
 
 /** What the ~10 s poll would bring in: Mia's session writing to Dana's docs-site session, which is offline. */
 export function incomingMessage(n: number): Message {

@@ -52,7 +52,12 @@ export const online = {
   messages: (id, page) => get(c.messagesPage, `/v1/conversations/${id}/messages${query(page)}`),
   agents: async () => (await get(c.myAgents, "/v1/agents")).agents,
   agentMessages: (id, page) => get(c.messagesPage, `/v1/agents/${encodeURIComponent(id)}/messages${query(page)}`),
-  contacts: async () => (await get(c.contacts, "/v1/contacts")).contacts,
+  // With their sessions seen in the last 7 days, which a chat can also send to (FLOW-WEB-CHAT S2).
+  contacts: async () => (await get(c.contacts, "/v1/contacts?offline=true")).contacts,
+  send: (to, body, client_msg_id) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id }),
+  sendToAgent: async (id, body, client_msg_id) =>
+    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id })).message,
+  markRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/agents/${encodeURIComponent(id)}/read`, { up_to })).marked,
   pendingRequests: async () => (await get(c.requests, "/v1/requests")).requests.length,
   billing: () => get(c.billing, "/v1/billing"),
   checkout: async (plan) => (await call(c.checkout, "POST", "/v1/billing/checkout", { plan })).checkout_url,

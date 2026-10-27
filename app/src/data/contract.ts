@@ -21,13 +21,17 @@ export const groupRef = z.object({ id: z.number(), name: z.string() })
 /** A session as it appears on a message (`from.agent`, `to`). `to.tool` is `terminal` when it went to a terminal inbox. */
 export const agentRef = z.object({ id: z.string(), short_id: z.string(), title: z.string(), tool: z.string() })
 
-/** API-014 listMyAgents: my sessions, online or seen in the last 7 days. The terminal inbox is not one of them. */
+/**
+ * API-014 listMyAgents: my sessions, online or seen in the last 7 days. The terminal inbox is not one of them.
+ * `unread`: what this session sent my terminal inbox that nobody has read yet; older servers leave it out.
+ */
 export const myAgent = agentRef.extend({
   session_id: z.string(),
   online: z.boolean(),
   device_id: z.string().nullable(),
   device_name: z.string().optional(),
   last_online_at: time.optional(),
+  unread: z.number().default(0),
 })
 
 /** API-012 listContacts. A contact's sessions have no id and no computer name. `active` is false when their access ended. */
@@ -43,7 +47,11 @@ export const sender = z.object({ account_id: accountId, name: z.string(), agent:
 /** The conversation a message belongs to: `group` for group messages, `peer` (the other account) for direct ones. */
 export const conversationRef = z.object({ kind: z.enum(["direct", "group"]), id: z.number(), group: groupRef.optional(), peer: accountRef.optional() })
 
-/** API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal. */
+/**
+ * API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal.
+ * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what I sent one of my own sessions
+ * (API-036, API-043): `pending`, `pushed`, `delivered` or `canceled`.
+ */
 export const message = z.object({
   id: z.number(),
   from: sender,
@@ -53,6 +61,8 @@ export const message = z.object({
   reply_to: z.string(),
   files: z.array(file).default([]),
   to: agentRef.optional(),
+  from_me: z.boolean().default(false),
+  state: z.string().optional(),
 })
 
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
@@ -84,6 +94,19 @@ export const billing = z.object({
 /** Error bodies are problem+json. `type` is the stable part (`/errors/code-invalid`); `detail` is written for people. */
 export const problem = z.object({ type: z.string(), title: z.string(), status: z.number(), detail: z.string().optional() })
 
+/** API-015 sendMessage. `terminal`: it went to the peer's terminal inbox. `inactive_members`: group members skipped. */
+export const sent = z.object({
+  message_id: z.number(),
+  conversation: conversationRef,
+  recipients: z.number(),
+  terminal: z.boolean().default(false),
+  inactive_members: z.number().optional(),
+})
+/** API-043 sendToMyAgent: the stored message, with its `state`. */
+export const sentToAgent = z.object({ message })
+/** API-044 markAgentRead */
+export const marked = z.object({ marked: z.number() })
+
 /** API-001 */
 export const codeSent = z.object({ retry_after_s: z.number() })
 /** API-028 */
@@ -110,3 +133,4 @@ export type Billing = z.infer<typeof billing>
 export type MessagesPage = z.infer<typeof messagesPage>
 export type Me = z.infer<typeof me>
 export type WebLogin = z.infer<typeof webLogin>
+export type Sent = z.infer<typeof sent>

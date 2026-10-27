@@ -1,4 +1,4 @@
-// TC-104 (docs/TEST.md): signs in to https://app.imbo.dev as the online smoke account and walks the read-only pages.
+// TC-104 (docs/TEST.md): signs in to https://app.imbo.dev as the online smoke account and walks the pages without sending.
 // The code is read from the smoke mailbox with mail-read (subject "Imbo code: NNNNNN"); it is never printed.
 // usage: node web/app/tests/prod.mjs <screenshot dir>
 import { execFileSync } from 'node:child_process';
@@ -67,7 +67,7 @@ try {
   await thread.getByText('ping-42').first().waitFor();
   const text = await thread.textContent();
   ok('4 messages show with their receiving session', text.includes('to smoke-b smoke'));
-  ok('4 no message input on the web', (await page.locator('textarea, input[type=text]').count()) === 0);
+  ok('4 message box addressed to smoke-b\'s inbox', (await page.getByRole('textbox', { name: "Message smoke-b's inbox" }).count()) === 1);
   await shot('04-chat-smoke-b');
 
   // 5. Contacts

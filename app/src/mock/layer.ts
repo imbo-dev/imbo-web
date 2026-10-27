@@ -1,4 +1,4 @@
-import type { Account, Message, MessagesPage } from "@/data/contract"
+import type { Account, Message, MessagesPage, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -7,6 +7,8 @@ import * as f from "./data"
 // 401 when signed out). Loaded only when VITE_USE_MOCK=1. The Demo panel (./DemoPanel.tsx) changes `controls`.
 
 export type Status = "ready" | "loading" | "empty" | "error"
+/** `refused`: the server turns every send down, as when it's over the rate limit. */
+export type Sending = "ok" | "refused"
 export type Controls = {
   status: Status
   preset: f.BillingPreset
@@ -14,11 +16,12 @@ export type Controls = {
   plan: Plan
   mode: "live" | "test"
   billingOn: boolean
+  sending: Sending
   live: Message[]
   pendingExtra: Record<number, number>
 }
 
-export let controls: Controls = { status: "ready", preset: "trial", plan: "monthly", mode: "live", billingOn: true, live: [], pendingExtra: {} }
+export let controls: Controls = { status: "ready", preset: "trial", plan: "monthly", mode: "live", billingOn: true, sending: "ok", live: [], pendingExtra: {} }
 const listeners = new Set<() => void>()
 export const subscribe = (l: () => void) => (listeners.add(l), () => listeners.delete(l))
 export function setControls(patch: Partial<Controls>) {
@@ -79,6 +82,36 @@ function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
   }
   const older = p.before !== undefined ? list.filter((m) => m.id < p.before!) : list
   return { messages: older.slice(-limit), has_more: older.length > limit }
+}
+
+// ── Sending ──
+// Stored the way the server stores it: once per client_msg_id, answered by the sessions it went to a moment later.
+
+const sentByCid = new Map<string, Sent>()
+const agentSentByCid = new Map<string, number>()
+/** Delivery state of what Dana sent her own sessions, as it moves on. */
+const states: Record<number, string> = {}
+/** What each of Dana's sessions sent her terminal inbox that she hasn't read yet, by message number. */
+const repliesOf = (id: string) => allMessages().filter((m) => m.from.agent?.id === id && m.to?.tool === "terminal").map((m) => m.id)
+const unread: Record<string, number[]> = Object.fromEntries(f.myAgents.map((a) => [a.id, a.unread ? repliesOf(a.id).slice(-a.unread) : []]))
+const withState = (m: Message) => (states[m.id] ? { ...m, state: states[m.id] } : m)
+const nextId = () => Math.max(...allMessages().map((m) => m.id)) + 1
+const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
+const append = (m: Message, pendingFor?: number) =>
+  setControls({
+    live: [...controls.live, m],
+    pendingExtra: pendingFor === undefined ? controls.pendingExtra : { ...controls.pendingExtra, [pendingFor]: (controls.pendingExtra[pendingFor] ?? 0) + 1 },
+  })
+
+/** The checks every send passes first, in the server's order and wording. */
+async function sending(body: string) {
+  const a = signedIn()
+  await wait(450)
+  if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+  if (!body.trim() || [...body].length > 32_000) throw new ApiError(422, "/errors/body-invalid", "The message must be 1 to 32000 characters.")
+  if (controls.preset === "expired") throw new ApiError(402, "/errors/subscription-required", "Your trial has ended. Subscribe to send messages again.")
+  if (controls.sending === "refused") throw new ApiError(429, "/errors/rate-limited", "Too many messages in this conversation. Slow down.", 20)
+  return a
 }
 
 const codeTries: Record<string, number> = {}
@@ -143,12 +176,66 @@ export const mock = {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
     return data(() => page(allMessages().filter((m) => m.conversation.id === id), p), { messages: [], has_more: false })
   },
-  agents: () => data(() => f.myAgents, []),
+  agents: () => data(() => f.myAgents.map((a) => ({ ...a, unread: unread[a.id].length })), []),
   agentMessages: async (id, p) => {
     if (!f.myAgents.some((a) => a.id === id)) throw new ApiError(404, "/errors/not-found", "No such session.")
-    return data(() => page(allMessages().filter((m) => m.from.agent?.id === id || m.to?.id === id), p), { messages: [], has_more: false })
+    return data(() => page(allMessages().filter((m) => m.from.agent?.id === id || m.to?.id === id).map(withState), p), { messages: [], has_more: false })
   },
   contacts: () => data(() => f.contacts, []),
+  /** Direct: `<account>` is their terminal inbox, `<account>/<short ID>` one of their sessions, which answers 2.5 s later. */
+  async send(to, body, cid) {
+    const done = sentByCid.get(cid)
+    if (done) return done
+    const a = await sending(body)
+    const group = to.startsWith("#") ? f.conversations.find((c) => c.group && `#${c.group.id}` === to) : undefined
+    const [peerId, short] = to.split("/")
+    const peer = group ? undefined : f.contacts.find((p) => String(p.id) === peerId)
+    if (!group && !peer) throw new ApiError(403, "/errors/not-contact", `${to} isn't one of your contacts.`)
+    if (peer && !peer.active) throw new ApiError(403, "/errors/recipient-inactive", `${peer.name}'s account is inactive.`)
+    const chat = group ?? f.conversations.find((c) => c.peer?.id === peer!.id)
+    if (!chat) throw new ApiError(404, "/errors/recipient-not-found", `No conversation with ${to}.`)
+    const session = short ? f.contactSessions[to] : undefined
+    if (short && !session) throw new ApiError(404, "/errors/session-not-found", `${peer!.name} has no session ${short}.`)
+    const conversation = chat.group ? { kind: "group" as const, id: chat.id, group: chat.group } : { kind: "direct" as const, id: chat.id, peer: chat.peer }
+    const m = f.msg({ id: nextId(), conversation, from: f.from(a), ...(!group && { to: session ?? f.terminalOf(peer!.id) }), created_at: new Date().toISOString(), body })
+    append(m)
+    if (group)
+      later(3000, () => append(f.msg({ id: nextId(), conversation, from: f.from(f.groupAnswer.person, f.groupAnswer.agent), created_at: new Date().toISOString(), body: f.groupAnswer.body }), chat.id))
+    else if (session)
+      later(2500, () => append(f.msg({ id: nextId(), conversation, from: f.from(peer!, session), to: f.terminalOf(a.id), created_at: new Date().toISOString(), body: f.answerFor(m.id) }), chat.id))
+    const r = { message_id: m.id, conversation, recipients: session ? 1 : 0, terminal: !group && !session }
+    sentByCid.set(cid, r)
+    return r
+  },
+  /** An online session takes it within about a second and answers 3.5 s later; an offline one leaves it pending. */
+  async sendToAgent(id, body, cid) {
+    const done = agentSentByCid.get(cid)
+    if (done !== undefined) return withState(allMessages().find((m) => m.id === done)!)
+    const a = await sending(body)
+    const agent = f.myAgents.find((x) => x.id === id)
+    if (!agent) throw new ApiError(404, "/errors/not-found", "No such session.")
+    const m = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a), to: f.ref(agent), created_at: new Date().toISOString(), body })
+    states[m.id] = agent.online ? "pushed" : "pending"
+    append(m)
+    agentSentByCid.set(cid, m.id)
+    if (agent.online) {
+      later(1200, () => (states[m.id] = "delivered"))
+      later(3500, () => {
+        const reply = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a, f.ref(agent)), to: f.terminalOf(a.id), created_at: new Date().toISOString(), body: f.answerFor(m.id) })
+        unread[id].push(reply.id)
+        append(reply)
+      })
+    }
+    return withState(m)
+  },
+  async markRead(id, upTo) {
+    signedIn()
+    await wait(200)
+    const left = (unread[id] ?? []).filter((n) => n > upTo)
+    const marked = (unread[id]?.length ?? 0) - left.length
+    unread[id] = left
+    return marked
+  },
   pendingRequests: () => data(() => f.pendingRequests, 0),
   async billing() {
     const a = signedIn()

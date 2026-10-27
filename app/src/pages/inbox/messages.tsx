@@ -1,9 +1,25 @@
 import { Fragment, type ReactNode } from "react"
-import { ArrowDown, Download, FileText } from "lucide-react"
+import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "lucide-react"
+import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Avatar, SessionName, Sep, Tag, agentAvatar } from "@/components/bits"
 import type { FileRef, Message } from "@/data/contract"
-import { fileExpired, fileUrl, loadOlder, recipientOf, type State, type Thread, type ThreadKey } from "@/data/store"
+import type { ApiError } from "@/data/layer"
+import {
+  contactOf,
+  dataOf,
+  discard,
+  fileExpired,
+  fileUrl,
+  loadOlder,
+  recipientOf,
+  resend,
+  resendTo,
+  type Outgoing,
+  type State,
+  type Thread,
+  type ThreadKey,
+} from "@/data/store"
 import { clock, dayLabel, fileSize, langOf, sameDay } from "@/lib/format"
 import { useFollow } from "@/lib/useFollow"
 
@@ -46,6 +62,26 @@ function Attachments({ files }: { files: FileRef[] }) {
   )
 }
 
+/** One line under a message, in the caption size: its delivery state or why it wasn't sent. */
+function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error"; children: ReactNode }) {
+  return (
+    <div className={cn("mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption", tone ? "text-destructive" : "text-(--semantic-color-text-tertiary)")}>
+      {icon}
+      {children}
+    </div>
+  )
+}
+
+/** API-036 `state` of what I sent one of my sessions (FLOW-WEB-SEND S8); a state this page doesn't know shows nothing. */
+function Delivery({ s, m }: { s: State; m: Message }) {
+  if (!m.state || !m.to) return null
+  if (m.state === "delivered") return <StatusLine icon={<CheckCheck size={14} aria-hidden="true" />}>Delivered</StatusLine>
+  if (m.state === "canceled") return <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />}>Not delivered</StatusLine>
+  if (m.state !== "pending" && m.state !== "pushed") return null
+  const online = dataOf(s.agents)?.find((a) => a.id === m.to?.id)?.online
+  return <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{online ? "Sending…" : `Waiting for ${m.to.title} to come online`}</StatusLine>
+}
+
 /** A message sent with `imbo send` has no `from.agent`: it came from the sender's terminal. Group messages have no `to`. */
 export function MessageRow({ s, m }: { s: State; m: Message }) {
   const to = recipientOf(s, m)
@@ -64,6 +100,86 @@ export function MessageRow({ s, m }: { s: State; m: Message }) {
           {m.body}
         </p>
         {m.files.length > 0 && <Attachments files={m.files} />}
+        <Delivery s={s} m={m} />
+      </div>
+    </article>
+  )
+}
+
+/** Refusals worth another try: no answer, over the rate limit, a server fault. The same `client_msg_id` makes it safe. */
+const retryable = (e: ApiError) => e.status === 0 || e.status === 429 || e.status >= 500 || e.type === "contract"
+
+/** Why a send was refused, in the words of FLOW-WEB-CHAT and FLOW-WEB-SEND; anything else in the server's own words. */
+function refusal(e: ApiError, group: boolean, who: string) {
+  switch (e.type) {
+    case "/errors/body-invalid":
+      return "Messages are 1 to 32,000 characters."
+    case "/errors/rate-limited":
+      return e.retryAfter ? `Sending too fast. Try again in ${e.retryAfter} s.` : "Sending too fast. Wait a moment, then try again."
+    case "/errors/subscription-required":
+      return "Subscribe to send and receive again."
+    case "/errors/not-contact":
+      return `${who} is no longer your contact.`
+    case "/errors/not-member":
+      return "You're no longer in this group."
+    case "/errors/recipient-not-found":
+      return group ? "This group was dissolved." : e.message
+    case "/errors/session-not-found":
+      return `That session is gone. Send it to ${who}'s inbox instead.`
+    case "/errors/recipient-inactive":
+      return group ? "No one else in this group can receive messages right now." : `${who}'s account is inactive, so they can't receive messages.`
+  }
+  return e.status === 0 ? "Check your connection, then try again." : e.message
+}
+
+/** Who an outgoing message is addressed to: my own session, the group (nobody named), or a contact's inbox or session. */
+function addressee(s: State, key: ThreadKey, to: string) {
+  if (key.startsWith("a:")) return { owner: s.account?.name ?? "", title: dataOf(s.agents)?.find((a) => a.id === key.slice(2))?.title ?? "" }
+  if (to.startsWith("#")) return undefined
+  const [account, short] = to.split("/")
+  const p = contactOf(s, Number(account))
+  return { owner: p?.name ?? account, title: short ? (p?.sessions.find((x) => x.short_id === short)?.title ?? short) : "Terminal" }
+}
+
+/** A message on its way, or refused: shown under the thread until the server's copy takes its place. */
+function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
+  const to = addressee(s, id, o.to)
+  const e = o.status === "failed" ? o.error : undefined
+  return (
+    <article className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
+      <Avatar kind="terminal" />
+      <div className="min-w-0">
+        <header className="flex min-w-0 items-baseline gap-2">
+          <SessionName owner={s.account?.name ?? ""} title="Terminal" strong />
+          {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
+        </header>
+        <p lang={langOf(o.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
+          {o.body}
+        </p>
+        {!e ? (
+          <StatusLine icon={<Clock size={14} aria-hidden="true" />}>Sending…</StatusLine>
+        ) : (
+          <div role="alert">
+            <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />} tone="error">
+              <span>Not sent. {refusal(e, o.to.startsWith("#"), to?.owner ?? "")}</span>
+            </StatusLine>
+            <div className="mt-1 -ml-2 flex flex-wrap gap-1">
+              {retryable(e) && (
+                <Button variant="ghost" size="sm" onClick={() => resend(id, o.cid)}>
+                  Try again
+                </Button>
+              )}
+              {e.type === "/errors/session-not-found" && (
+                <Button variant="ghost" size="sm" onClick={() => resendTo(id, o.cid, o.to.split("/")[0])}>
+                  Send to inbox
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => discard(id, o.cid)}>
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </article>
   )
@@ -99,7 +215,9 @@ function Earlier({ id, t }: { id: ThreadKey; t: Thread }) {
 /** Scrolling message list that stays on the newest message while you're at the bottom, with a day divider per day. */
 export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey; thread: Thread; label: string }) {
   const { messages } = thread
-  const { ref, showJump, jump } = useFollow<HTMLDivElement>(messages.at(-1)?.id, id)
+  const outbox = s.outbox[id] ?? []
+  // Sending something follows the thread to the bottom again.
+  const { ref, showJump, jump } = useFollow<HTMLDivElement>(`${messages.at(-1)?.id}:${outbox.length}`, `${id}:${s.sent[id] ?? 0}`)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={ref} tabIndex={0} aria-label={label} className="scroll-pane focus-ring min-h-0 flex-1">
@@ -110,6 +228,9 @@ export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey;
               {(i === 0 || !sameDay(messages[i - 1].created_at, m.created_at)) && <DayDivider at={m.created_at} />}
               <MessageRow s={s} m={m} />
             </Fragment>
+          ))}
+          {outbox.map((o) => (
+            <OutgoingRow key={o.cid} s={s} id={id} o={o} />
           ))}
         </div>
       </div>

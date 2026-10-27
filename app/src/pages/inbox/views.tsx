@@ -1,14 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, ExternalLink, FlaskConical, Lock, MessageSquare, UserPlus, Users } from "lucide-react"
+import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
-import type { Billing, MyAgent } from "@/data/contract"
+import type { Billing, Conversation, MyAgent } from "@/data/contract"
 import { messageOf, type Plan } from "@/data/layer"
 import {
   PRICES,
+  addressOf,
   checkout,
+  chosenSession,
+  contactOf,
   conversationOf,
   conversationTitle,
   conversationWith,
@@ -26,6 +29,7 @@ import {
 } from "@/data/store"
 import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
 import { onLinkClick } from "@/lib/router"
+import { Composer, RecipientPicker, SendingClosed } from "./composer"
 import { MessageList, PaneHeader } from "./messages"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
 
@@ -55,8 +59,11 @@ function ListRow({ href, current, children }: { href: string; current: boolean; 
   )
 }
 
-/** API-030 `pending`: sent to me, not yet picked up by a session nor read in a terminal. Looking here changes nothing. */
-export function PendingBadge({ n, small, labelled }: { n: number; small?: boolean; labelled?: boolean }) {
+/**
+ * API-030 `pending`: sent to me, not yet picked up by a session nor read in a terminal. Looking here changes nothing.
+ * Also API-014 `unread`, with `sr` saying what the number counts.
+ */
+export function PendingBadge({ n, small, labelled, sr = "waiting for delivery" }: { n: number; small?: boolean; labelled?: boolean; sr?: string }) {
   return (
     <span
       className={cn(
@@ -65,7 +72,7 @@ export function PendingBadge({ n, small, labelled }: { n: number; small?: boolea
       )}
     >
       {n}
-      {!labelled && <span className="sr-only"> waiting for delivery</span>}
+      {!labelled && <span className="sr-only"> {sr}</span>}
     </span>
   )
 }
@@ -157,10 +164,10 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
   if (!c) return <NotFound back={back} what="chat" />
 
   const title = conversationTitle(c)
-  const peer = c.peer && dataOf(s.contacts)?.find((p) => p.id === c.peer?.id)
+  const peer = c.peer && contactOf(s, c.peer.id)
   return (
     <>
-      <PaneHeader back={back}>
+      <PaneHeader back={back} end={c.kind === "direct" && peer?.active && <RecipientPicker s={s} c={c} />}>
         <Avatar kind={c.group ? "group" : "person"} label={title} />
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
@@ -192,20 +199,37 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
         </div>
       </PaneHeader>
       <ThreadBody s={s} id={key} label={`Messages with ${title}`} />
-      <ReadOnlyNote />
+      <ChatComposer s={s} c={c} title={title} />
     </>
   )
 }
 
-function ReadOnlyNote() {
+/** Why this account can't send right now (RULE-008), or undefined when it can. */
+function sendingPaused(s: State) {
+  const b = dataOf(s.billing)
+  return b?.enabled && b.access.state === "expired" ? "Sending is paused until you subscribe." : undefined
+}
+
+/** A group sends to everyone in it; a direct chat to the peer's inbox or the session picked in the header. */
+function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: string }) {
+  const key: ThreadKey = `c:${c.id}`
+  if (s.threads[key]?.status !== "ready") return null
+  const paused = sendingPaused(s)
+  if (paused) return <SendingClosed>{paused}</SendingClosed>
+  if (c.kind === "group") return <Composer key={key} threadKey={key} to={addressOf(s, c)} label={title} />
+  const contacts = dataOf(s.contacts)
+  const peer = contactOf(s, c.peer!.id)
+  if (contacts && !peer) return <SendingClosed>{title} is no longer your contact, so messages can't be sent here.</SendingClosed>
+  if (peer && !peer.active) return <SendingClosed>{title}'s account is inactive, so messages can't reach them.</SendingClosed>
+  const x = chosenSession(s, c)
   return (
-    <p className="flex flex-none items-center gap-2 border-t-(length:--semantic-layout-hairline) border-border px-4 py-3 text-caption text-muted-foreground">
-      <Lock size={14} aria-hidden="true" className="flex-none" />
-      <span className="text-pretty">
-        Read-only on the web. Your sessions reply on their own, or send from a terminal with{" "}
-        <code className="font-(family-name:--semantic-typography-code-font-family) text-foreground">imbo send</code>.
-      </span>
-    </p>
+    <Composer
+      key={key}
+      threadKey={key}
+      to={addressOf(s, c)}
+      label={x ? `${title} ${x.title}` : `${title}'s inbox`}
+      note={x && !x.online ? `${x.title} is offline. It gets your message when it comes back online.` : undefined}
+    />
   )
 }
 
@@ -260,7 +284,7 @@ function ThreadBody({ s, id, label, empty }: { s: State; id: ThreadKey; label: s
         <ErrorState what="the messages" error={t.error} onRetry={() => loadThread(id)} />
       </div>
     )
-  if (!t.data.messages.length && empty) return empty
+  if (!t.data.messages.length && !s.outbox[id]?.length && empty) return empty
   return <MessageList s={s} id={id} thread={t.data} label={label} />
 }
 
@@ -295,7 +319,7 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
       {l.data.map((x) => (
         <ListRow key={x.id} href={`/sessions/${x.id}`} current={x.id === open}>
           <Avatar kind="agent" />
-          <span className="col-span-2 min-w-0">
+          <span className="min-w-0">
             <span className="block truncate text-body">{x.title}</span>
             <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
               <Presence s={x} plain />
@@ -303,6 +327,7 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
               <span className="truncate">{toolName(x.tool)}</span>
             </span>
           </span>
+          {x.unread > 0 && <PendingBadge n={x.unread} sr={x.unread === 1 ? "new reply" : "new replies"} />}
         </ListRow>
       ))}
     </nav>
@@ -317,6 +342,7 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
   if (early) return early
   const x = dataOf(s.agents)?.find((a) => a.id === id)
   if (!x) return <NotFound back={back} what="session" />
+  const paused = sendingPaused(s)
   return (
     <>
       <PaneHeader back={back} end={<Presence s={x} />}>
@@ -340,7 +366,18 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
           </div>
         }
       />
-      <ReadOnlyNote />
+      {s.threads[key]?.status === "ready" &&
+        (paused ? (
+          <SendingClosed>{paused}</SendingClosed>
+        ) : (
+          <Composer
+            key={key}
+            threadKey={key}
+            to=""
+            label={x.title}
+            note={!x.online ? `${x.title} is offline. It gets your message when it comes back online.` : undefined}
+          />
+        ))}
     </>
   )
 }

@@ -1,4 +1,4 @@
-import type { Billing, Contact, Conversation, FileRef, Me, MessagesPage, MyAgent, WebLogin } from "./contract"
+import type { Billing, Contact, Conversation, FileRef, Me, Message, MessagesPage, MyAgent, Sent, WebLogin } from "./contract"
 
 /** Which messages to fetch: the newest page by default, or only those before or after a message number. */
 export type Page = { before?: number; after?: number }
@@ -18,6 +18,12 @@ export type DataLayer = {
   agents(): Promise<MyAgent[]>
   agentMessages(agentId: string, page?: Page): Promise<MessagesPage>
   contacts(): Promise<Contact[]>
+  /** API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on retry. */
+  send(to: string, body: string, clientMsgId: string): Promise<Sent>
+  /** API-043: to one of my own sessions. */
+  sendToAgent(agentId: string, body: string, clientMsgId: string): Promise<Message>
+  /** API-044: what this session sent my terminal inbox, up to message `upTo`, counts as read. */
+  markRead(agentId: string, upTo: number): Promise<number>
   pendingRequests(): Promise<number>
   billing(): Promise<Billing>
   checkout(plan: Plan): Promise<string>
