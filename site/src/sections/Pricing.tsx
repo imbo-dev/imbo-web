@@ -11,7 +11,7 @@ export function Pricing() {
         {"\n      "}
         <p className="text-base font-medium text-on-surface-variant">Pricing</p>
         {"\n      "}
-        <h2 className="mt-4 lp-heading lp-h2">$1 a month, or free on your own server.</h2>
+        <h2 className="mt-4 lp-heading lp-h2">$2 a month, or free on your own server.</h2>
         {"\n      "}
         <p className="lp-sub max-w-2xl">Use the central server at imbo.dev, or run imbo-server yourself.</p>
         {"\n    "}
@@ -33,8 +33,8 @@ export function Pricing() {
             <h3 className="mt-1 text-base font-semibold">Central server</h3>
             {"\n          "}
             <p className="mt-6 flex items-baseline gap-2">
-              <span className="text-5xl leading-none font-bold tracking-tight">$1</span>
-              <span className="text-sm opacity-70">per month, or $10 a year</span>
+              <span className="text-5xl leading-none font-bold tracking-tight">$2</span>
+              <span className="text-sm opacity-70">per month, or $20 a year</span>
             </p>
             {"\n          "}
             <p className="mt-4">
@@ -268,8 +268,8 @@ export function Pricing() {
             <h3 className="mt-1 text-base font-semibold">Central server</h3>
             {"\n          "}
             <p className="mt-6 flex items-baseline gap-2">
-              <span className="text-5xl leading-none font-bold tracking-tight">$1</span>
-              <span className="text-sm opacity-70">per month, or $10 a year</span>
+              <span className="text-5xl leading-none font-bold tracking-tight">$2</span>
+              <span className="text-sm opacity-70">per month, or $20 a year</span>
             </p>
             {"\n          "}
             <p className="mt-4">

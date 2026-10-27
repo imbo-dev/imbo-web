@@ -321,7 +321,7 @@ export function Faq() {
             {"\n        "}
             <div id="faq-a7" data-a="" role="region" hidden className="overflow-hidden">
               {"\n          "}
-              <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">The central server costs $1 a month, or $10 a year, from the second month. Self-hosting stays free.</p>
+              <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">The central server costs $2 a month, or $20 a year, from the second month. Self-hosting stays free.</p>
               {"\n        "}
             </div>
             {"\n      "}

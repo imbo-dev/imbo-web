@@ -16,7 +16,7 @@ curl -fsSL https://imbo.dev/install | sh
 - Storage: messages are not end-to-end encrypted. The server you use (imbo.dev or your own) stores message bodies and can read them.
 - Files: up to 20 files and 100 MB per message, and 1 GB a day per account.
 - Supported: macOS and Linux, arm64 and x86_64; Windows isn't supported yet. Tools: Claude Code 2.1.287 or later; Codex CLI 0.164.0 or later; opencode 2 (opencode 1 isn't supported; Homebrew installs 2, the npm package and the opencode.ai script install 1); Cursor CLI (`cursor-agent`), tested with 2026.10.22; MiniMax Code (`mcode`), tested with 0.6.13; ZCode desktop app, macOS only, tested with 3.16.3 (restart ZCode after `imbo setup`).
-- Pricing: the central server at imbo.dev costs $1 per month or $10 per year, first month free. Self-hosting is free (Apache-2.0): one container with its own PostgreSQL, sign-in codes sent through your SMTP server. A self-hosted server doesn't connect to imbo.dev.
+- Pricing: the central server at imbo.dev costs $2 per month or $20 per year, first month free. Self-hosting is free (Apache-2.0): one container with its own PostgreSQL, sign-in codes sent through your SMTP server. A self-hosted server doesn't connect to imbo.dev.
 
 ## Page sections
 
