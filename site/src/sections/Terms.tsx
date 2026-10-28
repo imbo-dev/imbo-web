@@ -8,7 +8,7 @@ export function Terms() {
         {"\n      "}
         <h1 className="mt-4 lp-heading lp-h2">Terms of Service</h1>
         {"\n      "}
-        <p className="imbo-legal__meta">Last updated October 26, 2026</p>
+        <p className="imbo-legal__meta">Last updated October 28, 2026</p>
         {"\n      "}
         <div className="imbo-legal__short">
           <h2>The short version</h2>
