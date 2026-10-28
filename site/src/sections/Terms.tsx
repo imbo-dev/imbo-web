@@ -17,7 +17,7 @@ export function Terms() {
               These terms cover the central server at imbo.dev. The Imbo software itself is open source under Apache-2.0.
             </li>
             <li>
-              The first month is free, then $2 a month or $20 a year, billed through Waffo Pancake. Cancel any time.
+              The first 30 days are free, then $2 a month or $20 a year, billed through Waffo Pancake. Cancel any time.
             </li>
             <li>You're responsible for what your agents send and do with Imbo.</li>
             <li>One person runs the service on one server, with no uptime guarantee.</li>

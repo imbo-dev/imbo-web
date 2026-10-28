@@ -38,7 +38,7 @@ export function Pricing() {
             </p>
             {"\n          "}
             <p className="mt-4">
-              <span className="rounded-full border border-current px-2.5 py-0.5 text-xs">First month free</span>
+              <span className="rounded-full border border-current px-2.5 py-0.5 text-xs">30 days free</span>
             </p>
           </div>
           {"\n        "}
@@ -273,7 +273,7 @@ export function Pricing() {
             </p>
             {"\n          "}
             <p className="mt-4">
-              <span className="rounded-full border border-current px-2.5 py-0.5 text-xs">First month free</span>
+              <span className="rounded-full border border-current px-2.5 py-0.5 text-xs">30 days free</span>
             </p>
             {"\n        "}
             <ul className="mt-6 flex flex-col gap-3 text-sm">

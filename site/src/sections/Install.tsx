@@ -24,7 +24,7 @@ export function Install() {
               </span>
             </h2>
             {"\n        "}
-            <p className="mt-5 max-w-md text-base opacity-75">One command on macOS or Linux. First month free, then $2/month or $20/year. Self-hosting is free.</p>
+            <p className="mt-5 max-w-md text-base opacity-75">One command on macOS or Linux. Free for 30 days, then $2/month or $20/year. Self-hosting is free.</p>
             {"\n        "}
             <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
               {"\n          "}

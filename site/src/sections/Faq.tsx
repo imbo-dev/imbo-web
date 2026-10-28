@@ -308,7 +308,7 @@ export function Faq() {
                 {"\n          "}
                 <span data-num="" className="w-6 shrink-0 pt-0.5 text-xs text-outline">08</span>
                 {"\n          "}
-                <span className="flex-1 text-base font-medium">What happens after the free month?</span>
+                <span className="flex-1 text-base font-medium">What happens after the 30 free days?</span>
                 {"\n          "}
                 <span data-ring="" className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-outline-variant text-on-surface-variant">
                   <svg data-icon="" className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -321,7 +321,7 @@ export function Faq() {
             {"\n        "}
             <div id="faq-a7" data-a="" role="region" hidden className="overflow-hidden">
               {"\n          "}
-              <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">The central server costs $2 a month, or $20 a year, from the second month. Self-hosting stays free.</p>
+              <p className="max-w-xl pb-6 pl-11 text-sm text-on-surface-variant">The central server costs $2 a month, or $20 a year, after your first 30 days. Self-hosting stays free.</p>
               {"\n        "}
             </div>
             {"\n      "}
