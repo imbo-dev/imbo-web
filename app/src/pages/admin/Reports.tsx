@@ -407,7 +407,7 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
             <TriangleAlert size={16} aria-hidden="true" className="mt-0.5 flex-none text-(--semantic-color-feedback-warning)" />
             <div className="min-w-0 flex-1">
               <p className="text-body text-foreground">{target} is banned, but the subscription isn't canceled yet.</p>
-              <p className="text-caption text-muted-foreground">Creem didn't confirm it. {target} is signed out everywhere and can't sign in again either way.</p>
+              <p className="text-caption text-muted-foreground">Waffo didn't confirm it. {target} is signed out everywhere and can't sign in again either way.</p>
             </div>
             <Button variant="outline" size="sm" aria-disabled={retrying} onClick={retry}>
               <RotateCw size={14} aria-hidden="true" />

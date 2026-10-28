@@ -54,7 +54,7 @@ function jpegSize(buf) {
 
 // Expected: 401 for signed-out pages and the banned account's polling, 403 for the refused send to someone who blocked
 // alice, 404 for /admin as a non-admin and the removed picture, 409 for the second report and the stale Dismiss,
-// 422 for name-required when a new email signs in, 429 for the 21st picture, 502 for deleting while Creem refuses.
+// 422 for name-required when a new email signs in, 429 for the 21st picture, 502 for deleting while Waffo refuses.
 const expected = /status of (401|403|404|409|422|429|502) /;
 const watch = (p) => {
   p.on('console', (m) => m.type() === 'error' && !expected.test(m.text()) && errors.push(`console: ${m.text()}`));
@@ -628,7 +628,7 @@ try {
     const focused = await adm.evaluate(() => document.activeElement?.textContent?.trim());
     ok(
       'TC-231 #2 the ban dialog',
-      focused === 'Cancel' && ['Signs carol out on every computer, browser and phone.', 'Takes back undelivered messages', "Cancels carol's subscription on Creem.", "Closes carol's other open reports."].every((x) => text.includes(x)),
+      focused === 'Cancel' && ['Signs carol out on every computer, browser and phone.', 'Takes back undelivered messages', "Cancels carol's subscription on Waffo.", "Closes carol's other open reports."].every((x) => text.includes(x)),
       `focus ${focused}`
     );
     await shot(adm, '231-02');
@@ -791,9 +791,9 @@ try {
     ok('TC-234 #6 carol signs up again as a new account', me.account.id !== Number(C_ID) && String(me.account.id).length === 8, `${C_ID} → ${me.account.id}`);
   });
 
-  // ── TC-235: Creem doesn't cancel the subscription ──
+  // ── TC-235: Waffo doesn't cancel the subscription ──
   await step('TC-235 #1 ban from a report; the subscription stays', async () => {
-    const paid = sh(`IMBO_CREEM_WEBHOOK_SECRET="\${IMBO_CREEM_WEBHOOK_SECRET:-$(cat $L/webhook-secret)}" python3 ${crates}scripts/creem-event.py subscription.paid --sub sub_t235 --account ${B_ID} --period-end +30d`);
+    const paid = sh(`python3 ${crates}scripts/waffo-event.py subscription.activated --order ORD_t235 --account ${B_ID} --period-end +30d`);
     if (!paid.includes('\n200')) throw new Error(`paid event: ${paid.trim().split('\n').at(-2)}`);
     const before = mails().length;
     await openChat(a, /bob/);
@@ -802,28 +802,28 @@ try {
     await sent.getByText('Thanks. We review reports within 24 hours.').waitFor();
     made.R4 = (await nextMail(before)).id;
     await sent.getByRole('button', { name: 'Not now' }).click();
-    const refused = log().split('creem refused').length;
+    const refused = log().split('waffo refused').length;
     await adm.goto(`${base}/admin?report=${made.R4}`);
     await adm.getByRole('button', { name: 'Ban bob' }).click();
     await adm.getByRole('dialog', { name: 'Ban bob?' }).getByRole('button', { name: 'Ban bob' }).click();
     await toast(adm, 'bob is banned.');
     await adm.getByText("bob is banned, but the subscription isn't canceled yet.").waitFor();
-    ok('TC-235 #1 ban from a report; the subscription stays', log().split('creem refused').length - refused === 1 && (await adm.getByRole('button', { name: 'Retry' }).isVisible()), `report ${made.R4}`);
+    ok('TC-235 #1 ban from a report; the subscription stays', log().split('waffo refused').length - refused === 1 && (await adm.getByRole('button', { name: 'Retry' }).isVisible()), `report ${made.R4}`);
     await shot(adm, '235-01');
   });
   await step('TC-235 #2 Retry, refused again', async () => {
-    const refused = log().split('creem refused').length;
+    const refused = log().split('waffo refused').length;
     await adm.getByRole('button', { name: 'Retry' }).click();
     await adm.getByRole('button', { name: 'Retrying…' }).waitFor({ state: 'detached', timeout: 20000 }).catch(() => {});
     await adm.getByRole('button', { name: 'Retry', exact: true }).waitFor({ timeout: 20000 });
-    ok('TC-235 #2 Retry, refused again', log().split('creem refused').length - refused === 1 && (await adm.getByText("bob is banned, but the subscription isn't canceled yet.").isVisible()));
+    ok('TC-235 #2 Retry, refused again', log().split('waffo refused').length - refused === 1 && (await adm.getByText("bob is banned, but the subscription isn't canceled yet.").isVisible()));
   });
   await step('TC-235 #3 Users marks it; Retry cancel', async () => {
     await adm.goto(`${base}/admin/users?q=bob%40imbo.test`);
     const row = userRow('bob@imbo.test');
     await row.getByText('Subscription not canceled').waitFor();
     await row.getByRole('button', { name: 'Retry cancel' }).click();
-    await toast(adm, "Creem still didn't confirm the cancel. Try again later.");
+    await toast(adm, "Waffo still didn't confirm the cancel. Try again later.");
     ok('TC-235 #3 Users marks it; Retry cancel', await row.getByText('Subscription not canceled').isVisible());
     await shot(adm, '235-03');
   });

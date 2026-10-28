@@ -100,8 +100,8 @@ export const conversation = z.object({
 })
 
 /**
- * API-032 getBilling. `enabled: false`: the server has no Creem (self-hosted), and `mode` is absent.
- * `access.state` decides what the account can do; `subscription.status` is Creem's as received (`active`, `scheduled_cancel`,
+ * API-032 getBilling. `enabled: false`: the server has no Waffo (self-hosted), and `mode` is absent.
+ * `access.state` decides what the account can do; `subscription.status` is the server's (`active`, `scheduled_cancel`,
  * `canceled`, `past_due`, or one this app doesn't know, shown as is) and only picks the wording.
  */
 export const billing = z.object({

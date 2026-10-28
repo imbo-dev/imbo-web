@@ -8,7 +8,7 @@ import { controls, receive, setControls, skipSignIn, subscribe, type Cancel, typ
 
 // Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, whether sends
 // go through or the peer blocked Dana, what the next picture upload meets, whether a ban cancels the subscription, and
-// drop in a new message the way the 10 s poll would. "off" is a server without Creem, e.g. self-hosted. Only in the
+// drop in a new message the way the 10 s poll would. "off" is a server without Waffo, e.g. self-hosted. Only in the
 // mock build.
 
 /** Change what the fixtures answer, then ask again the way the page would. */

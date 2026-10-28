@@ -14,7 +14,7 @@ export type Status = "ready" | "loading" | "empty" | "error"
 export type Sending = "ok" | "refused" | "blocked"
 /** What the server makes of the next picture: taken, over 5 MB, unreadable, or the 20th change today. */
 export type Picture = "ok" | "too-large" | "unreadable" | "limit"
-/** Whether canceling a banned account's Creem subscription works (API-066, API-070). */
+/** Whether canceling a banned account's Waffo subscription works (API-066, API-070). */
 export type Cancel = "ok" | "fails"
 export type Controls = {
   status: Status
@@ -289,7 +289,7 @@ export const mock = {
     await wait(250)
     return f.billingFor(controls.preset, controls.mode, controls.billingOn, a.id === f.newAccountId ? 30 : 23, controls.plan)
   },
-  /** No Creem here: "checkout" lands straight back on the account page, and the payment notice arrives 4 s later. */
+  /** No Waffo here: "checkout" lands straight back on the account page, and the payment notice arrives 4 s later. */
   async checkout(plan) {
     signedIn()
     await wait(800)
@@ -303,7 +303,7 @@ export const mock = {
     await wait(600)
     if (controls.preset !== "paid" && controls.preset !== "ending" && controls.preset !== "past_due")
       throw new ApiError(404, "/errors/not-found", "You have no subscription to manage yet.")
-    return "https://www.creem.io/"
+    return "https://pancake.waffo.ai/"
   },
   fileUrl: (file) => `data:text/plain;charset=utf-8,${encodeURIComponent(`Demo file: ${file.name}\n`)}`,
   groups: () => data(() => f.groups, []),
@@ -425,7 +425,7 @@ export const mock = {
       const x = accountById(id)
       if (!x.banned_at) throw new ApiError(400, "/errors/invalid-request", "Only a banned account can be deleted here. Ban it first.")
       if (x.subscription?.status === "active" && controls.cancel === "fails")
-        throw new ApiError(502, "/errors/upstream", "Couldn't cancel the subscription on Creem, so nothing was deleted.")
+        throw new ApiError(502, "/errors/upstream", "Couldn't cancel the subscription on Waffo, so nothing was deleted.")
       named = named.filter((a) => a.id !== id)
       deleted.add(id)
     },
@@ -490,7 +490,7 @@ function close(r: Report, status: string, action?: string) {
 }
 /**
  * API-066: bans, closes the other open reports on them, and cancels a live subscription unless the Cancel control
- * says Creem fails. Again on a banned account only retries the cancel. Resolves to whether nothing is left to cancel.
+ * says Waffo fails. Again on a banned account only retries the cancel. Resolves to whether nothing is left to cancel.
  */
 function banAccount(id: number) {
   const x = accountById(id)

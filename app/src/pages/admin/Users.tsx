@@ -16,7 +16,7 @@ import { Pager } from "./Reports"
 // The Users tab of PAGE-WEB-ADMIN (API-065, FLOW-BAN S2, S5, S7): every account, newest first, 50 a page, searchable by
 // account ID or email; ban, unban, retry a subscription cancel that didn't go through, and delete a banned account.
 
-/** A subscription that would still charge: a ban cancels it, unless Creem didn't answer (FLOW-BAN S4). */
+/** A subscription that would still charge: a ban cancels it, unless Waffo didn't answer (FLOW-BAN S4). */
 const charging = (a: AdminAccount) => a.subscription?.status === "active" || a.subscription?.status === "past_due"
 
 /** The Plan column, from API-065 `access` and the latest `subscription`. */
@@ -102,7 +102,7 @@ export function Users({ recount }: { recount: () => void }) {
       const ok = await retryCancel(a.id)
       replace({ ...a, subscription: ok && a.subscription ? { ...a.subscription, status: "canceled" } : a.subscription })
       if (ok) toast(`${nameOf(a)}'s subscription is canceled.`)
-      else toast.error("Creem still didn't confirm the cancel. Try again later.")
+      else toast.error("Waffo still didn't confirm the cancel. Try again later.")
       if (ok) load()
     })
 

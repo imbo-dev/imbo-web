@@ -149,7 +149,7 @@ export function BanDialog({ who, ban, onDone }: { who: ReportParty | AdminAccoun
       <ul className="flex flex-col gap-3">
         <Consequence icon={<LogOut size={16} />}>Signs {name} out on every computer, browser and phone. Their sessions stop sending.</Consequence>
         <Consequence icon={<Undo2 size={16} />}>Takes back undelivered messages to and from {name}, and closes their pending requests and invites.</Consequence>
-        <Consequence icon={<CreditCard size={16} />}>Cancels {name}'s subscription on Creem. Payments already made aren't refunded.</Consequence>
+        <Consequence icon={<CreditCard size={16} />}>Cancels {name}'s subscription on Waffo. Payments already made aren't refunded.</Consequence>
         <Consequence icon={<Flag size={16} />}>Closes {name}'s other open reports.</Consequence>
       </ul>
       <p className="text-caption text-muted-foreground">You can unban {name} later in Users. Sign-ins and the subscription don't come back.</p>

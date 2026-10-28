@@ -579,7 +579,7 @@ function Subscribe() {
   )
 }
 
-/** Creem's customer page opens in a new tab (API-034). */
+/** Waffo's customer page opens in a new tab (API-034). */
 function ManageSubscription({ note }: { note: string }) {
   const [opening, setOpening] = useState(false)
   const open = async () => {
@@ -627,7 +627,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
           <p>
             Free trial, <span className="tabular-nums">{daysUntil(b.trial_ends_at!)}</span> days left
           </p>
-          <p className="text-caption text-muted-foreground">Subscribing starts the paid plan right away. Trial days left don't carry over.</p>
+          <p className="text-caption text-muted-foreground">Subscribe now and your first payment is taken 30 days later.</p>
           {!confirming && <Subscribe />}
         </>
       )
@@ -640,7 +640,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag tone="warn">Payment failed</Tag>
               {cycleName(sub.plan)}
             </p>
-            <p className="text-caption text-muted-foreground">Creem is retrying the charge.</p>
+            <p className="text-caption text-muted-foreground">Waffo is retrying the charge.</p>
             <ManageSubscription note="Change your card in Manage subscription." />
           </>
         )
@@ -651,7 +651,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag>Won't renew</Tag>
               {cycleName(sub.plan)}, ends {longDate(sub.paid_until)}
             </p>
-            <ManageSubscription note="Renew, change your card or download invoices on Creem." />
+            <ManageSubscription note="Renew, change your card or download invoices on Waffo." />
           </>
         )
       if (sub.status === "active")
@@ -661,17 +661,17 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag tone="ok">Subscribed</Tag>
               {cycleName(sub.plan)}, renews {longDate(sub.paid_until)}
             </p>
-            <ManageSubscription note="Cancel, change your card or download invoices on Creem." />
+            <ManageSubscription note="Cancel, change your card or download invoices on Waffo." />
           </>
         )
-      // A status this app doesn't know is shown as Creem sent it; access.state already says the plan is paid.
+      // A status this app doesn't know is shown as the server sent it; access.state already says the plan is paid.
       return (
         <>
           <p className="flex flex-wrap items-center gap-2">
             <Tag>{sub.status}</Tag>
             {cycleName(sub.plan)}, paid until {longDate(sub.paid_until)}
           </p>
-          <ManageSubscription note="Details are on Creem." />
+          <ManageSubscription note="Details are on Waffo." />
         </>
       )
     case "expired":
@@ -737,7 +737,7 @@ function PlanRow({ s }: { s: State }) {
 }
 
 export function AccountPane({ s }: { s: State }) {
-  // Creem sends the payer back to /account?checkout=done.
+  // Waffo sends the payer back to /account?checkout=done.
   useEffect(() => {
     if (new URLSearchParams(location.search).get("checkout") !== "done") return
     history.replaceState(null, "", "/account")

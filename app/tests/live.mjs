@@ -142,21 +142,22 @@ try {
   await page.waitForURL(/\/chats\/\d+$/);
   ok('Open chat goes to that chat', true);
 
-  // 10. Account: trial, test mode, subscribe goes to Creem (the page itself is stubbed, nothing is paid)
+  // 10. Account: trial, test mode, subscribe goes to Waffo (the page itself is stubbed, nothing is paid)
   await page.goto(base + '/account');
   await page.getByText(/Free trial, \d+ days left/).waitFor();
   ok('account shows trial and test mode', await page.getByText('Test mode: checkout takes test card numbers').isVisible());
+  ok('account says the first payment comes 30 days later', await page.getByText('Subscribe now and your first payment is taken 30 days later.').isVisible());
   await shot('09-account-trial');
-  await page.route(/creem\.io/, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>creem checkout stand-in</p>' }));
-  const [nav] = await Promise.all([page.waitForRequest(/creem\.io/, { timeout: 20000 }), page.getByRole('button', { name: '$10 a year' }).click()]);
-  ok('subscribe opens a Creem checkout page', /creem\.io\/test\/checkout/.test(nav.url()), nav.url().replace(/\?.*/, ''));
+  await page.route(/pancake\.waffo\.ai/, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>waffo checkout stand-in</p>' }));
+  const [nav] = await Promise.all([page.waitForRequest(/pancake\.waffo\.ai/, { timeout: 20000 }), page.getByRole('button', { name: '$20 a year' }).click()]);
+  ok('subscribe opens a Waffo checkout page', /pancake\.waffo\.ai\/store\/[^/]+\/checkout\/cs_/.test(nav.url()), nav.url().replace(/#.*/, ''));
 
-  // 11. Back from checkout: the payment notice (signed like Creem's) arrives, the page picks it up
+  // 11. Back from checkout: the payment notice (signed like Waffo's) arrives, the page picks it up
   const aliceId = sh("awk '$1==\"alice\"{print $2}' $L/ids.tsv").trim();
   await page.goto(base + '/account?checkout=done');
   await page.getByText('Confirming your payment…').waitFor();
   ok('back from checkout: confirming', true);
-  sh(`. ${crates}scripts/billing-env.sh; python3 ${crates}scripts/creem-event.py subscription.paid --sub sub_web_${stamp} --account ${aliceId} --plan yearly --period-end +365d >/dev/null`);
+  sh(`. ${crates}scripts/billing-env.sh; python3 ${crates}scripts/waffo-event.py subscription.activated --order ORD_web_${stamp} --account ${aliceId} --plan yearly --period-end +365d >/dev/null`);
   await page.getByText(/Subscribed/).waitFor({ timeout: 15000 });
   ok('subscription shows after the notice', (await page.locator('main').textContent()).includes('Yearly, renews'));
   await shot('10-account-subscribed');

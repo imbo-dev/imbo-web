@@ -482,11 +482,11 @@ export async function signOut() {
 
 // ── Billing ──────────────────────────────────────────────────────────────────
 
-export const PRICES = { monthly: "$1", yearly: "$10" } as const
+export const PRICES = { monthly: "$2", yearly: "$20" } as const
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/** Back from Creem: the payment notice can lag behind, so ask every 3 s for up to 60 s (FLOW-SUBSCRIBE S6). */
+/** Back from Waffo: the payment notice can lag behind, so ask every 3 s for up to 60 s (FLOW-SUBSCRIBE S6). */
 export async function watchCheckout() {
   set({ checkout: "waiting" })
   const until = Date.now() + 60_000
@@ -504,7 +504,7 @@ export async function watchCheckout() {
 }
 
 /**
- * Throws ApiError when the server refuses. Resolves true when the page is leaving for Creem; a path instead of a
+ * Throws ApiError when the server refuses. Resolves true when the page is leaving for Waffo; a path instead of a
  * payment page means there is none to go to (the demo), so it waits for the payment notice right here.
  */
 export async function checkout(plan: Plan) {
