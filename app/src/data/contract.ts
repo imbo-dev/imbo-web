@@ -103,13 +103,17 @@ export const conversation = z.object({
  * API-032 getBilling. `enabled: false`: the server has no Waffo (self-hosted), and `mode` is absent.
  * `access.state` decides what the account can do; `subscription.status` is the server's (`active`, `scheduled_cancel`,
  * `canceled`, `past_due`, or one this app doesn't know, shown as is) and only picks the wording.
+ * `subscription.provider` is `waffo` or `apple`; servers before App Store subscriptions leave it out (Waffo).
+ * `app_store` is only there when the server sells App Store subscriptions; the web app doesn't use it.
  */
 export const billing = z.object({
   enabled: z.boolean(),
   mode: z.enum(["test", "live"]).optional(),
   access,
   trial_ends_at: time.optional(),
-  subscription: z.object({ plan: z.string(), status: z.string(), paid_until: time }).optional(),
+  subscription: z
+    .object({ plan: z.string(), status: z.string(), paid_until: time, provider: z.string().optional() })
+    .optional(),
 })
 
 /** Error bodies are problem+json. `type` is the stable part (`/errors/code-invalid`); `detail` is written for people. */
@@ -178,8 +182,8 @@ export const report = z.object({
 })
 export const reportsPage = z.object({ reports: z.array(report), total: z.number() })
 export const reportOne = z.object({ report })
-/** API-064; `subscription_canceled` only for `ban`. */
-export const resolved = z.object({ report, subscription_canceled: z.boolean().optional() })
+/** API-064; `subscription_canceled` and `app_store_subscription` only for `ban`. */
+export const resolved = z.object({ report, subscription_canceled: z.boolean().optional(), app_store_subscription: z.boolean().optional() })
 /** API-065 item. `subscription`: the latest one, absent when there's none. */
 export const adminAccount = z.object({
   id: accountId,
@@ -188,15 +192,15 @@ export const adminAccount = z.object({
   avatar_url: z.string().optional(),
   created_at: time,
   access,
-  subscription: z.object({ status: z.string(), paid_until: time }).optional(),
+  subscription: z.object({ status: z.string(), paid_until: time, provider: z.string().optional() }).optional(),
   last_active_at: time.optional(),
   banned_at: time.optional(),
   admin: z.boolean(),
 })
 export const adminAccountsPage = z.object({ accounts: z.array(adminAccount), total: z.number() })
 export const adminAccountOne = z.object({ account: adminAccount })
-/** API-066 */
-export const banned = z.object({ account: adminAccount, subscription_canceled: z.boolean() })
+/** API-066. `app_store_subscription`: it still has an App Store subscription that renews, which only it can cancel. */
+export const banned = z.object({ account: adminAccount, subscription_canceled: z.boolean(), app_store_subscription: z.boolean() })
 /** API-068. `days`: the last 30 Beijing-time days, oldest first; `paid` has no daily history. */
 export const stats = z.object({
   accounts: z.number(),

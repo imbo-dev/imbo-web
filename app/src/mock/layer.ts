@@ -391,7 +391,7 @@ export const mock = {
       if (action === "ban") canceled = banAccount(r.target.id)
       if (action === "remove_avatar") takePicture(r.target.id)
       close(r, action === "dismiss" ? "dismissed" : "actioned", action === "dismiss" ? undefined : action)
-      return { report: current(r), ...(canceled !== undefined && { subscription_canceled: canceled }) }
+      return { report: current(r), ...(canceled !== undefined && { subscription_canceled: canceled, app_store_subscription: false }) }
     },
     async accounts(q, n) {
       adminOnly()
@@ -410,7 +410,7 @@ export const mock = {
       adminOnly()
       await wait(500)
       const canceled = banAccount(id)
-      return { account: accountById(id), subscription_canceled: canceled }
+      return { account: accountById(id), subscription_canceled: canceled, app_store_subscription: false }
     },
     async unban(id) {
       adminOnly()

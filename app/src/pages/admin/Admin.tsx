@@ -167,6 +167,9 @@ export function BanDialog({ who, ban, onDone }: { who: ReportParty | AdminAccoun
   )
 }
 
+/** After a ban: the server can't stop an App Store subscription and emailed the person instead (FLOW-BAN S7). */
+export const appStoreNote = (name: string) => `Only ${name} can cancel their App Store subscription. We emailed them how.`
+
 /** API-066 again on a banned account only retries canceling the subscription (FLOW-BAN S4). */
 export async function retryCancel(id: number) {
   return (await admin.ban(id)).subscription_canceled

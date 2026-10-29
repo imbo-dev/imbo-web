@@ -615,9 +615,16 @@ function ManageSubscription({ note }: { note: string }) {
 
 const cycleName = (plan: string) => (plan === "monthly" ? "Monthly" : plan === "yearly" ? "Yearly" : plan)
 
+/** An App Store subscription is managed only on the iPhone, so it gets this note instead of Manage subscription (ADR-043). */
+function AppStoreNote() {
+  return <p className="text-caption text-muted-foreground">Billed through the App Store. Manage it in Settings on your iPhone.</p>
+}
+
 /** The Plan row, one branch per API-032 state. `confirming`: back from checkout, waiting for the payment notice. */
 function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
   const sub = b.subscription
+  const appStore = sub?.provider === "apple"
+  const manage = (note: string) => (appStore ? <AppStoreNote /> : <ManageSubscription note={note} />)
   switch (b.access.state) {
     case "free":
       return <p>Free while billing hasn't started.</p>
@@ -640,8 +647,8 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag tone="warn">Payment failed</Tag>
               {cycleName(sub.plan)}
             </p>
-            <p className="text-caption text-muted-foreground">Waffo is retrying the charge.</p>
-            <ManageSubscription note="Change your card in Manage subscription." />
+            <p className="text-caption text-muted-foreground">{appStore ? "Apple" : "Waffo"} is retrying the charge.</p>
+            {manage("Change your card in Manage subscription.")}
           </>
         )
       if (sub.status === "scheduled_cancel" || sub.status === "canceled")
@@ -651,7 +658,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag>Won't renew</Tag>
               {cycleName(sub.plan)}, ends {longDate(sub.paid_until)}
             </p>
-            <ManageSubscription note="Renew, change your card or download invoices on Waffo." />
+            {manage("Renew, change your card or download invoices on Waffo.")}
           </>
         )
       if (sub.status === "active")
@@ -661,7 +668,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
               <Tag tone="ok">Subscribed</Tag>
               {cycleName(sub.plan)}, renews {longDate(sub.paid_until)}
             </p>
-            <ManageSubscription note="Cancel, change your card or download invoices on Waffo." />
+            {manage("Cancel, change your card or download invoices on Waffo.")}
           </>
         )
       // A status this app doesn't know is shown as the server sent it; access.state already says the plan is paid.
@@ -671,7 +678,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
             <Tag>{sub.status}</Tag>
             {cycleName(sub.plan)}, paid until {longDate(sub.paid_until)}
           </p>
-          <ManageSubscription note="Details are on Waffo." />
+          {manage("Details are on Waffo.")}
         </>
       )
     case "expired":
@@ -718,9 +725,10 @@ function PlanRow({ s }: { s: State }) {
     )
   const b = l.data
   if (!b.enabled) return null
+  const viaAppStore = b.access.state === "paid" && b.subscription?.provider === "apple"
   return (
     <Row label="Plan">
-      {b.mode === "test" && (
+      {b.mode === "test" && !viaAppStore && (
         <p className="flex items-start gap-2 text-caption text-muted-foreground">
           <FlaskConical size={14} aria-hidden="true" className="mt-0.5 flex-none text-(--semantic-color-feedback-warning)" />
           Test mode: checkout takes test card numbers and never charges.

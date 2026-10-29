@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { ArrowLeft, Ban, Check, ChevronDown, FileText, Flag, Link2, RotateCw, TriangleAlert } from "lucide-react"
+import { ArrowLeft, Ban, Check, ChevronDown, FileText, Flag, Info, Link2, RotateCw, TriangleAlert } from "lucide-react"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
@@ -12,7 +12,7 @@ import { ago, clock, dateTime, fileSize, langOf, sameDay, shortDate } from "@/li
 import { onLinkClick, onFilterClick, useQuery } from "@/lib/router"
 import { useCopy } from "@/lib/useCopy"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "@/pages/inbox/states"
-import { BanDialog, BannedTag, Refusal, nameOf, retryCancel } from "./Admin"
+import { BanDialog, BannedTag, Refusal, appStoreNote, nameOf, retryCancel } from "./Admin"
 
 // The Reports tab of PAGE-WEB-ADMIN (FLOW-BAN S1–S3): open reports or all of them on the left (API-062), the one in
 // `?report=<id>` on the right (API-063) with Ban, Remove picture and Dismiss (API-064). The link in the report email
@@ -305,6 +305,8 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
   /** false after a ban that couldn't cancel the subscription (FLOW-BAN S4). */
   const [canceled, setCanceled] = useState<boolean>()
   const [retrying, setRetrying] = useState(false)
+  /** true after a ban when the person still has an App Store subscription that renews (FLOW-BAN S7). */
+  const [appStore, setAppStore] = useState(false)
 
   const load = useCallback(
     async (quiet = false) => {
@@ -362,6 +364,7 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
       const res = await admin.resolve(id, action)
       setR({ status: "ready", data: res.report })
       if (res.subscription_canceled !== undefined) setCanceled(res.subscription_canceled)
+      if (res.app_store_subscription) setAppStore(true)
       toast(action === "ban" ? `${target} is banned.` : action === "remove_avatar" ? `${target}'s picture is removed.` : `Report #${id} is dismissed.`)
       onChanged()
     } catch (e) {
@@ -413,6 +416,12 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
               <RotateCw size={14} aria-hidden="true" />
               {retrying ? "Retrying…" : "Retry"}
             </Button>
+          </div>
+        )}
+        {appStore && (
+          <div role="status" className="flex items-start gap-3 rounded-md border-(length:--semantic-layout-hairline) border-border p-3">
+            <Info size={16} aria-hidden="true" className="mt-0.5 flex-none text-muted-foreground" />
+            <p className="min-w-0 flex-1 text-body text-foreground">{appStoreNote(target)}</p>
           </div>
         )}
         {rep.status !== "open" && <Refusal>{error}</Refusal>}

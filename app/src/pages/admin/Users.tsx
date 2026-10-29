@@ -10,7 +10,7 @@ import { admin, type Load } from "@/data/store"
 import { clock, daysUntil, sameDay, shortDate } from "@/lib/format"
 import { navigate, useQuery } from "@/lib/router"
 import { EmptyState, ErrorState, ListSkeleton } from "@/pages/inbox/states"
-import { BanDialog, BannedTag, Refusal, nameOf, retryCancel } from "./Admin"
+import { BanDialog, BannedTag, Refusal, appStoreNote, nameOf, retryCancel } from "./Admin"
 import { Pager } from "./Reports"
 
 // The Users tab of PAGE-WEB-ADMIN (API-065, FLOW-BAN S2, S5, S7): every account, newest first, 50 a page, searchable by
@@ -18,6 +18,8 @@ import { Pager } from "./Reports"
 
 /** A subscription that would still charge: a ban cancels it, unless Waffo didn't answer (FLOW-BAN S4). */
 const charging = (a: AdminAccount) => a.subscription?.status === "active" || a.subscription?.status === "past_due"
+/** Only the person can stop an App Store subscription (FLOW-BAN S7). */
+const appStore = (a: AdminAccount) => a.subscription?.provider === "apple"
 
 /** The Plan column, from API-065 `access` and the latest `subscription`. */
 function planOf(a: AdminAccount) {
@@ -100,8 +102,9 @@ export function Users({ recount }: { recount: () => void }) {
   const retry = (a: AdminAccount) =>
     act(a.id, async () => {
       const ok = await retryCancel(a.id)
-      replace({ ...a, subscription: ok && a.subscription ? { ...a.subscription, status: "canceled" } : a.subscription })
-      if (ok) toast(`${nameOf(a)}'s subscription is canceled.`)
+      // Retrying cancels only the web subscription; an App Store one stays as it is.
+      if (!appStore(a)) replace({ ...a, subscription: ok && a.subscription ? { ...a.subscription, status: "canceled" } : a.subscription })
+      if (ok) toast(appStore(a) ? `Nothing left to cancel on the web. ${appStoreNote(nameOf(a))}` : `${nameOf(a)}'s subscription is canceled.`)
       else toast.error("Waffo still didn't confirm the cancel. Try again later.")
       if (ok) load()
     })
@@ -176,7 +179,8 @@ export function Users({ recount }: { recount: () => void }) {
               const r = await admin.ban(dialog.who.id)
               replace(r.account)
               recount()
-              toast(r.subscription_canceled ? `${nameOf(r.account)} is banned.` : `${nameOf(r.account)} is banned, but the subscription isn't canceled yet.`)
+              const name = nameOf(r.account)
+              toast(!r.subscription_canceled ? `${name} is banned, but the subscription isn't canceled yet.` : r.app_store_subscription ? `${name} is banned. ${appStoreNote(name)}` : `${name} is banned.`)
             }}
             onDone={() => setDialog(undefined)}
           />
@@ -198,7 +202,8 @@ export function Users({ recount }: { recount: () => void }) {
 }
 
 function UserRow({ a, busy, onBan, onUnban, onDelete, onRetry }: { a: AdminAccount; busy: boolean; onBan: () => void; onUnban: () => void; onDelete: () => void; onRetry: () => void }) {
-  const stuck = !!a.banned_at && charging(a)
+  const renewing = !!a.banned_at && charging(a)
+  const stuck = renewing && !appStore(a)
   const cell = "py-3 pr-4 align-middle max-sm:block max-sm:py-0.5 max-sm:pr-0"
   return (
     <tr className="border-t-(length:--semantic-layout-hairline) border-border max-sm:grid max-sm:gap-1 max-sm:py-3">
@@ -218,6 +223,8 @@ function UserRow({ a, busy, onBan, onUnban, onDelete, onRetry }: { a: AdminAccou
             <TriangleAlert size={12} aria-hidden="true" />
             Subscription not canceled
           </Tag>
+        ) : renewing ? (
+          <Tag>App Store: only they can cancel</Tag>
         ) : (
           planOf(a)
         )}
@@ -234,7 +241,7 @@ function UserRow({ a, busy, onBan, onUnban, onDelete, onRetry }: { a: AdminAccou
           <span className="inline-flex flex-wrap items-center justify-end gap-1 max-sm:justify-start">
             {a.banned_at ? (
               <>
-                {stuck && (
+                {renewing && (
                   <Button variant="outline" size="sm" aria-disabled={busy} onClick={onRetry}>
                     <RotateCw size={12} aria-hidden="true" />
                     Retry cancel
