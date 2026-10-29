@@ -3,6 +3,7 @@ import siteHeader1 from "../islands/siteHeader1.js";
 import siteHeader2 from "../islands/siteHeader2.js";
 import siteHeader3 from "../islands/siteHeader3.js";
 import siteHeaderHide from "../islands/siteHeaderHide.js";
+import sessionsLive from "../islands/sessionsLive";
 
 // base: prefix for the in-page anchors; the 404 page passes "/" so they lead back to the landing page
 export function SiteHeader({ base = "" }: { base?: string }) {
@@ -44,8 +45,11 @@ export function SiteHeader({ base = "" }: { base?: string }) {
             <Island run={siteHeader1} />
           </span>
           <span className="relative">imbo.dev</span>
-          <span className="relative text-outline">::</span>
-          <span data-ascii-live="" className="relative">3 sessions live</span>
+          <span data-sessions-live="" className="relative inline-flex items-center gap-1 opacity-0 motion-safe:transition-opacity">
+            <span className="text-outline">::</span>
+            <span data-sessions-live-text="" className="min-w-[15ch]" />
+            <Island run={sessionsLive} />
+          </span>
         </div>
         {"\n"}
         <div aria-hidden="true" className="absolute top-full left-[64.5%] [transform:translate(-50%,-50%)] z-[5] px-1 bg-background text-xs leading-none text-outline">
