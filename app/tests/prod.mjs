@@ -16,7 +16,17 @@ const ok = (name, cond, detail = '') => checks.push(`${cond ? 'PASS' : 'FAIL'} $
 
 // Codes come from login@imbo.dev; poll every 5 s so the mailbox isn't hammered with logins.
 const today = new Date().toISOString().slice(0, 10);
-const inbox = () => JSON.parse(execFileSync('mail-read', ['list', '--to', 'imbo-smoke-a@', '--since', today, '--json'], { encoding: 'utf8' }));
+// mail-read now and then fails on a fetch that comes back empty; three tries.
+function mailRead(args) {
+  for (let i = 1; ; i++) {
+    try {
+      return execFileSync('mail-read', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      if (i === 3) throw e;
+    }
+  }
+}
+const inbox = () => JSON.parse(mailRead(['list', '--to', 'imbo-smoke-a@', '--since', today, '--json']));
 const lastUid = () => Math.max(0, ...inbox().map((m) => Number(m.uid)));
 async function codeAfter(uid) {
   for (let i = 0; i < 18; i++) {
