@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, ShieldCheck, UserPlus, Users } from "lucide-react"
+import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, ShieldCheck, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
-import type { Billing, Conversation, MyAgent } from "@/data/contract"
+import type { Billing, Conversation, MyAgent, Request } from "@/data/contract"
 import { messageOf, type Plan } from "@/data/layer"
 import {
   PRICES,
+  acceptRequest,
   addressOf,
   checkout,
   chosenSession,
@@ -16,6 +17,7 @@ import {
   conversationTitle,
   conversationWith,
   dataOf,
+  declineRequest,
   isBlocked,
   isMe,
   loadThread,
@@ -29,8 +31,10 @@ import {
   type ThreadKey,
 } from "@/data/store"
 import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
-import { onLinkClick } from "@/lib/router"
+import { navigate, onLinkClick } from "@/lib/router"
 import { Composer, RecipientPicker, SendingClosed } from "./composer"
+import { ChangeEmail } from "./email"
+import { openGroupDetails, openNewGroup } from "./groups"
 import { MessageList, PaneHeader } from "./messages"
 import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
@@ -113,44 +117,58 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
   const l = s.conversations
   if (l.status === "loading") return <ListSkeleton />
   if (l.status === "error") return <ErrorState what="chats" error={l.error} onRetry={() => retry("conversations")} />
+  const newGroup = (
+    <div className="flex justify-end px-4 pt-2">
+      <Button variant="outline" size="sm" onClick={openNewGroup}>
+        <Users size={14} aria-hidden="true" />
+        New group
+      </Button>
+    </div>
+  )
   if (!l.data.length)
     return (
-      <EmptyState icon={<MessageSquare size={24} />} title="No chats yet">
-        <p>Chats show up here when your sessions message a contact, or a contact's sessions message yours.</p>
-        <div className="sm:hidden">
-          <Command text={INSTALL} />
-        </div>
-      </EmptyState>
+      <>
+        {newGroup}
+        <EmptyState icon={<MessageSquare size={24} />} title="No chats yet">
+          <p>Chats show up here when your sessions message a contact, or a contact's sessions message yours.</p>
+          <div className="sm:hidden">
+            <Command text={INSTALL} />
+          </div>
+        </EmptyState>
+      </>
     )
   return (
-    <nav aria-label="Chats" className="flex flex-col gap-0.5 p-2">
-      {l.data.map((c) => {
-        const title = conversationTitle(c)
-        const last = c.last_message
-        const who = !last ? "" : isMe(s, last.from.account_id) ? "You" : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? "Terminal")
-        return (
-          <ListRow key={c.id} href={`/chats/${c.id}`} current={String(c.id) === open}>
-            <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
-            <span className="min-w-0">
-              <span className="block truncate text-body">{title}</span>
-              {last && (
-                <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
-                  {who}: {last.preview}
-                </span>
-              )}
-            </span>
-            <span className="flex flex-col items-end gap-1">
-              {last && (
-                <time dateTime={last.created_at} className="text-caption tabular-nums text-(--semantic-color-text-tertiary)">
-                  {shortWhen(last.created_at)}
-                </time>
-              )}
-              {c.pending > 0 ? <PendingBadge n={c.pending} /> : <span className="h-5" />}
-            </span>
-          </ListRow>
-        )
-      })}
-    </nav>
+    <>
+      {newGroup}
+      <nav aria-label="Chats" className="flex flex-col gap-0.5 p-2">
+        {l.data.map((c) => {
+          const title = conversationTitle(c)
+          const last = c.last_message
+          const who = !last ? "" : isMe(s, last.from.account_id) ? "You" : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? "Terminal")
+          return (
+            <ListRow key={c.id} href={`/chats/${c.id}`} current={String(c.id) === open}>
+              <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
+              <span className="min-w-0">
+                <span className="block truncate text-body">{title}</span>
+                {last && (
+                  <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
+                    {who}: {last.preview}
+                  </span>
+                )}
+              </span>
+              <span className="flex flex-col items-end gap-1">
+                {last && (
+                  <time dateTime={last.created_at} className="text-caption tabular-nums text-(--semantic-color-text-tertiary)">
+                    {shortWhen(last.created_at)}
+                  </time>
+                )}
+                {c.pending > 0 ? <PendingBadge n={c.pending} /> : <span className="h-5" />}
+              </span>
+            </ListRow>
+          )
+        })}
+      </nav>
+    </>
   )
 }
 
@@ -174,7 +192,20 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
         <Avatar kind={c.group ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-body-strong text-foreground">{title}</h1>
+            <h1 className="min-w-0 truncate text-body-strong text-foreground">
+              {c.group ? (
+                <button
+                  type="button"
+                  onClick={() => openGroupDetails(c.group!.id)}
+                  aria-haspopup="dialog"
+                  className="state-layer focus-ring max-w-full truncate rounded-sm text-left"
+                >
+                  {title}
+                </button>
+              ) : (
+                title
+              )}
+            </h1>
             {c.pending > 0 && (
               <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
                 <PendingBadge n={c.pending} small labelled />
@@ -371,6 +402,20 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
   )
 }
 
+/**
+ * The line over the box while the session is offline (FLOW-WAKE): when the server says sending can open it on its computer,
+ * then the latest try at that until it comes online.
+ */
+function offlineNote(x: MyAgent) {
+  if (x.online) return undefined
+  const on = x.device_name ?? "its computer"
+  const later = "It gets your message when it comes back online."
+  if (x.wake?.state === "waking") return `Opening ${x.title} on ${on}…`
+  if (x.wake?.state === "failed") return `Couldn't open ${x.title} on ${on}${x.wake.detail ? `: ${x.wake.detail}` : "."} ${later}`
+  if (x.wakeable) return `${x.title} is offline. Sending opens it in the background on ${on}.`
+  return `${x.title} is offline. ${later}`
+}
+
 export function SessionPane({ s, id }: { s: State; id: string }) {
   const key: ThreadKey = `a:${id}`
   useEffect(() => openThread(key), [key])
@@ -412,7 +457,7 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
             threadKey={key}
             to=""
             label={x.title}
-            note={!x.online ? `${x.title} is offline. It gets your message when it comes back online.` : undefined}
+            note={offlineNote(x)}
           />
         ))}
     </>
@@ -421,22 +466,58 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
-/** API-009, count only: requests are answered in a terminal. */
-function PendingRequests({ n }: { n: number }) {
-  if (!n) return null
+/** API-009 to API-011: a contact request or group invitation waiting for me, with its note, Accept and Decline. */
+function RequestRow({ r }: { r: Request }) {
+  const [busy, setBusy] = useState(false)
+  const title = r.group ? `${r.from.name} invited you to ${r.group.name}` : r.from.name
+  const answer = async (accept: boolean) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      if (!accept) return void (await declineRequest(r))
+      const done = await acceptRequest(r)
+      // Joined a group: its chat, with the details open to pick which sessions get its messages (FLOW-GROUP-JOIN).
+      if (done.group) {
+        if (done.chat) navigate(`/chats/${done.chat}`)
+        openGroupDetails(done.group.id)
+        toast(`You joined ${done.group.name}. Pick which sessions get its messages.`)
+      } else if (done.contact) toast(`You and ${done.contact.name} are now contacts.`)
+    } catch (e) {
+      setBusy(false)
+      toast.error(messageOf(e))
+    }
+  }
   return (
-    <div className="mx-2 mt-2 flex gap-3 rounded-md border-(length:--semantic-layout-hairline) border-border px-2 py-2">
-      <UserPlus size={16} aria-hidden="true" className="mt-0.5 flex-none text-muted-foreground" />
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-body text-foreground">
-          {n} contact {n === 1 ? "request" : "requests"} waiting
-        </p>
-        <p className="text-caption text-muted-foreground">
-          Answer in a terminal:{" "}
-          <code className="font-(family-name:--semantic-typography-code-font-family) text-foreground">imbo contact requests</code>
-        </p>
+    <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2">
+      <Avatar kind={r.group ? "group" : "person"} label={r.from.name} />
+      <div className="flex min-w-0 flex-col gap-2">
+        <div>
+          <p className="text-body wrap-anywhere text-foreground">{title}</p>
+          <p className="text-caption tabular-nums text-muted-foreground">{r.group ? `Group ${r.group.id}` : `ID ${r.from.id}`}</p>
+          {r.note && (
+            <p lang={langOf(r.note)} className="mt-1 text-body wrap-anywhere text-foreground">
+              {r.note}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" aria-disabled={busy} onClick={() => answer(true)} aria-label={`Accept, ${title}`}>
+            Accept
+          </Button>
+          <Button size="sm" variant="outline" aria-disabled={busy} onClick={() => answer(false)} aria-label={`Decline, ${title}`}>
+            Decline
+          </Button>
+        </div>
       </div>
-    </div>
+    </li>
+  )
+}
+
+function ListHeading({ id, children }: { id: string; children: string }) {
+  return (
+    <h2 id={id} className="px-4 pt-3 pb-1 text-label text-muted-foreground">
+      {children}
+    </h2>
   )
 }
 
@@ -444,16 +525,30 @@ export function ContactList({ s, open }: { s: State; open?: string }) {
   const l = s.contacts
   if (l.status === "loading") return <ListSkeleton rows={3} />
   if (l.status === "error") return <ErrorState what="contacts" error={l.error} onRetry={() => retry("contacts")} />
+  const requests = s.requests.length > 0 && (
+    <section aria-labelledby="requests-heading">
+      <ListHeading id="requests-heading">Requests</ListHeading>
+      <ul className="flex flex-col px-2">
+        {s.requests.map((r) => (
+          <RequestRow key={r.id} r={r} />
+        ))}
+      </ul>
+    </section>
+  )
   if (!l.data.length)
     return (
-      <EmptyState icon={<Users size={24} />} title="No contacts yet">
-        <p>Ask someone for their 8-digit account ID, then add them from a terminal:</p>
-        <Command text="imbo contact add <ID>" />
-      </EmptyState>
+      <>
+        {requests}
+        <EmptyState icon={<Users size={24} />} title="No contacts yet">
+          <p>Ask someone for their 8-digit account ID, then add them from a terminal:</p>
+          <Command text="imbo contact add <ID>" />
+        </EmptyState>
+      </>
     )
   return (
     <>
-      <PendingRequests n={s.requests} />
+      {requests}
+      {requests && <ListHeading id="contacts-heading">Contacts</ListHeading>}
       <nav aria-label="Contacts" className="flex flex-col gap-0.5 p-2">
         {l.data.map((p) => {
           const online = p.sessions.filter((x) => x.online).length
@@ -753,7 +848,6 @@ export function AccountPane({ s }: { s: State }) {
   }, [])
   const a = s.account
   if (!a) return null
-  const n = s.requests
   return (
     <>
       <PaneHeader back={<BackLink to="/chats" label="Back to chats" />}>
@@ -765,7 +859,10 @@ export function AccountPane({ s }: { s: State }) {
         </Row>
         <Row label="Name">{a.name}</Row>
         <Row label="Email">
-          <span className="wrap-anywhere">{a.email}</span>
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0 wrap-anywhere">{a.email}</span>
+            <ChangeEmail />
+          </div>
         </Row>
         <Row label="Account ID">
           <div className="-ml-1.5">
@@ -791,17 +888,6 @@ export function AccountPane({ s }: { s: State }) {
               </Button>
             </div>
             <p className="text-caption text-muted-foreground">Reports, users and the dashboard.</p>
-          </Row>
-        )}
-        {n > 0 && (
-          <Row label="Requests">
-            <p>
-              {n} contact {n === 1 ? "request" : "requests"} waiting
-            </p>
-            <p className="text-caption text-muted-foreground">
-              Answer in a terminal:{" "}
-              <code className="font-(family-name:--semantic-typography-code-font-family) text-foreground">imbo contact requests</code>
-            </p>
           </Row>
         )}
         <div className="border-t-(length:--semantic-layout-hairline) border-border pt-4">

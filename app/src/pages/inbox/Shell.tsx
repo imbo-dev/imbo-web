@@ -11,6 +11,7 @@ import { messageOf } from "@/data/layer"
 import { dataOf, pendingTotal, refreshList, signOut, unreadTotal, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
+import { GroupDialogs } from "./groups"
 import { BlocksPane, SafetyDialogs } from "./safety"
 import { AccountPane, BackLink, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, NotFound, PendingBadge, SessionList, SessionPane } from "./views"
 
@@ -186,6 +187,7 @@ export function Inbox({ tab, item, missing }: { tab: Tab; item?: string; missing
         </main>
       </div>
       <SafetyDialogs s={s} />
+      <GroupDialogs s={s} />
     </AppStage>
   )
 }

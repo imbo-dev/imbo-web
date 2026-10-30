@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react"
+import { lazy, Suspense, useEffect, useSyncExternalStore } from "react"
 import { Toaster } from "sonner"
 import { AuthFlow } from "@/pages/Auth"
 import { Inbox, type Tab } from "@/pages/inbox/Shell"
@@ -15,6 +15,13 @@ const DemoPanel = panel && lazy(() => panel)
 function nextPage() {
   const next = new URLSearchParams(location.search).get("next")
   return next?.startsWith("/") && !next.startsWith("//") ? next : "/chats"
+}
+
+// Below the sm breakpoint a dialog rises from the bottom of the screen, so notices go to the top to stay off its buttons.
+const wide = matchMedia("(min-width: 40rem)")
+const onResize = (f: () => void) => {
+  wide.addEventListener("change", f)
+  return () => wide.removeEventListener("change", f)
 }
 
 const ADMIN_TABS: AdminTab[] = ["users", "dashboard"]
@@ -57,6 +64,7 @@ function Route() {
 }
 
 export function App() {
+  const isWide = useSyncExternalStore(onResize, () => wide.matches)
   return (
     <>
       <Route />
@@ -66,7 +74,7 @@ export function App() {
         </Suspense>
       )}
       <Toaster
-        position="bottom-center"
+        position={isWide ? "bottom-center" : "top-center"}
         toastOptions={{
           unstyled: true,
           classNames: {

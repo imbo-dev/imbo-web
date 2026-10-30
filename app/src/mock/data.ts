@@ -1,7 +1,7 @@
 // Demo data in the server's response shapes (src/data/contract.ts). Account IDs are 8 digits, short IDs the last 6
 // characters of a session ID, group IDs 7 digits (shown as "#" + ID), files kept 7 days.
 
-import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent, Report, ReportMessage, Stats } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, Stats } from "@/data/contract"
 
 const DAY = 86_400_000
 const now = Date.now()
@@ -37,6 +37,8 @@ export const account: Account = { id: 48213907, name: "Dana", email: "dana@examp
 export const adminAccount: Account = { id: 10000001, name: "Imbo Support", email: "support@imbo.dev", admin: true }
 /** Banned (FLOW-BAN): asking for a sign-in code fails with `/errors/account-banned`. */
 export const bannedEmail = "kai@example.org"
+/** Another account's email: changing to it is refused (API-075). */
+export const takenEmail = "mia@example.com"
 /** The ID a new sign-up gets in the demo. */
 export const newAccountId = 60418235
 const dana = { id: account.id, name: account.name }
@@ -51,10 +53,26 @@ const releaseTeam = { id: 5520183, name: "release-team" }
 
 /** API-014 */
 export const myAgents: MyAgent[] = [
-  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp", unread: 1 },
-  { id: "a-migration", short_id: "7b2e40", session_id: "s-7b2e40", title: "orders-migration", tool: "codex", online: true, device_id: "d2", device_name: "build-box", unread: 0 },
-  { id: "a-api-tests", short_id: "e04a7d", session_id: "s-e04a7d", title: "api-tests", tool: "zcode", online: true, device_id: "d2", device_name: "build-box", unread: 0 },
-  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000), unread: 0 },
+  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp", unread: 1, wakeable: false },
+  { id: "a-migration", short_id: "7b2e40", session_id: "s-7b2e40", title: "orders-migration", tool: "codex", online: true, device_id: "d2", device_name: "build-box", unread: 0, wakeable: false },
+  { id: "a-api-tests", short_id: "e04a7d", session_id: "s-e04a7d", title: "api-tests", tool: "zcode", online: true, device_id: "d2", device_name: "build-box", unread: 0, wakeable: false },
+  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000), unread: 0, wakeable: false },
+  // Claude Code sessions that sending can open on their computer (FLOW-WAKE): billing opens; search-index's last try failed.
+  { id: "a-billing", short_id: "5d19b2", session_id: "s-5d19b2", title: "billing", tool: "claude-code", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 5 * 3_600_000), unread: 0, wakeable: true },
+  {
+    id: "a-search",
+    short_id: "9e03f7",
+    session_id: "s-9e03f7",
+    title: "search-index",
+    tool: "claude-code",
+    online: false,
+    device_id: "d2",
+    device_name: "build-box",
+    last_online_at: iso(now - 26 * 3_600_000),
+    unread: 0,
+    wakeable: true,
+    wake: { state: "failed", detail: "Its folder ~/work/search-index is gone.", at: iso(now - 10 * 60_000) },
+  },
 ]
 
 export const ref = (a: MyAgent): AgentRef => ({ id: a.id, short_id: a.short_id, title: a.title, tool: a.tool })
@@ -85,11 +103,20 @@ export const groups: Group[] = [
       { ...leo, active: true },
       { ...bob, active: true },
     ],
+    my_sessions: [checkout, migration],
   },
 ]
 /** API-060 when the demo starts: Kai, blocked two days ago. */
 export const blocks: Block[] = [{ account: kai, created_at: at(2, "21:14") }]
-export const pendingRequests = 1
+/** Someone who asks Dana to be a contact. */
+export const noor = { id: 41298730, name: "Noor" }
+/** The group Leo invites Dana to. */
+export const infraOncall = { id: 6630147, name: "infra-oncall" }
+/** API-009 when the demo starts: Noor's contact request, with a note, and Leo's invitation to infra-oncall. */
+export const requests: Request[] = [
+  { id: 701, kind: "contact", from: noor, note: "Hi Dana, I'm on the payments team. Mia said you know the checkout flow.", status: "pending" },
+  { id: 702, kind: "group", from: leo, group: infraOncall, status: "pending" },
+]
 
 /** API-030 minus `last_message`, which the store derives from the messages. */
 export const conversations: Conversation[] = [

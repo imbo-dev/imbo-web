@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, Block, Message, MessagesPage, Profile, Report, Sent } from "@/data/contract"
+import type { Account, AdminAccount, Block, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -126,6 +126,8 @@ function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
 
 const sentByCid = new Map<string, Sent>()
 const agentSentByCid = new Map<string, number>()
+/** What sending changed about a session that sending can open: opening, open, or failed (FLOW-WAKE). */
+const woken: Record<string, Partial<MyAgent>> = {}
 /** Delivery state of what Dana sent her own sessions, as it moves on. */
 const states: Record<number, string> = {}
 /** What each of Dana's sessions sent her terminal inbox that she hasn't read yet, by message number. */
@@ -150,6 +152,30 @@ async function sending(body: string) {
   if (controls.sending === "refused") throw new ApiError(429, "/errors/rate-limited", "Too many messages in this conversation. Slow down.", 20)
   return a
 }
+
+// ── Requests and groups ──
+// An answered request leaves the list; accepting adds the contact or the group, with its chat, as the server does.
+
+let myRequests: Request[] = [...f.requests]
+/** Invitations Dana sent, as `<group>/<account>`. */
+const invitations = new Set<string>()
+let nextGroupId = 7301402
+const nextChatId = () => Math.max(f.selfChat.id, ...f.conversations.map((c) => c.id)) + 1
+
+function waiting(id: number) {
+  const r = myRequests.find((x) => x.id === id)
+  if (!r) throw new ApiError(404, "/errors/not-found", "No such request.")
+  if (r.status !== "pending") throw new ApiError(409, "/errors/request-closed", `This request was already ${r.status}.`)
+  return r
+}
+const settle = (id: number, status: string) => (myRequests = myRequests.map((r) => (r.id === id ? { ...r, status } : r)))
+
+function groupOf(id: number) {
+  const g = f.groups.find((x) => x.id === id)
+  if (!g) throw new ApiError(404, "/errors/not-found", `No group ${id}.`)
+  return g
+}
+const asMember = (a: Account) => ({ id: a.id, name: a.name, avatar_url: a.avatar_url, active: true })
 
 const codeTries: Record<string, number> = {}
 const codeSentAt: Record<string, number> = {}
@@ -221,7 +247,7 @@ export const mock = {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
     return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)), p), { messages: [], has_more: false })
   },
-  agents: () => data(() => f.myAgents.map((a) => ({ ...a, unread: unread[a.id].length })), []),
+  agents: () => data(() => f.myAgents.map((a) => ({ ...a, ...woken[a.id], unread: unread[a.id].length })), []),
   agentMessages: async (id, p) => {
     if (!f.myAgents.some((a) => a.id === id)) throw new ApiError(404, "/errors/not-found", "No such session.")
     return data(() => page(allMessages().filter((m) => m.from.agent?.id === id || m.to?.id === id).map(withState), p), { messages: [], has_more: false })
@@ -254,7 +280,10 @@ export const mock = {
     sentByCid.set(cid, r)
     return r
   },
-  /** An online session takes it within about a second and answers 3.5 s later; an offline one leaves it pending. */
+  /**
+   * An online session takes it within about a second and answers 3.5 s later; an offline one leaves it pending. One that
+   * sending can open (FLOW-WAKE) shows as opening, comes online 6 s later and then takes it; search-index's open fails.
+   */
   async sendToAgent(id, body, cid) {
     const done = agentSentByCid.get(cid)
     if (done !== undefined) return withState(allMessages().find((m) => m.id === done)!)
@@ -262,15 +291,30 @@ export const mock = {
     const agent = f.myAgents.find((x) => x.id === id)
     if (!agent) throw new ApiError(404, "/errors/not-found", "No such session.")
     const m = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a), to: f.ref(agent), created_at: new Date().toISOString(), body })
-    states[m.id] = agent.online ? "pushed" : "pending"
+    const online = agent.online || !!woken[id]?.online
+    const opens = !online && agent.wakeable
+    states[m.id] = online ? "pushed" : "pending"
     append(m)
     agentSentByCid.set(cid, m.id)
-    if (agent.online) {
+    const answer = () => {
       later(1200, () => (states[m.id] = "delivered"))
       later(3500, () => {
         const reply = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a, f.ref(agent)), to: f.terminalOf(a.id), created_at: new Date().toISOString(), body: f.answerFor(m.id) })
         unread[id].push(reply.id)
         append(reply)
+      })
+    }
+    if (online) answer()
+    if (opens) {
+      woken[id] = { wake: { state: "waking", at: new Date().toISOString() } }
+      later(6000, () => {
+        if (id === "a-search") {
+          woken[id] = { wake: { state: "failed", detail: "Its folder ~/work/search-index is gone.", at: new Date().toISOString() } }
+          return
+        }
+        woken[id] = { online: true, wakeable: false, wake: undefined }
+        states[m.id] = "pushed"
+        answer()
       })
     }
     return withState(m)
@@ -283,7 +327,29 @@ export const mock = {
     unread[id] = left
     return marked
   },
-  pendingRequests: () => data(() => f.pendingRequests, 0),
+  requests: () => data(() => myRequests.filter((r) => r.status === "pending"), []),
+  async accept(id) {
+    const a = signedIn()
+    await wait(500)
+    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    const r = waiting(id)
+    settle(id, "accepted")
+    if (r.group) {
+      f.groups.push({ ...r.group, owner: r.from, members: [{ ...r.from, active: true }, asMember(a)], my_sessions: [] })
+      f.conversations.push({ id: nextChatId(), kind: "group", group: r.group, pending: 0 })
+      return { group: r.group }
+    }
+    f.contacts.push({ ...r.from, active: true, blocked: false, sessions: [] })
+    f.conversations.push({ id: nextChatId(), kind: "direct", peer: r.from, pending: 0 })
+    return { contact: r.from }
+  },
+  async decline(id) {
+    signedIn()
+    await wait(400)
+    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    waiting(id)
+    settle(id, "declined")
+  },
   async billing() {
     const a = signedIn()
     await wait(250)
@@ -307,6 +373,70 @@ export const mock = {
   },
   fileUrl: (file) => `data:text/plain;charset=utf-8,${encodeURIComponent(`Demo file: ${file.name}\n`)}`,
   groups: () => data(() => f.groups, []),
+  /** Same name rules as the server; the group is Dana's, with the sessions she picked. */
+  async createGroup(name, sessions) {
+    const a = signedIn()
+    await wait(600)
+    const n = name.trim()
+    if (!n || [...n].length > 64) throw new ApiError(400, "/errors/invalid-request", "Group name must be 1 to 64 characters.")
+    if (n.includes("/") || n.startsWith("#") || /\p{Cc}/u.test(n))
+      throw new ApiError(400, "/errors/invalid-request", "Group name cannot contain a slash, start with # or contain control characters.")
+    const ref = { id: nextGroupId++, name: n }
+    const g: Group = { ...ref, owner: { id: a.id, name: a.name }, members: [asMember(a)], my_sessions: f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref) }
+    f.groups.push(g)
+    f.conversations.push({ id: nextChatId(), kind: "group", group: ref, pending: 0 })
+    return g
+  },
+  /** Ivy's account is inactive; an invitation already sent is refused the second time. */
+  async invite(groupId, accountId) {
+    signedIn()
+    await wait(350)
+    const g = groupOf(groupId)
+    const p = f.contacts.find((c) => c.id === accountId)
+    if (!p) throw new ApiError(403, "/errors/not-contact", `${accountId} is not your contact. Only contacts can be invited.`)
+    if (g.members.some((m) => m.id === accountId)) throw new ApiError(409, "/errors/already-member", `${accountId} is already in ${g.name}.`)
+    if (blockedByMe(accountId)) throw new ApiError(403, "/errors/unblock-first", `You blocked ${p.name}. Unblock them first.`)
+    if (!p.active) throw new ApiError(403, "/errors/recipient-inactive", `${p.name}'s account is inactive.`)
+    const key = `${groupId}/${accountId}`
+    if (invitations.has(key)) throw new ApiError(409, "/errors/request-pending", "They already have a pending invite to this group.")
+    invitations.add(key)
+  },
+  async setGroupSessions(groupId, sessions) {
+    signedIn()
+    await wait(400)
+    const g = groupOf(groupId)
+    const mine = f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref)
+    f.groups[f.groups.indexOf(g)] = { ...g, my_sessions: mine }
+    return mine
+  },
+  /** Same rules as the server: not my email now, not another account's (mia@example.com), one code a minute. */
+  async requestEmailChange(email) {
+    const a = signedIn()
+    await wait(700)
+    const key = email.trim().toLowerCase()
+    if (key === a.email?.toLowerCase()) throw new ApiError(400, "/errors/invalid-email", "That's already your email.")
+    if (key === f.takenEmail) throw new ApiError(409, "/errors/email-taken", "That email is already used by another Imbo account.")
+    const age = (Date.now() - (codeSentAt[key] ?? 0)) / 1000
+    if (age < 60) throw new ApiError(429, "/errors/rate-limited", "A code was just sent. Wait a minute before asking again.", Math.ceil(60 - age))
+    codeSentAt[key] = Date.now()
+    codeTries[key] = 0
+    return { retry_after_s: 60 }
+  },
+  /** Code 000000 is wrong, 111111 has expired, as when signing in. */
+  async changeEmail(email, code) {
+    const a = signedIn()
+    await wait(500)
+    const key = email.trim().toLowerCase()
+    if (code === "111111") throw new ApiError(410, "/errors/code-expired", "That code has expired. Request a new one.")
+    if (code === "000000" || (codeTries[key] ?? 0) >= 5) {
+      const tries = (codeTries[key] = (codeTries[key] ?? 0) + 1)
+      if (tries >= 5) throw new ApiError(429, "/errors/code-locked", "Too many wrong codes. Request a new code.")
+      throw new ApiError(400, "/errors/code-invalid", `Wrong code. ${5 - tries} tries left.`)
+    }
+    const next = { ...a, email: email.trim() }
+    setMe(next)
+    return next
+  },
   /** Shows the very picture picked (the server would send back its 512 px square). */
   async setAvatar(picture) {
     const a = signedIn()

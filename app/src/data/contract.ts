@@ -35,6 +35,9 @@ export const agentRef = z.object({ id: z.string(), short_id: z.string(), title: 
 /**
  * API-014 listMyAgents: my sessions, online or seen in the last 7 days. The terminal inbox is not one of them.
  * `unread`: what this session sent my terminal inbox that nobody has read yet; older servers leave it out.
+ * `wakeable`: offline, and what I send it from here opens it in the background on its computer (FLOW-WAKE); `wake`: the
+ * latest try at that, only while it's still offline, with `detail` (one English sentence) when it failed. Servers before
+ * 0.2.14 leave both out.
  */
 export const myAgent = agentRef.extend({
   session_id: z.string(),
@@ -43,6 +46,8 @@ export const myAgent = agentRef.extend({
   device_name: z.string().optional(),
   last_online_at: time.optional(),
   unread: z.number().default(0),
+  wakeable: z.boolean().default(false),
+  wake: z.object({ state: z.enum(["waking", "failed"]), detail: z.string().optional(), at: time }).nullish(),
 })
 
 /**
@@ -132,9 +137,22 @@ export const sentToAgent = z.object({ message })
 /** API-044 markAgentRead */
 export const marked = z.object({ marked: z.number() })
 
-/** API-019 listGroups, for a group's members. `active` as in API-012. */
+/** API-019 listGroups: a group's members, and which of my sessions get its messages. `active` as in API-012. */
 export const member = z.object({ id: accountId, name: z.string(), avatar_url: z.string().optional(), active: z.boolean().default(true) })
-export const group = z.object({ id: z.number(), name: z.string(), owner: accountRef.nullish(), members: z.array(member), avatar_url: z.string().optional() })
+export const group = z.object({
+  id: z.number(),
+  name: z.string(),
+  owner: accountRef.nullish(),
+  members: z.array(member),
+  my_sessions: z.array(agentRef).default([]),
+  avatar_url: z.string().optional(),
+})
+/** API-018 */
+export const groupCreated = z.object({ group })
+/** API-020: the invitation; its other fields aren't read. */
+export const invited = z.object({ request: z.object({ id: z.number() }) })
+/** API-021 */
+export const groupSessions = z.object({ my_sessions: z.array(agentRef) })
 
 /** API-045 */
 export const avatar = z.object({ avatar_url: z.string() })
@@ -214,8 +232,15 @@ export const stats = z.object({
 export const codeSent = z.object({ retry_after_s: z.number() })
 /** API-028 */
 export const webLogin = z.object({ account, new_account: z.boolean() })
-/** API-009, as the web calls it: pending requests sent to me. */
-export const requests = z.object({ requests: z.array(z.object({ id: z.number(), kind: z.string(), from: accountRef, status: z.string() })) })
+/** API-009, as the web calls it: contact requests (`kind` contact, maybe with a note) and group invitations waiting for me. */
+export const request = z.object({ id: z.number(), kind: z.string(), from: accountRef, group: groupRef.optional(), note: z.string().optional(), status: z.string() })
+export const requests = z.object({ requests: z.array(request) })
+/** API-010: the new contact, or the group I joined (a web login picks none of my sessions for it). */
+export const accepted = z.object({ contact: accountRef.optional(), group: groupRef.optional() })
+/** API-011: the request, now declined; its fields aren't read. */
+export const declined = z.object({ request: z.object({ id: z.number() }) })
+/** API-076: my account under its new email. */
+export const emailChanged = z.object({ account })
 /** API-033, API-034 */
 export const checkout = z.object({ checkout_url: z.string() })
 export const portal = z.object({ portal_url: z.string() })
@@ -241,6 +266,8 @@ export type WebLogin = z.infer<typeof webLogin>
 export type Sent = z.infer<typeof sent>
 export type Profile = z.infer<typeof profile>
 export type Group = z.infer<typeof group>
+export type Request = z.infer<typeof request>
+export type Accepted = z.infer<typeof accepted>
 export type Member = z.infer<typeof member>
 export type Block = z.infer<typeof block>
 export type ReportParty = z.infer<typeof reportParty>

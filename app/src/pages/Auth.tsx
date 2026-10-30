@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { dataOf, requestCode, useStore, verify } from "@/data/store"
 import { emailSchema, nameSchema, problem } from "@/data/schema"
 import { daysUntil } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
+import { useSecondsUntil } from "@/lib/useSecondsUntil"
 
 // Sign-in and sign-up are one flow, as in the terminal (FLOW-WEB-LOGIN): email → 6-digit code → a name if the
 // email is new. The two pages only differ in their wording; an existing email on /register just signs in. Once the
@@ -170,22 +171,6 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resen
       )}
     </>
   )
-}
-
-/** Seconds until `at`, worked out from the clock on every tick, so a background tab can't slow it down. */
-function useSecondsUntil(at: number) {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const tick = () => setNow(Date.now())
-    tick()
-    const t = setInterval(() => (tick(), Date.now() >= at && clearInterval(t)), 1000)
-    document.addEventListener("visibilitychange", tick)
-    return () => {
-      clearInterval(t)
-      document.removeEventListener("visibilitychange", tick)
-    }
-  }, [at])
-  return Math.max(0, Math.ceil((at - now) / 1000))
 }
 
 function CodeStep({

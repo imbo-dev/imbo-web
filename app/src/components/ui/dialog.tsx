@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn"
 
 const Dialog = DialogPrimitive.Root
 const DialogClose = DialogPrimitive.Close
+const DialogTrigger = DialogPrimitive.Trigger
 
 function DialogContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
@@ -41,4 +42,4 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return <div className={cn("flex justify-end gap-2 max-sm:flex-col-reverse max-sm:[&>*]:w-full", className)} {...props} />
 }
 
-export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle }
+export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger }

@@ -1,6 +1,9 @@
 import type {
+  Accepted,
+  Account,
   AdminAccount,
   AdminAccountsPage,
+  AgentRef,
   Banned,
   Billing,
   Block,
@@ -14,6 +17,7 @@ import type {
   MyAgent,
   Report,
   ReportsPage,
+  Request,
   Resolved,
   Sent,
   Stats,
@@ -46,13 +50,26 @@ export type DataLayer = {
   sendToAgent(agentId: string, body: string, clientMsgId: string): Promise<Message>
   /** API-044: what this session sent my terminal inbox, up to message `upTo`, counts as read. */
   markRead(agentId: string, upTo: number): Promise<number>
-  pendingRequests(): Promise<number>
+  /** API-009: contact requests and group invitations waiting for me. */
+  requests(): Promise<Request[]>
+  /** API-010, API-011 */
+  accept(requestId: number): Promise<Accepted>
+  decline(requestId: number): Promise<void>
   billing(): Promise<Billing>
   checkout(plan: Plan): Promise<string>
   portal(): Promise<string>
   fileUrl(f: FileRef): string
   /** API-019: the groups I'm in, with their members. */
   groups(): Promise<Group[]>
+  /** API-018: a group I own, its messages going to `sessions` (agent IDs). */
+  createGroup(name: string, sessions: string[]): Promise<Group>
+  /** API-020 */
+  invite(groupId: number, accountId: number): Promise<void>
+  /** API-021: which of my sessions get the group's messages; resolves to them. */
+  setGroupSessions(groupId: number, sessions: string[]): Promise<AgentRef[]>
+  /** API-075: a code to the new email. API-076 checks it and changes my email. */
+  requestEmailChange(email: string): Promise<{ retry_after_s: number }>
+  changeEmail(email: string, code: string): Promise<Account>
   /** API-045: a JPEG or PNG up to 5 MB; resolves to the new `avatar_url`. API-046 removes it. */
   setAvatar(picture: Blob): Promise<string>
   removeAvatar(): Promise<void>

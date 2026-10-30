@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from "react"
-import type { Account, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent } from "./contract"
+import type { Accepted, Account, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent, Request } from "./contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { shrinkPicture } from "@/lib/picture"
 import { navigate } from "@/lib/router"
 
 // The only module components read data from. It loads what the pages show through the data layer, keeps it in one
-// state object, and refreshes the chat and session lists and an open chat every 10 s, an open session every 3 s, while
-// the tab is visible (docs/DESIGN.md「网页的界面状态」). A 401 anywhere signs the page out.
+// state object, and refreshes the chat and session lists and an open chat every 10 s, an open session with the session
+// list every 3 s, while the tab is visible (docs/DESIGN.md「网页的界面状态」). A 401 anywhere signs the page out.
 
 /**
  * The demo fixtures and their panel (src/mock), only in a `VITE_USE_MOCK=1` build. This is the one place the switch is
@@ -41,7 +41,8 @@ export type State = {
   blocks: Load<Block[]>
   /** The groups I'm in, with their members (API-019): the group header and the profile card read them. */
   groups: Load<Group[]>
-  requests: number
+  /** Contact requests and group invitations waiting for me (API-009). */
+  requests: Request[]
   threads: Partial<Record<ThreadKey, Load<Thread>>>
   outbox: Partial<Record<ThreadKey, Outgoing[]>>
   /** How many messages this page has sent per thread; the message list goes back to the bottom when it grows. */
@@ -63,7 +64,7 @@ const fresh = (account: Account | null | undefined, isNew = false): State => ({
   contacts: LOADING,
   blocks: LOADING,
   groups: LOADING,
-  requests: 0,
+  requests: [],
   threads: {},
   outbox: {},
   sent: {},
@@ -125,8 +126,10 @@ async function load(key: ListKey, quiet = false) {
 }
 
 async function loadRequests() {
+  const n = turn("requests")
   try {
-    set({ requests: await api.pendingRequests() })
+    const requests = await api.requests()
+    if (seq.requests === n) set({ requests })
   } catch (e) {
     expired(e)
   }
@@ -272,10 +275,14 @@ const setOutbox = (key: ThreadKey, out: Outgoing[]) => set({ outbox: { ...state.
 const patchOut = (key: ThreadKey, cid: string, patch: Partial<Outgoing>) =>
   setOutbox(key, (state.outbox[key] ?? []).map((o) => (o.cid === cid ? { ...o, ...patch } : o)))
 
-/** Sends, then fetches the thread right away so the stored message shows in its place (FLOW-WEB-CHAT S7). */
+/**
+ * Sends, then fetches the thread right away so the stored message shows in its place (FLOW-WEB-CHAT S7); to a session, the
+ * session list too, which says whether sending is opening it on its computer (FLOW-WAKE).
+ */
 async function deliver(key: ThreadKey, o: Outgoing) {
   try {
     const id = key.startsWith("a:") ? (await api.sendToAgent(key.slice(2), o.body, o.cid)).id : (await api.send(o.to, o.body, o.cid)).message_id
+    if (key.startsWith("a:")) load("agents", true)
     const t = state.threads[key]
     // A retry after a lost answer: the poll may already have brought the stored message in.
     if (t?.status === "ready" && t.data.messages.some((m) => m.id === id)) discard(key, o.cid)
@@ -387,6 +394,96 @@ export async function unblock(accountId: number) {
 }
 export const isBlocked = (s: State, accountId: number) => !!dataOf(s.blocks)?.some((b) => b.account.id === accountId)
 
+// ── Requests, groups and email ───────────────────────────────────────────────
+
+/** The request leaves the list at once, and the lists it changes load again. A poll already out would bring it back. */
+function answered(id: number) {
+  turn("requests")
+  set({ requests: state.requests.filter((r) => r.id !== id) })
+  return Promise.all([load("contacts", true), load("groups", true), load("conversations", true)])
+}
+/** API-010 or API-011. Throws ApiError; a request already answered elsewhere leaves the list too. */
+async function answer(r: Request, call: () => Promise<Accepted | void>) {
+  let done: Accepted | void
+  try {
+    done = await act(call)
+  } catch (e) {
+    if (e instanceof ApiError && (e.type === "/errors/request-closed" || e.type === "/errors/not-found")) await answered(r.id)
+    throw e
+  }
+  await answered(r.id)
+  return done ?? {}
+}
+/** A joined group comes with its chat, to open. */
+export async function acceptRequest(r: Request) {
+  const done = await answer(r, () => api.accept(r.id))
+  return { ...done, chat: done.group && (await chatOf(done.group.id)) }
+}
+export const declineRequest = (r: Request) => answer(r, () => api.decline(r.id))
+
+/** Why an invitation was refused, in the App's words. */
+function inviteRefusal(e: ApiError, name: string) {
+  switch (e.type) {
+    case "/errors/already-member":
+      return `${name} is already in this group.`
+    case "/errors/request-pending":
+      return `${name} already has an invitation to this group.`
+    case "/errors/removed-from-group":
+      return `${name} was removed from this group; only the owner can invite them back.`
+    case "/errors/blocked":
+      return `${name} doesn't accept your invitations.`
+    case "/errors/unblock-first":
+      return `You blocked ${name}. Unblock them to invite them.`
+    case "/errors/recipient-inactive":
+      return `${name}'s account is inactive.`
+  }
+  return `${name}: ${e.message}`
+}
+/** API-020 for each person, one after another. Resolves to why some were refused. */
+export async function invite(groupId: number, people: { id: number; name: string }[]) {
+  const refused: string[] = []
+  for (const p of people)
+    try {
+      await act(() => api.invite(groupId, p.id))
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) break
+      refused.push(inviteRefusal(asApiError(e), p.name))
+    }
+  return refused
+}
+/**
+ * API-018, then invitations to `people`. Resolves to the new group's chat, to open, and why invitations were refused;
+ * throws ApiError when the group wasn't made.
+ */
+export async function createGroup(name: string, sessions: string[], people: { id: number; name: string }[]) {
+  const g = await act(() => api.createGroup(name, sessions))
+  const refused = await invite(g.id, people)
+  const [chat] = await Promise.all([chatOf(g.id), load("groups", true)])
+  return { chat, refused }
+}
+/** The group's chat once the chats list has it: a poll can overtake a reload and leave the list as it was. */
+async function chatOf(groupId: number) {
+  const find = () => dataOf(state.conversations)?.find((c) => c.group?.id === groupId)?.id
+  for (let i = 0; i < 3 && !find(); i++) await load("conversations", true)
+  return find()
+}
+/** API-021: which of my sessions get this group's messages from now on. Throws ApiError. */
+export async function setGroupSessions(groupId: number, sessions: string[]) {
+  const mine = await act(() => api.setGroupSessions(groupId, sessions))
+  const groups = dataOf(state.groups)
+  if (groups) set({ groups: ready(groups.map((g) => (g.id === groupId ? { ...g, my_sessions: mine } : g))) })
+  return mine
+}
+
+/** API-075: a code to the new email. Throws ApiError. */
+export const requestEmailChange = (email: string) => act(() => api.requestEmailChange(email))
+/** API-076: the account shows the new email at once. Throws ApiError. */
+export async function changeEmail(email: string, code: string) {
+  const a = await act(() => api.changeEmail(email, code))
+  if (state.account) set({ account: { ...state.account, email: a.email } })
+  return a
+}
+
 /** API-061. Resolves to the report's number; throws ApiError (409 `/errors/already-reported` among them). */
 export const report = (accountId: number, reason: ReportReason, note?: string, groupId?: number) =>
   act(() => api.report(accountId, reason, note, groupId))
@@ -411,12 +508,18 @@ function tick() {
   if (document.hidden || !state.account) return
   load("conversations", true)
   load("agents", true)
+  loadRequests()
   if (openKey?.startsWith("c:")) newer(openKey)
 }
-/** An open session pane shows replies and delivery states within 3 s (FLOW-WEB-SEND S8). */
+/**
+ * An open session pane shows replies and delivery states within 3 s (FLOW-WEB-SEND S8), and whether sending is opening it
+ * on its computer (FLOW-WAKE).
+ */
 function fast() {
   if (document.hidden || !state.account) return
-  if (openKey?.startsWith("a:")) newer(openKey)
+  if (!openKey?.startsWith("a:")) return
+  newer(openKey)
+  load("agents", true)
 }
 function startPolling() {
   stopPolling()

@@ -66,6 +66,8 @@ body {
 .composer::-webkit-scrollbar { display: none; }
 .composer-shell { overflow: visible; transition: height var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
 .composer-shell[data-dir="shrink"] { transition-duration: var(--semantic-motion-duration-base); }
+/* The line over the box fades in when it changes, as when sending starts opening an offline session (FLOW-WAKE). */
+.composer-note { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
 
 /* Radix marks the item under the pointer or arrow keys with data-highlighted. */
 .state-layer[data-highlighted]::after { opacity: var(--state-hover); }

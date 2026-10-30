@@ -56,7 +56,7 @@ function useGrow(text: string) {
 }
 
 /** `to`: the API-015 address in a chat; a session pane sends to its own session. `label` names who it goes to. */
-export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey; to: string; label: string; note?: ReactNode }) {
+export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey; to: string; label: string; note?: string }) {
   const [text, setText] = useState(() => draftOf(threadKey))
   const { shell, area } = useGrow(text)
   const composedAt = useRef(-Infinity)
@@ -90,7 +90,11 @@ export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey;
 
   return (
     <div className="flex flex-none flex-col gap-2 border-t-(length:--semantic-layout-hairline) border-border px-4 py-3">
-      {note && <p className="text-caption text-muted-foreground">{note}</p>}
+      {note && (
+        <p key={note} className="composer-note text-caption text-muted-foreground">
+          {note}
+        </p>
+      )}
       <form
         className="flex items-end gap-2"
         onSubmit={(e) => {

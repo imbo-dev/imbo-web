@@ -52,6 +52,10 @@ const TOOLS: Record<string, string> = {
   cursor: "Cursor",
   "minimax-code": "MiniMax Code",
   zcode: "ZCode",
+  "kimi-code": "Kimi Code",
+  pi: "pi",
+  hermes: "Hermes Agent",
+  "deepseek-harness": "DeepSeek Harness",
   terminal: "Terminal",
 }
 /** Display name of a server `tool` value; one this app doesn't know yet shows as sent. */
