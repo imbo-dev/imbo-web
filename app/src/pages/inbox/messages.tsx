@@ -12,6 +12,7 @@ import {
   discard,
   fileExpired,
   fileUrl,
+  isMe,
   loadOlder,
   recipientOf,
   resend,
@@ -83,6 +84,12 @@ function Delivery({ s, m }: { s: State; m: Message }) {
   return <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{online ? "Sending…" : `Waiting for ${m.to.title} to come online`}</StatusLine>
 }
 
+/** In a group the session leads ("orders-api #Mia"); what I sent from my own terminal there is "You". */
+function Sender({ owner, title, group, you }: { owner: string; title: string; group: boolean; you: boolean }) {
+  if (group && you) return <span className="truncate text-body-strong">You</span>
+  return <SessionName owner={owner} title={title} strong group={group} />
+}
+
 /** A message sent with `imbo send` has no `from.agent`: it came from the sender's terminal. Group messages have no `to`. */
 export function MessageRow({ s, m }: { s: State; m: Message }) {
   const to = recipientOf(s, m)
@@ -92,16 +99,18 @@ export function MessageRow({ s, m }: { s: State; m: Message }) {
       <div className="min-w-0">
         <header className="flex min-w-0 items-baseline gap-2">
           <SenderName s={s} from={m.from} group={m.conversation.group}>
-            <SessionName owner={m.from.name} title={m.from.agent?.title ?? "Terminal"} strong />
+            <Sender owner={m.from.name} title={m.from.agent?.title ?? "Terminal"} group={!!m.conversation.group} you={!m.from.agent && isMe(s, m.from.account_id)} />
           </SenderName>
           {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
           <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
             {clock(m.created_at)}
           </time>
         </header>
-        <p lang={langOf(m.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
-          {m.body}
-        </p>
+        {m.body && (
+          <p lang={langOf(m.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
+            {m.body}
+          </p>
+        )}
         {m.files.length > 0 && <Attachments files={m.files} />}
         <Delivery s={s} m={m} />
       </div>
@@ -157,12 +166,15 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
       <Avatar kind="terminal" />
       <div className="min-w-0">
         <header className="flex min-w-0 items-baseline gap-2">
-          <SessionName owner={s.account?.name ?? ""} title="Terminal" strong />
+          <Sender owner={s.account?.name ?? ""} title="Terminal" group={o.to.startsWith("#")} you />
           {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
         </header>
-        <p lang={langOf(o.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
-          {o.body}
-        </p>
+        {o.body && (
+          <p lang={langOf(o.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
+            {o.body}
+          </p>
+        )}
+        {o.files.length > 0 && <Attachments files={o.files} />}
         {!e ? (
           <StatusLine icon={<Clock size={14} aria-hidden="true" />}>Sending…</StatusLine>
         ) : (
@@ -254,6 +266,19 @@ export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey;
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+/** What's on its way in a chat that doesn't exist yet: the first message, until the chat it makes opens. */
+export function Outbox({ s, id }: { s: State; id: ThreadKey }) {
+  return (
+    <div className="scroll-pane min-h-0 flex-1">
+      <div className="flex flex-col gap-4 p-4">
+        {(s.outbox[id] ?? []).map((o) => (
+          <OutgoingRow key={o.cid} s={s} id={id} o={o} />
+        ))}
+      </div>
     </div>
   )
 }

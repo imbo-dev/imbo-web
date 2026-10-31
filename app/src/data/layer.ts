@@ -8,7 +8,9 @@ import type {
   Billing,
   Block,
   Contact,
+  ContactAsked,
   Conversation,
+  Device,
   FileRef,
   Group,
   Me,
@@ -21,6 +23,7 @@ import type {
   Resolved,
   Sent,
   Stats,
+  Uploaded,
   WebLogin,
 } from "./contract"
 
@@ -39,19 +42,39 @@ export type DataLayer = {
   signIn(email: string, code: string, name?: string): Promise<WebLogin>
   signOut(): Promise<void>
   me(): Promise<Me>
+  /** API-005: 1 to 32 characters. */
+  renameMe(name: string): Promise<Account>
+  /** API-006, API-007: the computers signed in with `imbo login`, and signing one out. */
+  devices(): Promise<Device[]>
+  revokeDevice(id: string): Promise<void>
+  /** API-052: everything goes; the web sign-in ends with it. */
+  deleteAccount(): Promise<void>
   conversations(): Promise<Conversation[]>
   messages(conversationId: number, page?: Page): Promise<MessagesPage>
   agents(): Promise<MyAgent[]>
   agentMessages(agentId: string, page?: Page): Promise<MessagesPage>
   contacts(): Promise<Contact[]>
-  /** API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on retry. */
-  send(to: string, body: string, clientMsgId: string): Promise<Sent>
+  /**
+   * API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on
+   * retry. `files`: IDs from `upload`.
+   */
+  send(to: string, body: string, clientMsgId: string, files?: string[]): Promise<Sent>
   /** API-043: to one of my own sessions. */
-  sendToAgent(agentId: string, body: string, clientMsgId: string): Promise<Message>
+  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[]): Promise<Message>
+  /** API-026: `sha256` is the file's, 64 lowercase hex digits. */
+  upload(file: File, sha256: string): Promise<Uploaded>
+  /** API-073: an empty title goes back to the one from the tool. */
+  renameAgent(agentId: string, title: string): Promise<MyAgent>
   /** API-044: what this session sent my terminal inbox, up to message `upTo`, counts as read. */
   markRead(agentId: string, upTo: number): Promise<number>
   /** API-009: contact requests and group invitations waiting for me. */
   requests(): Promise<Request[]>
+  /** API-009 `direction=out`: what I sent that is still waiting. */
+  sentRequests(): Promise<Request[]>
+  /** API-008: by account ID or by the email they sign in with. */
+  askContact(to: { account_id: number } | { email: string }, note?: string): Promise<ContactAsked>
+  /** API-013 */
+  removeContact(accountId: number): Promise<void>
   /** API-010, API-011 */
   accept(requestId: number): Promise<Accepted>
   decline(requestId: number): Promise<void>
@@ -67,6 +90,14 @@ export type DataLayer = {
   invite(groupId: number, accountId: number): Promise<void>
   /** API-021: which of my sessions get the group's messages; resolves to them. */
   setGroupSessions(groupId: number, sessions: string[]): Promise<AgentRef[]>
+  /** The owner's (API-077, API-056, API-057, API-037, API-038, API-039), and leaving (API-022). */
+  renameGroup(groupId: number, name: string): Promise<Group>
+  setGroupAvatar(groupId: number, picture: Blob): Promise<string>
+  removeGroupAvatar(groupId: number): Promise<void>
+  removeMember(groupId: number, accountId: number): Promise<void>
+  transferGroup(groupId: number, accountId: number): Promise<Group>
+  dissolveGroup(groupId: number): Promise<void>
+  leaveGroup(groupId: number): Promise<void>
   /** API-075: a code to the new email. API-076 checks it and changes my email. */
   requestEmailChange(email: string): Promise<{ retry_after_s: number }>
   changeEmail(email: string, code: string): Promise<Account>

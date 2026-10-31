@@ -1,21 +1,64 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react"
 import { toast } from "sonner"
-import { ArrowLeft, Check, CircleAlert, UserPlus, Users } from "lucide-react"
+import {
+  ArrowLeft,
+  BellOff,
+  Camera,
+  Check,
+  CircleAlert,
+  Crown,
+  LogOut,
+  MessageSquareOff,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Undo2,
+  Upload,
+  UserMinus,
+  UserPlus,
+  UserRound,
+  Users,
+} from "lucide-react"
+import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Avatar, Presence, Sep, Tag } from "@/components/bits"
-import type { AgentRef, Contact, Group, MyAgent } from "@/data/contract"
-import { messageOf } from "@/data/layer"
-import { createGroup, dataOf, groupOf, invite, isBlocked, isMe, refreshList, retry, setGroupSessions, type State } from "@/data/store"
+import type { AgentRef, Contact, Group, Member, MyAgent } from "@/data/contract"
+import { ApiError, messageOf } from "@/data/layer"
+import {
+  PICTURE_TYPES,
+  createGroup,
+  dataOf,
+  dissolveGroup,
+  groupOf,
+  invite,
+  isBlocked,
+  isMe,
+  leaveGroup,
+  refreshList,
+  removeGroupPicture,
+  removeMember,
+  renameGroup,
+  retry,
+  setGroupSessions,
+  transferGroup,
+  uploadGroupPicture,
+  type State,
+} from "@/data/store"
 import { toolName } from "@/lib/format"
 import { navigate } from "@/lib/router"
+import { ConfirmContent } from "./confirm"
+import { RenameRow, useRename, useReturnFocus } from "./rename"
+import { pictureRefusal } from "./safety"
 import { ListSkeleton } from "./states"
 
 // Groups on the web (FLOW-GROUP-CREATE, FLOW-GROUP-SESSIONS, FLOW-GROUP-JOIN): New group, and a group's details with
-// its members, which of my sessions get its messages, and inviting contacts. One dialog for the whole page (rendered
-// by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all open it.
+// its members, which of my sessions get its messages, and inviting contacts; for its owner also its name and picture,
+// removing members, handing it on and dissolving it, for everyone else leaving it. One dialog for the whole page
+// (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all open it.
 
 type Open = { kind: "new" } | { kind: "details"; groupId: number }
 let opened: Open | undefined
@@ -314,11 +357,37 @@ function MySessions({ s, g }: { s: State; g: Group }) {
   )
 }
 
-function Members({ s, g }: { s: State; g: Group }) {
+/** Menus opened from the group's details sit over the dialog, not under it. */
+const IN_DIALOG = "z-(--semantic-layout-z-index-modal)"
+
+/** The owner's "…" on each other member: hand the group on, or remove them. */
+function MemberActions({ m, onAsk }: { m: Member; onAsk: (kind: "transfer" | "remove") => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={`Actions for ${m.name}`} className="text-muted-foreground">
+          <MoreHorizontal size={16} aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={IN_DIALOG}>
+        <DropdownMenuItem onSelect={() => onAsk("transfer")}>
+          <Crown size={16} aria-hidden="true" />
+          Make {m.name} the owner…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onAsk("remove")} className="text-destructive [&_svg]:text-destructive">
+          <UserMinus size={16} aria-hidden="true" />
+          Remove {m.name}…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function Members({ s, g, onAsk }: { s: State; g: Group; onAsk?: (kind: "transfer" | "remove", m: Member) => void }) {
   return (
     <ul className="flex flex-col">
       {g.members.map((m) => (
-        <li key={m.id} className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-2 py-1.5">
+        <li key={m.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-2 py-1.5">
           <Avatar kind="person" label={m.name} src={m.avatar_url} />
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -329,15 +398,18 @@ function Members({ s, g }: { s: State; g: Group }) {
             </span>
             <span className="block text-caption tabular-nums text-muted-foreground">ID {m.id}</span>
           </span>
+          {onAsk && !isMe(s, m.id) ? <MemberActions m={m} onAsk={(kind) => onAsk(kind, m)} /> : <span />}
         </li>
       ))}
     </ul>
   )
 }
 
-function CloseFooter() {
+/** `start`: a button on the other side, such as Leave group…. */
+function CloseFooter({ start }: { start?: ReactNode }) {
   return (
-    <DialogFooter>
+    <DialogFooter className={cn(start && "sm:justify-between")}>
+      {start}
       <Button variant="ghost" className="text-foreground" onClick={close}>
         Close
       </Button>
@@ -345,12 +417,191 @@ function CloseFooter() {
   )
 }
 
+/** The owner's picture menu (API-056, API-057): upload a JPEG or PNG, or remove the one there. */
+function GroupPicture({ g }: { g: Group }) {
+  const file = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const run = async (f: () => Promise<void>, done: string) => {
+    setBusy(true)
+    try {
+      await f()
+      toast(done)
+    } catch (e) {
+      // Pictures of my own and of my groups share the day's 20 changes.
+      toast.error(e instanceof ApiError && e.status === 429 ? "You've changed pictures 20 times today. Try again tomorrow." : pictureRefusal(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="state-layer focus-ring relative flex-none rounded-full"
+          aria-label="Change group picture"
+          aria-disabled={busy}
+          onPointerDown={(e) => busy && e.preventDefault()}
+        >
+          <span className={cn("block", busy && "opacity-60")}>
+            <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />
+          </span>
+          <span aria-hidden="true" className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full border-(length:--semantic-layout-hairline) border-border bg-popover text-muted-foreground">
+            <Camera size={12} />
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className={cn("max-w-64", IN_DIALOG)}>
+          <DropdownMenuItem onSelect={() => file.current?.click()}>
+            <Upload size={16} aria-hidden="true" />
+            Upload picture…
+          </DropdownMenuItem>
+          {g.avatar_url && (
+            <DropdownMenuItem onSelect={() => run(() => removeGroupPicture(g.id), "Group picture removed.")} className="text-destructive [&_svg]:text-destructive">
+              <Trash2 size={16} aria-hidden="true" />
+              Remove picture
+            </DropdownMenuItem>
+          )}
+          <p className="mt-1 border-t-(length:--semantic-layout-hairline) border-border px-2 pt-2 pb-1 text-caption text-muted-foreground">
+            JPEG or PNG, up to 5 MB. Imbo crops it to a square.
+          </p>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={file}
+        type="file"
+        accept={PICTURE_TYPES.join(",")}
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ""
+          if (f) run(() => uploadGroupPicture(g.id, f), "Group picture updated.")
+        }}
+      />
+    </>
+  )
+}
+
+/** API-077: the owner renames the group in place. The rules are API-018's. */
+function RenameGroup({ g, onDone }: { g: Group; onDone: () => void }) {
+  const r = useRename(g.name, (name) => renameGroup(g.id, name), onDone, nameProblem)
+  return (
+    <>
+      <DialogTitle className="sr-only">{g.name}</DialogTitle>
+      <RenameRow r={r} label="Group name" hint="Members see the new name in their group list. 1–64 characters, can't start with #." />
+    </>
+  )
+}
+
+type View =
+  | { kind: "details" }
+  | { kind: "invite" }
+  | { kind: "remove" | "transfer"; m: Member }
+  | { kind: "dissolve" | "leave" }
+
+/** Out of the group or the group is gone: the dialog closes, and its chat with it if that's where I am. */
+function left(g: Group, s: State, say: string) {
+  close()
+  const chat = dataOf(s.conversations)?.find((c) => c.group?.id === g.id)?.id
+  if (chat && location.pathname === `/chats/${chat}`) navigate("/chats", { replace: true })
+  toast(say)
+}
+
+/** One of the owner's or a member's questions in place of the details; Cancel goes back to them. */
+function GroupConfirm({ s, g, v, onBack }: { s: State; g: Group; v: Exclude<View, { kind: "details" | "invite" }>; onBack: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  const run = async (f: () => Promise<void>, then: () => void) => {
+    if (busy) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      await f()
+      then()
+    } catch (e) {
+      setBusy(false)
+      setError(messageOf(e))
+    }
+  }
+  const common = { busy, error, onCancel: onBack, onCloseAutoFocus: giveFocusBack }
+  const n = g.members.length
+  switch (v.kind) {
+    case "remove":
+      return (
+        <ConfirmContent
+          {...common}
+          title={`Remove ${v.m.name} from ${g.name}?`}
+          consequences={[
+            [<BellOff size={16} />, `${v.m.name}'s sessions stop getting this group's messages.`],
+            [<Undo2 size={16} />, `Messages to ${v.m.name} from this group that haven't been delivered yet are taken back.`],
+            [<UserRound size={16} />, `${v.m.name} sees a notice in their terminal inbox. You can invite them again later.`],
+          ]}
+          action={{ label: `Remove ${v.m.name}`, busyLabel: "Removing…", icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
+          onConfirm={() =>
+            run(
+              () => removeMember(g.id, v.m.id),
+              () => (onBack(), toast(`${v.m.name} was removed from ${g.name}.`)),
+            )
+          }
+        />
+      )
+    case "transfer":
+      return (
+        <ConfirmContent
+          {...common}
+          title={`Make ${v.m.name} the owner of ${g.name}?`}
+          consequences={[
+            [<Crown size={16} />, `${v.m.name} can rename the group, change its picture, remove members, hand it on and dissolve it.`],
+            [<UserRound size={16} />, "You stay in the group as a member, and can't undo this yourself."],
+          ]}
+          action={{ label: `Make ${v.m.name} the owner`, busyLabel: "Handing it on…", icon: <Crown size={16} aria-hidden="true" /> }}
+          onConfirm={() =>
+            run(
+              () => transferGroup(g.id, v.m.id),
+              () => (onBack(), toast(`${v.m.name} is now the owner of ${g.name}.`)),
+            )
+          }
+        />
+      )
+    case "dissolve":
+      return (
+        <ConfirmContent
+          {...common}
+          title={`Dissolve ${g.name}?`}
+          consequences={[
+            [<Users size={16} />, n === 1 ? "You leave the group, and nobody is left in it." : `All ${n} members leave the group, you included.`],
+            [<Undo2 size={16} />, "Messages to the group that haven't been delivered yet are taken back."],
+            [<MessageSquareOff size={16} />, `Nobody can message or join ${g.name} again. This can't be undone.`],
+          ]}
+          action={{ label: "Dissolve group", busyLabel: "Dissolving…", icon: <Trash2 size={16} aria-hidden="true" />, destructive: true }}
+          onConfirm={() => run(() => dissolveGroup(g.id), () => left(g, s, `${g.name} was dissolved.`))}
+        />
+      )
+    case "leave":
+      return (
+        <ConfirmContent
+          {...common}
+          title={`Leave ${g.name}?`}
+          consequences={[
+            [<BellOff size={16} />, "Your sessions stop getting this group's messages."],
+            [<Undo2 size={16} />, "Messages to you from this group that haven't been delivered yet are taken back."],
+            [<UserPlus size={16} />, "To come back, someone in the group has to invite you again."],
+          ]}
+          action={{ label: "Leave group", busyLabel: "Leaving…", icon: <LogOut size={16} aria-hidden="true" />, destructive: true }}
+          onConfirm={() => run(() => leaveGroup(g.id), () => left(g, s, `You left ${g.name}.`))}
+        />
+      )
+  }
+}
+
 /**
  * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS): who is in the group and who owns it (API-019), which of my sessions get its
- * messages (API-021), and inviting contacts (API-020), who accept in Contacts or from a terminal.
+ * messages (API-021), and inviting contacts (API-020), who accept in Contacts or from a terminal. Its owner renames
+ * it, changes its picture, removes members, hands it on and dissolves it (API-077, API-056/057, API-037, API-038,
+ * API-039); anyone else can leave it (API-022).
  */
 function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
-  const [inviting, setInviting] = useState(false)
+  const [view, setView] = useState<View>({ kind: "details" })
+  const [renaming, setRenaming] = useState(false)
+  const pencil = useReturnFocus(renaming)
   useEffect(() => {
     refreshList("groups")
     refreshList("agents")
@@ -374,34 +625,72 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         <CloseFooter />
       </DialogContent>
     )
-  if (inviting) return <InviteView s={s} g={g} onDone={() => setInviting(false)} />
+  const back = () => setView({ kind: "details" })
+  if (view.kind === "invite") return <InviteView s={s} g={g} onDone={back} />
+  if (view.kind !== "details") return <GroupConfirm s={s} g={g} v={view} onBack={back} />
+  const owner = !!g.owner && isMe(s, g.owner.id)
   const n = g.members.length
+  const renamed = () => setRenaming(false)
   return (
-    <DialogContent aria-describedby={undefined} onCloseAutoFocus={giveFocusBack}>
+    <DialogContent
+      aria-describedby={undefined}
+      onCloseAutoFocus={giveFocusBack}
+      // Escape while renaming leaves the name as it was and keeps the details open.
+      onEscapeKeyDown={(e) => {
+        if (!renaming || !owner) return
+        e.preventDefault()
+        renamed()
+      }}
+    >
       <div className="flex items-center gap-3">
-        <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />
-        <div className="min-w-0">
-          <DialogTitle className="wrap-anywhere">{g.name}</DialogTitle>
-          <p className="flex items-center gap-2 text-caption tabular-nums text-muted-foreground">
-            Group {g.id}
-            <Sep />
-            {n === 1 ? "1 member" : `${n} members`}
-          </p>
-        </div>
+        {owner ? <GroupPicture g={g} /> : <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />}
+        {owner && renaming ? (
+          <RenameGroup g={g} onDone={renamed} />
+        ) : (
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-1">
+              <DialogTitle className="min-w-0 wrap-anywhere">{g.name}</DialogTitle>
+              {owner && (
+                <Button ref={pencil} variant="ghost" size="icon" aria-label="Rename group" className="flex-none text-muted-foreground" onClick={() => setRenaming(true)}>
+                  <Pencil size={14} aria-hidden="true" />
+                </Button>
+              )}
+            </div>
+            <p className="flex items-center gap-2 text-caption tabular-nums text-muted-foreground">
+              Group {g.id}
+              <Sep />
+              {n === 1 ? "1 member" : `${n} members`}
+            </p>
+          </div>
+        )}
       </div>
       <Section title="Your sessions in this group" hint="They get the group's messages and can reply.">
         <MySessions key={g.my_sessions.map((x) => x.id).join()} s={s} g={g} />
       </Section>
       <Section title="Members">
-        <Members s={s} g={g} />
+        <Members s={s} g={g} onAsk={owner ? (kind, m) => setView({ kind, m }) : undefined} />
       </Section>
       <div>
-        <Button variant="outline" onClick={() => setInviting(true)}>
+        <Button variant="outline" onClick={() => setView({ kind: "invite" })}>
           <UserPlus size={16} aria-hidden="true" />
           Invite contacts
         </Button>
       </div>
-      <CloseFooter />
+      <CloseFooter
+        start={
+          owner ? (
+            <Button variant="destructive" onClick={() => setView({ kind: "dissolve" })}>
+              <Trash2 size={16} aria-hidden="true" />
+              Dissolve group…
+            </Button>
+          ) : (
+            <Button variant="destructive" onClick={() => setView({ kind: "leave" })}>
+              <LogOut size={16} aria-hidden="true" />
+              Leave group…
+            </Button>
+          )
+        }
+      />
     </DialogContent>
   )
 }

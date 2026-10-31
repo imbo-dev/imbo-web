@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent, Request } from "./contract"
+import type { Accepted, Account, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Request, Uploaded } from "./contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { shrinkPicture } from "@/lib/picture"
@@ -20,13 +20,18 @@ let api: DataLayer
 
 export type Load<T> = { status: "loading" } | { status: "error"; error: ApiError } | { status: "ready"; data: T }
 export type Thread = { messages: Message[]; hasMore: boolean; older: "idle" | "loading" | "error" }
-/** `c:<conversation ID>` for a chat, `a:<agent ID>` for everything one of my sessions sent and received. */
-export type ThreadKey = `c:${number}` | `a:${string}`
+/**
+ * `c:<conversation ID>` for a chat, `a:<agent ID>` for everything one of my sessions sent and received, `n:<account ID>`
+ * for a chat with a contact that starts with the message being written (FLOW-WEB-CHAT S1).
+ */
+export type ThreadKey = `c:${number}` | `a:${string}` | `n:${number}`
 /**
  * A message this page is sending or couldn't send. Retrying reuses `cid` (`client_msg_id`), so the server stores it
  * once. `id` is the server's message number once stored; the entry goes away when that message is in the thread.
  */
-export type Outgoing = { cid: string; to: string; body: string; status: "sending" | "failed"; error?: ApiError; id?: number }
+export type Outgoing = { cid: string; to: string; body: string; files: FileRef[]; status: "sending" | "failed"; error?: ApiError; id?: number }
+/** A file for the next message in a thread: uploading, uploaded (`ref`), or not sendable (`error`, said for people). */
+export type Attachment = { key: string; file: File; ref?: FileRef; error?: string }
 
 export type State = {
   /** undefined until /v1/me answers, null when signed out. */
@@ -39,12 +44,18 @@ export type State = {
   contacts: Load<Contact[]>
   /** The accounts I blocked, newest first (API-060). */
   blocks: Load<Block[]>
+  /** The computers signed in with `imbo login` (API-006). */
+  devices: Load<Device[]>
   /** The groups I'm in, with their members (API-019): the group header and the profile card read them. */
   groups: Load<Group[]>
   /** Contact requests and group invitations waiting for me (API-009). */
   requests: Request[]
+  /** Contact requests I sent that are still waiting (API-009 `direction=out`). */
+  outgoing: Request[]
   threads: Partial<Record<ThreadKey, Load<Thread>>>
   outbox: Partial<Record<ThreadKey, Outgoing[]>>
+  /** Files attached to the message being written, per thread (FLOW-WEB-CHAT S3). */
+  attachments: Partial<Record<ThreadKey, Attachment[]>>
   /** How many messages this page has sent per thread; the message list goes back to the bottom when it grows. */
   sent: Partial<Record<ThreadKey, number>>
   /** Per direct chat, the short ID of the peer's session it sends to; none is the peer's terminal inbox (FLOW-WEB-CHAT S2). */
@@ -63,10 +74,13 @@ const fresh = (account: Account | null | undefined, isNew = false): State => ({
   agents: LOADING,
   contacts: LOADING,
   blocks: LOADING,
+  devices: LOADING,
   groups: LOADING,
   requests: [],
+  outgoing: [],
   threads: {},
   outbox: {},
+  attachments: {},
   sent: {},
   sendTo: {},
 })
@@ -95,13 +109,14 @@ function expired(e: unknown) {
 
 // ── Lists ────────────────────────────────────────────────────────────────────
 
-type ListKey = "billing" | "conversations" | "agents" | "contacts" | "blocks" | "groups"
+type ListKey = "billing" | "conversations" | "agents" | "contacts" | "blocks" | "devices" | "groups"
 const fetchers: { [K in ListKey]: () => Promise<State[K] extends Load<infer T> ? T : never> } = {
   billing: () => api.billing(),
   conversations: () => api.conversations(),
   agents: () => api.agents(),
   contacts: () => api.contacts(),
   blocks: () => api.blocks(),
+  devices: () => api.devices(),
   groups: () => api.groups(),
 }
 
@@ -134,12 +149,22 @@ async function loadRequests() {
     expired(e)
   }
 }
+/** Only contact requests: the group invitations I sent show in the groups' details, not here. */
+async function loadSent() {
+  const n = turn("outgoing")
+  try {
+    const sent = await api.sentRequests()
+    if (seq.outgoing === n) set({ outgoing: sent.filter((r) => r.kind === "contact") })
+  } catch (e) {
+    expired(e)
+  }
+}
 
 export const retry = (key: ListKey) => load(key)
 /** Opening the Sessions or Contacts tab brings presence up to date; opening a group's members, who's in it. */
-export function refreshList(key: "agents" | "contacts" | "blocks" | "groups") {
+export function refreshList(key: "agents" | "contacts" | "blocks" | "devices" | "groups") {
   load(key, true)
-  if (key === "contacts") loadRequests()
+  if (key === "contacts") loadRequests(), loadSent()
 }
 
 // ── Threads ──────────────────────────────────────────────────────────────────
@@ -280,8 +305,10 @@ const patchOut = (key: ThreadKey, cid: string, patch: Partial<Outgoing>) =>
  * session list too, which says whether sending is opening it on its computer (FLOW-WAKE).
  */
 async function deliver(key: ThreadKey, o: Outgoing) {
+  const files = o.files.length ? o.files.map((f) => f.id) : undefined
   try {
-    const id = key.startsWith("a:") ? (await api.sendToAgent(key.slice(2), o.body, o.cid)).id : (await api.send(o.to, o.body, o.cid)).message_id
+    if (key.startsWith("n:")) return await started(key, o, await api.send(o.to, o.body, o.cid, files))
+    const id = key.startsWith("a:") ? (await api.sendToAgent(key.slice(2), o.body, o.cid, files)).id : (await api.send(o.to, o.body, o.cid, files)).message_id
     if (key.startsWith("a:")) load("agents", true)
     const t = state.threads[key]
     // A retry after a lost answer: the poll may already have brought the stored message in.
@@ -292,10 +319,29 @@ async function deliver(key: ThreadKey, o: Outgoing) {
   }
 }
 
-/** `to` is the API-015 address in a chat; a session pane sends to its own session and ignores it. */
-export function send(key: ThreadKey, to: string, body: string) {
-  const o: Outgoing = { cid: crypto.randomUUID(), to, body, status: "sending" }
-  set({ outbox: { ...state.outbox, [key]: [...(state.outbox[key] ?? []), o] }, sent: { ...state.sent, [key]: (state.sent[key] ?? 0) + 1 } })
+/** The first message to a contact made the chat: open it, where the message now is. */
+async function started(key: ThreadKey, o: Outgoing, sent: { conversation: { id: number } }) {
+  const id = sent.conversation.id
+  for (let i = 0; i < 3 && !conversationOf(state, id); i++) await load("conversations", true)
+  discard(key, o.cid)
+  drafts.delete(key)
+  const peer = Number(key.slice(2))
+  const short = state.sendTo[-peer]
+  if (short) chooseRecipient(id, short)
+  if (location.pathname === `/contacts/${peer}/chat`) navigate(`/chats/${id}`, { replace: true })
+}
+
+/**
+ * `to` is the API-015 address in a chat; a session pane sends to its own session and ignores it. Without `given`, the
+ * uploaded attachments go with it and leave the box; a failed message sent again brings its own and leaves the box as it is.
+ */
+export function send(key: ThreadKey, to: string, body: string, given?: FileRef[]) {
+  const o: Outgoing = { cid: crypto.randomUUID(), to, body, files: given ?? attachedFiles(key), status: "sending" }
+  set({
+    outbox: { ...state.outbox, [key]: [...(state.outbox[key] ?? []), o] },
+    sent: { ...state.sent, [key]: (state.sent[key] ?? 0) + 1 },
+    ...(!given && { attachments: { ...state.attachments, [key]: [] } }),
+  })
   deliver(key, o)
 }
 export function resend(key: ThreadKey, cid: string) {
@@ -309,11 +355,80 @@ export function resendTo(key: ThreadKey, cid: string, to: string) {
   const o = state.outbox[key]?.find((x) => x.cid === cid)
   if (!o || o.status === "sending") return
   discard(key, cid)
-  send(key, to, o.body)
+  send(key, to, o.body, o.files)
 }
 export const discard = (key: ThreadKey, cid: string) => setOutbox(key, (state.outbox[key] ?? []).filter((o) => o.cid !== cid))
 
 export const chooseRecipient = (conversationId: number, shortId?: string) => set({ sendTo: { ...state.sendTo, [conversationId]: shortId } })
+
+// ── Attachments ──────────────────────────────────────────────────────────────
+
+/** What one message can carry (API-015): 20 files, 100 MB together. */
+const MAX_FILES = 20
+const MAX_FILES_BYTES = 104_857_600
+const QUOTA_USED = "Today's 1 GB upload limit is used up. It resets at midnight Beijing time."
+
+/** The day's upload use from the last upload. A refused upload can come back without its answer, so this decides first. */
+let quota: Uploaded["quota"] | undefined
+const attachedFiles = (key: ThreadKey) => (state.attachments[key] ?? []).flatMap((a) => (a.ref ? [a.ref] : []))
+const setAttachments = (key: ThreadKey, list: Attachment[]) => set({ attachments: { ...state.attachments, [key]: list } })
+const patchAttachment = (key: ThreadKey, k: string, patch: Partial<Attachment>) =>
+  setAttachments(key, (state.attachments[key] ?? []).map((a) => (a.key === k ? { ...a, ...patch } : a)))
+
+/**
+ * Attaches picked files to the next message in `key` and uploads them one after another. One past 20 files, over
+ * 100 MB, or past 100 MB together stays in the box with why, and isn't uploaded.
+ */
+export function attach(key: ThreadKey, picked: File[]) {
+  const list = [...(state.attachments[key] ?? [])]
+  let n = list.filter((a) => !a.error).length
+  let total = list.reduce((sum, a) => sum + (a.error ? 0 : a.file.size), 0)
+  for (const file of picked) {
+    const error =
+      n >= MAX_FILES
+        ? `Over ${MAX_FILES} files. A message can carry ${MAX_FILES}.`
+        : file.size > MAX_FILES_BYTES
+          ? "Over 100 MB. Files in one message can add up to 100 MB."
+          : total + file.size > MAX_FILES_BYTES
+            ? "Over the 100 MB the files in one message can add up to."
+            : undefined
+    list.push({ key: crypto.randomUUID(), file, error })
+    if (!error) (n++, (total += file.size))
+  }
+  setAttachments(key, list)
+  uploadAll(key)
+}
+export const detach = (key: ThreadKey, k: string) => setAttachments(key, (state.attachments[key] ?? []).filter((a) => a.key !== k))
+
+const uploading = new Set<ThreadKey>()
+async function uploadAll(key: ThreadKey) {
+  if (uploading.has(key)) return
+  uploading.add(key)
+  try {
+    for (let a; (a = state.attachments[key]?.find((x) => !x.ref && !x.error)); ) patchAttachment(key, a.key, await uploadOne(a))
+  } finally {
+    uploading.delete(key)
+  }
+}
+const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("")
+async function uploadOne(a: Attachment): Promise<Partial<Attachment>> {
+  if (quota && Date.parse(quota.resets_at) > Date.now() && quota.used + a.file.size > quota.limit) return { error: QUOTA_USED }
+  let sha256: string
+  try {
+    sha256 = hex(await crypto.subtle.digest("SHA-256", await a.file.arrayBuffer()))
+  } catch {
+    return { error: `Imbo couldn't read ${a.file.name}.` }
+  }
+  try {
+    const r = await api.upload(a.file, sha256)
+    quota = r.quota
+    return { ref: r.file }
+  } catch (e) {
+    expired(e)
+    const err = asApiError(e)
+    return { error: err.type === "/errors/upload-quota-exceeded" ? QUOTA_USED : err.message }
+  }
+}
 
 /** Unsent text per thread, kept while the page is open; switching chats doesn't lose it, sending clears it. */
 const drafts = new Map<ThreadKey, string>()
@@ -335,15 +450,18 @@ async function act<T>(f: () => Promise<T>): Promise<T> {
 export const PICTURE_TYPES = ["image/jpeg", "image/png"]
 const UNREADABLE = "Imbo can't read that image. Pick a JPEG or PNG."
 
-/** API-045. Throws ApiError; a file the browser can't read as a JPEG or PNG fails here like the server would. */
-export async function uploadPicture(file: Blob) {
-  let picture: Blob
+/** A file the browser can't read as a JPEG or PNG fails here like the server would. */
+async function readPicture(file: Blob) {
   try {
     if (!PICTURE_TYPES.includes(file.type)) throw new Error(file.type)
-    picture = await shrinkPicture(file)
+    return await shrinkPicture(file)
   } catch {
     throw new ApiError(422, "/errors/image-invalid", UNREADABLE)
   }
+}
+/** API-045. Throws ApiError. */
+export async function uploadPicture(file: Blob) {
+  const picture = await readPicture(file)
   const avatar_url = await act(() => api.setAvatar(picture))
   if (state.account) set({ account: { ...state.account, avatar_url } })
 }
@@ -475,6 +593,99 @@ export async function setGroupSessions(groupId: number, sessions: string[]) {
   return mine
 }
 
+/** The group as the server sent it back, in place of the one shown. */
+function putGroup(g: Group) {
+  const groups = dataOf(state.groups)
+  if (groups) set({ groups: ready(groups.map((x) => (x.id === g.id ? g : x))) })
+}
+/** API-077: the chats list shows the new name too. Throws ApiError. */
+export async function renameGroup(groupId: number, name: string) {
+  putGroup(await act(() => api.renameGroup(groupId, name)))
+  await load("conversations", true)
+}
+/** API-056, API-057: the group's picture in its details and in the chats list. Throw ApiError. */
+export async function uploadGroupPicture(groupId: number, file: Blob) {
+  const picture = await readPicture(file)
+  await act(() => api.setGroupAvatar(groupId, picture))
+  await Promise.all([load("groups", true), load("conversations", true)])
+}
+export async function removeGroupPicture(groupId: number) {
+  await act(() => api.removeGroupAvatar(groupId))
+  await Promise.all([load("groups", true), load("conversations", true)])
+}
+/** API-037. Throws ApiError. */
+export async function removeMember(groupId: number, accountId: number) {
+  await act(() => api.removeMember(groupId, accountId))
+  const g = groupOf(state, groupId)
+  if (g) putGroup({ ...g, members: g.members.filter((m) => m.id !== accountId) })
+  load("groups", true)
+}
+/** API-038: I stay in the group as a member. Throws ApiError. */
+export const transferGroup = async (groupId: number, accountId: number) => putGroup(await act(() => api.transferGroup(groupId, accountId)))
+/** API-039 or API-022: the group and its chat leave the lists. Throws ApiError. */
+async function gone(groupId: number, call: () => Promise<void>) {
+  await act(call)
+  const chat = dataOf(state.conversations)?.find((c) => c.group?.id === groupId)?.id
+  const groups = dataOf(state.groups)
+  const conversations = dataOf(state.conversations)
+  set({
+    ...(groups && { groups: ready(groups.filter((g) => g.id !== groupId)) }),
+    ...(conversations && { conversations: ready(conversations.filter((c) => c.id !== chat)) }),
+  })
+  load("groups", true)
+  load("conversations", true)
+}
+export const dissolveGroup = (groupId: number) => gone(groupId, () => api.dissolveGroup(groupId))
+export const leaveGroup = (groupId: number) => gone(groupId, () => api.leaveGroup(groupId))
+
+// ── Contacts and my account ──────────────────────────────────────────────────
+
+/**
+ * API-008. Resolves to the request, or to the contact when they had asked me already (their request is accepted, so
+ * they're a contact at once). Throws ApiError.
+ */
+export async function askContact(to: { account_id: number } | { email: string }, note?: string) {
+  const r = await act(() => api.askContact(to, note))
+  if ("contact" in r) await Promise.all([load("contacts", true), loadRequests()])
+  else await loadSent()
+  return r
+}
+/** API-013: the chat stays, and says they're no longer a contact. Throws ApiError. */
+export async function removeContact(accountId: number) {
+  await act(() => api.removeContact(accountId))
+  const contacts = dataOf(state.contacts)
+  if (contacts) set({ contacts: ready(contacts.filter((p) => p.id !== accountId)) })
+  load("contacts", true)
+  load("conversations", true)
+}
+/** API-005: the page shows the new name at once. Throws ApiError. */
+export async function renameMe(name: string) {
+  const a = await act(() => api.renameMe(name))
+  if (state.account) set({ account: { ...state.account, name: a.name } })
+}
+/** API-073: an empty title goes back to the tool's. Throws ApiError. */
+export async function renameAgent(agentId: string, title: string) {
+  const x = await act(() => api.renameAgent(agentId, title))
+  const agents = dataOf(state.agents)
+  if (agents) set({ agents: ready(agents.map((a) => (a.id === agentId ? { ...a, title: x.title } : a))) })
+  // An answer already on its way may still carry the old title; this one replaces it.
+  load("agents", true)
+}
+/** API-007: its sessions go offline with it. Throws ApiError. */
+export async function revokeDevice(id: string) {
+  await act(() => api.revokeDevice(id))
+  const devices = dataOf(state.devices)
+  if (devices) set({ devices: ready(devices.filter((d) => d.id !== id)) })
+  load("agents", true)
+}
+/** API-052: then this page is signed out too. Throws ApiError. */
+export async function deleteAccount() {
+  await act(() => api.deleteAccount())
+  stopPolling()
+  navigate("/login", { replace: true })
+  set(fresh(null))
+}
+
 /** API-075: a code to the new email. Throws ApiError. */
 export const requestEmailChange = (email: string) => act(() => api.requestEmailChange(email))
 /** API-076: the account shows the new email at once. Throws ApiError. */
@@ -539,9 +750,11 @@ document.addEventListener("visibilitychange", () => (tick(), fast()))
 /** Signed in: load everything the tabs and the top bar show. */
 export function begin(account: Account, isNew = false) {
   drafts.clear()
+  quota = undefined
   set(fresh(account, isNew))
   for (const key of Object.keys(fetchers) as ListKey[]) load(key)
   loadRequests()
+  loadSent()
   if (openKey) loadThread(openKey)
   startPolling()
 }

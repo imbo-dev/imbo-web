@@ -147,8 +147,8 @@ export const group = z.object({
   my_sessions: z.array(agentRef).default([]),
   avatar_url: z.string().optional(),
 })
-/** API-018 */
-export const groupCreated = z.object({ group })
+/** API-018, API-038, API-077: the group as it is now. */
+export const groupOne = z.object({ group })
 /** API-020: the invitation; its other fields aren't read. */
 export const invited = z.object({ request: z.object({ id: z.number() }) })
 /** API-021 */
@@ -232,15 +232,43 @@ export const stats = z.object({
 export const codeSent = z.object({ retry_after_s: z.number() })
 /** API-028 */
 export const webLogin = z.object({ account, new_account: z.boolean() })
-/** API-009, as the web calls it: contact requests (`kind` contact, maybe with a note) and group invitations waiting for me. */
-export const request = z.object({ id: z.number(), kind: z.string(), from: accountRef, group: groupRef.optional(), note: z.string().optional(), status: z.string() })
+/**
+ * API-009, as the web calls it: contact requests (`kind` contact, maybe with a note) and group invitations waiting for
+ * me, or the ones I sent (`direction=out`, without their notes).
+ */
+export const request = z.object({
+  id: z.number(),
+  kind: z.string(),
+  from: accountRef,
+  to: accountRef,
+  group: groupRef.optional(),
+  note: z.string().optional(),
+  status: z.string(),
+  created_at: time,
+})
 export const requests = z.object({ requests: z.array(request) })
+/** API-008: 201 with the new request, or 200 with the contact when they had already asked me (theirs is accepted). */
+export const contactAsked = z.union([z.object({ request }), z.object({ contact: accountRef })])
 /** API-010: the new contact, or the group I joined (a web login picks none of my sessions for it). */
 export const accepted = z.object({ contact: accountRef.optional(), group: groupRef.optional() })
 /** API-011: the request, now declined; its fields aren't read. */
 export const declined = z.object({ request: z.object({ id: z.number() }) })
-/** API-076: my account under its new email. */
-export const emailChanged = z.object({ account })
+/** API-005, API-076: my account under its new name or email. */
+export const accountChanged = z.object({ account })
+/** API-006: a computer signed in with `imbo login`. `current` is always false from the web. */
+export const device = z.object({
+  id: z.string(),
+  name: z.string(),
+  platform: z.string(),
+  created_at: time,
+  last_seen_at: time.nullish(),
+  current: z.boolean().default(false),
+})
+export const devices = z.object({ devices: z.array(device) })
+/** API-026: the uploaded file, and what the account uploaded today against the 1 GB limit. */
+export const uploaded = z.object({ file, quota: z.object({ used: z.number(), limit: z.number(), resets_at: time }) })
+/** API-073 */
+export const agentRenamed = z.object({ agent: myAgent })
 /** API-033, API-034 */
 export const checkout = z.object({ checkout_url: z.string() })
 export const portal = z.object({ portal_url: z.string() })
@@ -270,6 +298,9 @@ export type Request = z.infer<typeof request>
 export type Accepted = z.infer<typeof accepted>
 export type Member = z.infer<typeof member>
 export type Block = z.infer<typeof block>
+export type Device = z.infer<typeof device>
+export type Uploaded = z.infer<typeof uploaded>
+export type ContactAsked = z.infer<typeof contactAsked>
 export type ReportParty = z.infer<typeof reportParty>
 export type Report = z.infer<typeof report>
 export type ReportMessage = z.infer<typeof reportMessage>

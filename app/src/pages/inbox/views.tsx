@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, ExternalLink, FlaskConical, MessageSquare, ShieldCheck, Users } from "lucide-react"
+import { useEffect, useId, useState, type ReactNode } from "react"
+import { ArrowLeft, Bot, Clock, ExternalLink, FlaskConical, MessageSquare, Pencil, ShieldCheck, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,8 @@ import {
   loadThread,
   openThread,
   portalUrl,
+  refreshList,
+  renameAgent,
   retry,
   signOut,
   watchCheckout,
@@ -33,9 +35,12 @@ import {
 import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
 import { Composer, RecipientPicker, SendingClosed } from "./composer"
+import { ComputersField, DeleteAccount, NameField } from "./account"
 import { ChangeEmail } from "./email"
+import { openAddContact } from "./contacts"
 import { openGroupDetails, openNewGroup } from "./groups"
-import { MessageList, PaneHeader } from "./messages"
+import { MessageList, Outbox, PaneHeader } from "./messages"
+import { RenameButtons, RenameHint, RenameInput, useRename, useReturnFocus } from "./rename"
 import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
 
@@ -284,7 +289,7 @@ function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: strin
     )
   const paused = sendingPaused(s)
   if (paused) return <SendingClosed>{paused}</SendingClosed>
-  if (c.kind === "group") return <Composer key={key} threadKey={key} to={addressOf(s, c)} label={title} />
+  if (c.kind === "group") return <Composer key={key} s={s} threadKey={key} to={addressOf(s, c)} label={title} />
   const contacts = dataOf(s.contacts)
   const peer = contactOf(s, c.peer!.id)
   if (contacts && !peer) return <SendingClosed>{title} is no longer your contact, so messages can't be sent here.</SendingClosed>
@@ -293,6 +298,7 @@ function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: strin
   return (
     <Composer
       key={key}
+      s={s}
       threadKey={key}
       to={addressOf(s, c)}
       label={x ? `${title} ${x.title}` : `${title}'s inbox`}
@@ -416,6 +422,62 @@ function offlineNote(x: MyAgent) {
   return `${x.title} is offline. ${later}`
 }
 
+/** API-073 on a session's page: the pencil turns its name into a text box; empty goes back to the tool's title. */
+function SessionHeader({ x, back }: { x: MyAgent; back: ReactNode }) {
+  const [renaming, setRenaming] = useState(false)
+  const pencil = useReturnFocus(renaming)
+  if (renaming) return <RenamingSession x={x} back={back} onDone={() => setRenaming(false)} />
+  return (
+    <PaneHeader back={back} end={<Presence s={x} />}>
+      <Avatar kind="agent" />
+      <div className="min-w-0">
+        <h1 className="flex min-w-0 items-center gap-1 text-body-strong text-foreground">
+          <span className="truncate">{x.title}</span>
+          <Button ref={pencil} variant="ghost" size="icon-sm" aria-label={`Rename ${x.title}`} className="flex-none text-muted-foreground" onClick={() => setRenaming(true)}>
+            <Pencil size={14} aria-hidden="true" />
+          </Button>
+        </h1>
+        <p className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+          <ToolLine x={x} />
+          <Sep />
+          <span className="font-(family-name:--semantic-typography-code-font-family)">{x.short_id}</span>
+        </p>
+      </div>
+    </PaneHeader>
+  )
+}
+
+function RenamingSession({ x, back, onDone }: { x: MyAgent; back: ReactNode; onDone: () => void }) {
+  const r = useRename(x.title, (title) => renameAgent(x.id, title), onDone, (v) =>
+    [...v].length > 200 ? "A session name can be at most 200 characters." : undefined,
+  )
+  const formId = useId()
+  return (
+    <>
+      <PaneHeader back={back}>
+        {/* On a phone the box needs the room: no avatar, and Save and Cancel go under it, after the hint. */}
+        <span className="max-sm:hidden">
+          <Avatar kind="agent" />
+        </span>
+        <form id={formId} onSubmit={r.submit} noValidate className="flex min-w-0 flex-1 items-center gap-2">
+          <RenameInput r={r} label="Session name" className="h-8 min-w-0 flex-1 px-2.5" />
+          <span className="flex gap-2 max-sm:hidden">
+            <RenameButtons r={r} />
+          </span>
+        </form>
+      </PaneHeader>
+      <div className="flex flex-none flex-col gap-2 border-b-(length:--semantic-layout-hairline) border-border px-4 py-2">
+        <RenameHint r={r}>
+          The new name replaces the title from {toolName(x.tool)} everywhere in Imbo, for you and your contacts. Leave it empty to go back to that title.
+        </RenameHint>
+        <span className="flex gap-2 sm:hidden">
+          <RenameButtons r={r} form={formId} />
+        </span>
+      </div>
+    </>
+  )
+}
+
 export function SessionPane({ s, id }: { s: State; id: string }) {
   const key: ThreadKey = `a:${id}`
   useEffect(() => openThread(key), [key])
@@ -427,17 +489,7 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
   const paused = sendingPaused(s)
   return (
     <>
-      <PaneHeader back={back} end={<Presence s={x} />}>
-        <Avatar kind="agent" />
-        <div className="min-w-0">
-          <h1 className="truncate text-body-strong text-foreground">{x.title}</h1>
-          <p className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
-            <ToolLine x={x} />
-            <Sep />
-            <span className="font-(family-name:--semantic-typography-code-font-family)">{x.short_id}</span>
-          </p>
-        </div>
-      </PaneHeader>
+      <SessionHeader key={x.id} x={x} back={back} />
       <ThreadBody
         s={s}
         id={key}
@@ -454,6 +506,7 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
         ) : (
           <Composer
             key={key}
+            s={s}
             threadKey={key}
             to=""
             label={x.title}
@@ -521,10 +574,37 @@ function ListHeading({ id, children }: { id: string; children: string }) {
   )
 }
 
+/** API-009 `direction=out`: a contact request I sent, until they answer. */
+function SentRow({ r }: { r: Request }) {
+  return (
+    <li className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-2 py-2">
+      <Avatar kind="person" label={r.to.name} />
+      <div className="min-w-0">
+        <p className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-body text-foreground">{r.to.name}</span>
+          <span className="flex-none text-caption tabular-nums text-muted-foreground">ID {r.to.id}</span>
+        </p>
+        <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
+          <Clock size={12} aria-hidden="true" className="flex-none" />
+          <span className="truncate">Waiting for {r.to.name} to accept</span>
+        </p>
+      </div>
+    </li>
+  )
+}
+
 export function ContactList({ s, open }: { s: State; open?: string }) {
   const l = s.contacts
   if (l.status === "loading") return <ListSkeleton rows={3} />
   if (l.status === "error") return <ErrorState what="contacts" error={l.error} onRetry={() => retry("contacts")} />
+  const add = (
+    <div className="flex justify-end px-4 pt-2">
+      <Button variant="outline" size="sm" onClick={openAddContact}>
+        <UserPlus size={14} aria-hidden="true" />
+        Add contact
+      </Button>
+    </div>
+  )
   const requests = s.requests.length > 0 && (
     <section aria-labelledby="requests-heading">
       <ListHeading id="requests-heading">Requests</ListHeading>
@@ -535,20 +615,33 @@ export function ContactList({ s, open }: { s: State; open?: string }) {
       </ul>
     </section>
   )
+  const sent = s.outgoing.length > 0 && (
+    <section aria-labelledby="sent-heading">
+      <ListHeading id="sent-heading">Sent</ListHeading>
+      <ul className="flex flex-col px-2">
+        {s.outgoing.map((r) => (
+          <SentRow key={r.id} r={r} />
+        ))}
+      </ul>
+    </section>
+  )
   if (!l.data.length)
     return (
       <>
+        {add}
         {requests}
+        {sent}
         <EmptyState icon={<Users size={24} />} title="No contacts yet">
-          <p>Ask someone for their 8-digit account ID, then add them from a terminal:</p>
-          <Command text="imbo contact add <ID>" />
+          <p>Add someone with their 8-digit account ID or the email they sign in with. You can message each other once they accept.</p>
         </EmptyState>
       </>
     )
   return (
     <>
+      {add}
       {requests}
-      {requests && <ListHeading id="contacts-heading">Contacts</ListHeading>}
+      {sent}
+      {(requests || sent) && <ListHeading id="contacts-heading">Contacts</ListHeading>}
       <nav aria-label="Contacts" className="flex flex-col gap-0.5 p-2">
         {l.data.map((p) => {
           const online = p.sessions.filter((x) => x.online).length
@@ -588,13 +681,23 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
         back={back}
         end={
           <span className="flex flex-none items-center gap-1">
-            {chat && (
+            {chat ? (
               <Button asChild variant="outline" size="sm">
                 <a href={`/chats/${chat}`} onClick={onLinkClick}>
                   <MessageSquare size={14} aria-hidden="true" />
                   Open chat
                 </a>
               </Button>
+            ) : (
+              p.active &&
+              !blocked && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={`/contacts/${p.id}/chat`} onClick={onLinkClick}>
+                    <MessageSquare size={14} aria-hidden="true" />
+                    Message
+                  </a>
+                </Button>
+              )
             )}
             <PeerMenu s={s} who={p} />
           </span>
@@ -636,9 +739,85 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
             ))}
           </ul>
         ) : (
-          <p className="text-body text-(--semantic-color-text-tertiary)">No sessions online in the last 7 days.</p>
+          <p className="text-body text-(--semantic-color-text-tertiary)">
+            {p.name} has no sessions online or seen in the last 7 days. Messages go to {p.name}'s terminal inbox.
+          </p>
         )}
       </section>
+    </>
+  )
+}
+
+/**
+ * A chat with a contact I haven't messaged yet (FLOW-WEB-CHAT S1): empty until the first message, which makes the chat
+ * and opens it in Chats. Until then the recipient choice is kept under minus their account ID.
+ */
+export function NewChatPane({ s, id }: { s: State; id: string }) {
+  const back = <BackLink to={`/contacts/${id}`} label="Back to contact" />
+  const early = paneState(s.contacts, back, "contact", () => retry("contacts"), <ListSkeleton rows={3} />)
+  const p = dataOf(s.contacts)?.find((c) => String(c.id) === id)
+  const chat = p && conversationWith(s, p.id)
+  useEffect(() => {
+    if (chat) navigate(`/chats/${chat}`, { replace: true })
+  }, [chat])
+  if (early) return early
+  if (!p) return <NotFound back={back} what="contact" />
+  if (chat) return null
+  const key: ThreadKey = `n:${p.id}`
+  const c: Conversation = { id: -p.id, kind: "direct", peer: { id: p.id, name: p.name, avatar_url: p.avatar_url }, pending: 0 }
+  const x = chosenSession(s, c)
+  const online = p.sessions.filter((y) => y.online).length
+  const paused = sendingPaused(s)
+  return (
+    <>
+      <PaneHeader back={back} end={p.active && !isBlocked(s, p.id) && <RecipientPicker s={s} c={c} />}>
+        <Avatar kind="person" label={p.name} src={p.avatar_url} />
+        <div className="min-w-0">
+          <h1 className="truncate text-body-strong text-foreground">{p.name}</h1>
+          <p className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+            <a href={`/contacts/${p.id}`} onClick={onLinkClick} className="focus-ring rounded-sm tabular-nums underline-offset-4 hover:underline">
+              ID {p.id}
+            </a>
+            <Sep />
+            {online ? `${online} of ${p.sessions.length} sessions online` : "Offline"}
+          </p>
+        </div>
+      </PaneHeader>
+      {s.outbox[key]?.length ? (
+        <Outbox s={s} id={key} />
+      ) : (
+        <div className="flex-1">
+          <EmptyState icon={<MessageSquare size={24} />} title={`No messages with ${p.name} yet`}>
+            <p>
+              Your first message goes to {x ? `${p.name}'s session ${x.title}` : `${p.name}'s terminal inbox`}. The chat shows up in Chats once it's sent.
+            </p>
+          </EmptyState>
+        </div>
+      )}
+      {isBlocked(s, p.id) ? (
+        <SendingClosed
+          action={
+            <Button variant="outline" size="sm" onClick={() => unblockNow(p)}>
+              Unblock
+            </Button>
+          }
+        >
+          You blocked {p.name}. Unblock {p.name} to send messages.
+        </SendingClosed>
+      ) : !p.active ? (
+        <SendingClosed>{p.name}'s account is inactive, so messages can't reach them.</SendingClosed>
+      ) : paused ? (
+        <SendingClosed>{paused}</SendingClosed>
+      ) : (
+        <Composer
+          key={key}
+          s={s}
+          threadKey={key}
+          to={addressOf(s, c)}
+          label={x ? `${p.name} ${x.title}` : `${p.name}'s inbox`}
+          note={x && !x.online ? `${x.title} is offline. It gets your message when it comes back online.` : undefined}
+        />
+      )}
     </>
   )
 }
@@ -846,6 +1025,7 @@ export function AccountPane({ s }: { s: State }) {
     history.replaceState(null, "", "/account")
     watchCheckout()
   }, [])
+  useEffect(() => refreshList("devices"), [])
   const a = s.account
   if (!a) return null
   return (
@@ -857,7 +1037,9 @@ export function AccountPane({ s }: { s: State }) {
         <Row label="Picture">
           <PictureField s={s} />
         </Row>
-        <Row label="Name">{a.name}</Row>
+        <Row label="Name">
+          <NameField name={a.name} />
+        </Row>
         <Row label="Email">
           <div className="flex items-center justify-between gap-3">
             <span className="min-w-0 wrap-anywhere">{a.email}</span>
@@ -871,6 +1053,9 @@ export function AccountPane({ s }: { s: State }) {
           <p className="text-caption text-muted-foreground">People add you as a contact with this ID.</p>
         </Row>
         <PlanRow s={s} />
+        <Row label="Computers">
+          <ComputersField s={s} />
+        </Row>
         <Row label="Blocked">
           <BlockedField s={s} />
         </Row>
@@ -890,10 +1075,11 @@ export function AccountPane({ s }: { s: State }) {
             <p className="text-caption text-muted-foreground">Reports, users and the dashboard.</p>
           </Row>
         )}
-        <div className="border-t-(length:--semantic-layout-hairline) border-border pt-4">
+        <div className="flex flex-wrap gap-2 border-t-(length:--semantic-layout-hairline) border-border pt-4">
           <Button variant="outline" onClick={() => signOut().catch((e) => toast.error(messageOf(e)))}>
             Sign out
           </Button>
+          <DeleteAccount id={a.id} />
         </div>
       </div>
     </>

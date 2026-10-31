@@ -7,15 +7,15 @@ import { ApiError, NO_ANSWER, type DataLayer, type Page } from "./layer"
 // its contract schema.
 const API = import.meta.env.DEV ? "" : "https://api.imbo.dev"
 
-/** `body` goes as JSON, except a Blob (a picture), which goes as is with its own type. */
-async function call<T extends z.ZodType>(schema: T, method: string, path: string, body?: unknown): Promise<z.infer<T>> {
+/** `body` goes as JSON, except a Blob (a picture or a file), which goes as is with its own type, or `headers` when given. */
+async function call<T extends z.ZodType>(schema: T, method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<z.infer<T>> {
   let r: Response
   const raw = body instanceof Blob
   try {
     r = await fetch(API + path, {
       method,
       credentials: "include",
-      headers: body === undefined ? undefined : { "content-type": raw ? body.type : "application/json" },
+      headers: headers ?? (body === undefined ? undefined : { "content-type": raw ? body.type : "application/json" }),
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     })
   } catch {
@@ -51,17 +51,31 @@ export const online = {
   signIn: (email, code, name) => call(c.webLogin, "POST", "/v1/web/session", { email, code, name }),
   signOut: () => call(none, "DELETE", "/v1/web/session"),
   me: () => get(c.me, "/v1/me"),
+  renameMe: async (name) => (await call(c.accountChanged, "PATCH", "/v1/me", { name })).account,
+  devices: async () => (await get(c.devices, "/v1/devices")).devices,
+  revokeDevice: (id) => call(none, "DELETE", `/v1/devices/${encodeURIComponent(id)}`),
+  deleteAccount: () => call(none, "DELETE", "/v1/account", { confirm: "DELETE" }),
   conversations: async () => (await get(c.conversations, "/v1/conversations")).conversations,
   messages: (id, page) => get(c.messagesPage, `/v1/conversations/${id}/messages${query(page)}`),
   agents: async () => (await get(c.myAgents, "/v1/agents")).agents,
   agentMessages: (id, page) => get(c.messagesPage, `/v1/agents/${encodeURIComponent(id)}/messages${query(page)}`),
   // With their sessions seen in the last 7 days, which a chat can also send to (FLOW-WEB-CHAT S2).
   contacts: async () => (await get(c.contacts, "/v1/contacts?offline=true")).contacts,
-  send: (to, body, client_msg_id) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id }),
-  sendToAgent: async (id, body, client_msg_id) =>
-    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id })).message,
+  send: (to, body, client_msg_id, files) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files }),
+  sendToAgent: async (id, body, client_msg_id, files) =>
+    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files })).message,
+  upload: (file, sha256) =>
+    call(c.uploaded, "POST", "/v1/files", file, {
+      "content-type": "application/octet-stream",
+      "imbo-file-name": encodeURIComponent(file.name),
+      "imbo-file-sha256": sha256,
+    }),
+  renameAgent: async (id, title) => (await call(c.agentRenamed, "PUT", `/v1/agents/${encodeURIComponent(id)}/title`, { title })).agent,
   markRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/agents/${encodeURIComponent(id)}/read`, { up_to })).marked,
   requests: async () => (await get(c.requests, "/v1/requests")).requests,
+  sentRequests: async () => (await get(c.requests, "/v1/requests?direction=out")).requests,
+  askContact: (to, note) => call(c.contactAsked, "POST", "/v1/contacts/requests", { ...to, note: note || undefined }),
+  removeContact: (id) => call(none, "DELETE", `/v1/contacts/${id}`),
   accept: (id) => call(c.accepted, "POST", `/v1/requests/${id}/accept`, {}),
   decline: async (id) => void (await call(c.declined, "POST", `/v1/requests/${id}/decline`)),
   billing: () => get(c.billing, "/v1/billing"),
@@ -70,11 +84,18 @@ export const online = {
   // The response carries Content-Disposition: attachment, so a plain link downloads it.
   fileUrl: (f) => `${API}/v1/files/${encodeURIComponent(f.id)}`,
   groups: async () => (await get(c.groups, "/v1/groups")).groups,
-  createGroup: async (name, sessions) => (await call(c.groupCreated, "POST", "/v1/groups", { name, sessions })).group,
+  createGroup: async (name, sessions) => (await call(c.groupOne, "POST", "/v1/groups", { name, sessions })).group,
+  renameGroup: async (id, name) => (await call(c.groupOne, "PATCH", `/v1/groups/${id}`, { name })).group,
+  setGroupAvatar: async (id, picture) => (await call(c.avatar, "PUT", `/v1/groups/${id}/avatar`, picture)).avatar_url,
+  removeGroupAvatar: (id) => call(none, "DELETE", `/v1/groups/${id}/avatar`),
+  leaveGroup: (id) => call(none, "DELETE", `/v1/groups/${id}/members/me`),
+  removeMember: (id, account_id) => call(none, "DELETE", `/v1/groups/${id}/members/${account_id}`),
+  transferGroup: async (id, account_id) => (await call(c.groupOne, "PUT", `/v1/groups/${id}/owner`, { account_id })).group,
+  dissolveGroup: (id) => call(none, "DELETE", `/v1/groups/${id}`),
   invite: async (id, account_id) => void (await call(c.invited, "POST", `/v1/groups/${id}/invites`, { account_id })),
   setGroupSessions: async (id, sessions) => (await call(c.groupSessions, "PUT", `/v1/groups/${id}/sessions`, { sessions })).my_sessions,
   requestEmailChange: (email) => call(c.codeSent, "POST", "/v1/me/email/code", { email }),
-  changeEmail: async (email, code) => (await call(c.emailChanged, "POST", "/v1/me/email", { email, code })).account,
+  changeEmail: async (email, code) => (await call(c.accountChanged, "POST", "/v1/me/email", { email, code })).account,
   setAvatar: async (picture) => (await call(c.avatar, "PUT", "/v1/me/avatar", picture)).avatar_url,
   removeAvatar: () => call(none, "DELETE", "/v1/me/avatar"),
   avatarUrl: (url) => (url.startsWith("/") ? API + url : url),

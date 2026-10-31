@@ -32,7 +32,7 @@ const ADMIN_TABS: AdminTab[] = ["users", "dashboard"]
 function Route() {
   const path = usePath()
   const { account, isNew } = useStore()
-  const [, first = "", item] = path.split("/")
+  const [, first = "", item, sub] = path.split("/")
   const tab = TABS.find((t) => t === first)
   const admin = first === "admin"
   const adminTab = !item ? "reports" : ADMIN_TABS.find((t) => t === item)
@@ -60,7 +60,7 @@ function Route() {
   if (to || account === undefined) return null
   if (auth || first === "welcome") return <AuthFlow page={first as "login" | "register" | "welcome"} />
   if (admin) return account?.admin && adminTab ? <Admin tab={adminTab} /> : <Inbox tab="chats" missing />
-  return <Inbox tab={tab!} item={item ? decodeURIComponent(item) : undefined} />
+  return <Inbox tab={tab!} item={item ? decodeURIComponent(item) : undefined} chat={tab === "contacts" && sub === "chat"} />
 }
 
 export function App() {

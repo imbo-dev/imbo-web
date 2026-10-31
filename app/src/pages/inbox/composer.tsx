@@ -1,5 +1,5 @@
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { ArrowUp, Bot, ChevronDown, Inbox, Pause } from "lucide-react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { ArrowUp, Bot, ChevronDown, CircleAlert, FileText, Inbox, Paperclip, Pause, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,10 +12,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sep } from "@/components/bits"
 import type { Conversation } from "@/data/contract"
-import { chooseRecipient, chosenSession, contactOf, draftOf, keepDraft, send, type State, type ThreadKey } from "@/data/store"
-import { ago, toolName } from "@/lib/format"
+import { cn } from "@/lib/cn"
+import {
+  attach,
+  chooseRecipient,
+  chosenSession,
+  contactOf,
+  detach,
+  draftOf,
+  keepDraft,
+  send,
+  type Attachment,
+  type State,
+  type ThreadKey,
+} from "@/data/store"
+import { ago, fileSize, toolName } from "@/lib/format"
 
-// The text box at the bottom of an open chat or session (FLOW-WEB-CHAT S3, FLOW-WEB-SEND S3): text only, sent as me
+// The text box at the bottom of an open chat or session (FLOW-WEB-CHAT S3, FLOW-WEB-SEND S3): text and files, sent as me
 // from my terminal inbox. Enter sends, Shift+Enter starts a new line.
 
 const MAX_CHARS = 32_000
@@ -55,26 +68,59 @@ function useGrow(text: string) {
   return { shell, area }
 }
 
+/** A file waiting to go with the next message: uploading, uploaded, or why it can't go. */
+function FileChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
+  return (
+    <li className={cn("flex min-h-9 max-w-64 items-center gap-2 rounded-md border bg-background py-1 pr-1 pl-2.5", a.error ? "border-destructive" : "border-border")}>
+      {a.error ? (
+        <CircleAlert size={16} aria-hidden="true" className="flex-none text-destructive" />
+      ) : (
+        <FileText size={16} aria-hidden="true" className="flex-none text-muted-foreground" />
+      )}
+      <span className="min-w-0">
+        <span className="block truncate text-caption text-foreground">{a.file.name}</span>
+        <span className={cn("block text-caption", a.error ? "text-pretty text-destructive" : "truncate text-muted-foreground")}>
+          {a.error ?? (a.ref ? fileSize(a.file.size) : "Uploading…")}
+        </span>
+      </span>
+      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${a.file.name}`} className="flex-none text-muted-foreground" onClick={onRemove}>
+        <X size={14} aria-hidden="true" />
+      </Button>
+    </li>
+  )
+}
+
 /** `to`: the API-015 address in a chat; a session pane sends to its own session. `label` names who it goes to. */
-export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey; to: string; label: string; note?: string }) {
+export function Composer({ s, threadKey, to, label, note }: { s: State; threadKey: ThreadKey; to: string; label: string; note?: string }) {
   const [text, setText] = useState(() => draftOf(threadKey))
   const { shell, area } = useGrow(text)
   const composedAt = useRef(-Infinity)
+  const picker = useRef<HTMLInputElement>(null)
   const errorId = useId()
+  const files = s.attachments[threadKey] ?? []
   // Counted the way the server counts: code points, not UTF-16 units.
   const length = [...text].length
   const tooLong = length > MAX_CHARS
-  const blank = !text.trim()
+  const blank = !text.trim() && !files.length
+  // A file that can't go has to be removed first; one still uploading holds the message until it's done.
+  const refused = files.some((a) => a.error)
+  const uploading = files.some((a) => !a.ref && !a.error)
+  const [held, setHeld] = useState(false)
 
   const update = (v: string) => {
     setText(v)
     keepDraft(threadKey, v)
   }
   const submit = () => {
-    if (blank || tooLong) return
+    if (blank || tooLong || refused) return setHeld(false)
+    if (uploading) return setHeld(true)
+    setHeld(false)
     send(threadKey, to, text)
     update("")
   }
+  useEffect(() => {
+    if (held && !uploading) submit()
+  }, [held, uploading])
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== "Enter" || e.shiftKey) return
     // This Enter picks an input method candidate.
@@ -95,6 +141,20 @@ export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey;
           {note}
         </p>
       )}
+      {files.length > 0 && (
+        <ul aria-label="Attached files" className="flex flex-wrap gap-2">
+          {files.map((a) => (
+            <FileChip
+              key={a.key}
+              a={a}
+              onRemove={() => {
+                detach(threadKey, a.key)
+                area.current?.focus()
+              }}
+            />
+          ))}
+        </ul>
+      )}
       <form
         className="flex items-end gap-2"
         onSubmit={(e) => {
@@ -102,6 +162,20 @@ export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey;
           submit()
         }}
       >
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            const picked = [...(e.target.files ?? [])]
+            e.target.value = ""
+            if (picked.length) attach(threadKey, picked)
+          }}
+        />
+        <Button type="button" variant="ghost" size="icon" aria-label="Attach files" className="mb-1 flex-none text-muted-foreground" onClick={() => picker.current?.click()}>
+          <Paperclip size={16} aria-hidden="true" />
+        </Button>
         <div ref={shell} className="composer-shell state-layer focus-ring is-field min-w-0 flex-1 rounded-md border border-input bg-muted">
           <textarea
             ref={area}
@@ -117,10 +191,15 @@ export function Composer({ threadKey, to, label, note }: { threadKey: ThreadKey;
             className="composer block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
           />
         </div>
-        <Button type="submit" size="icon" aria-label="Send" aria-disabled={blank || tooLong} className="mb-1">
+        <Button type="submit" size="icon" aria-label="Send" aria-disabled={blank || tooLong || refused || held} className="mb-1">
           <ArrowUp size={16} aria-hidden="true" />
         </Button>
       </form>
+      {held && (
+        <p role="status" className="text-caption text-muted-foreground">
+          Sending when the files finish uploading…
+        </p>
+      )}
       {tooLong && (
         <p id={errorId} role="alert" className="text-caption text-destructive">
           Messages can be up to 32,000 characters. This one has {length.toLocaleString("en-US")}.

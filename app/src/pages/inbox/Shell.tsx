@@ -11,9 +11,10 @@ import { messageOf } from "@/data/layer"
 import { dataOf, pendingTotal, refreshList, signOut, unreadTotal, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
+import { ContactDialogs } from "./contacts"
 import { GroupDialogs } from "./groups"
 import { BlocksPane, SafetyDialogs } from "./safety"
-import { AccountPane, BackLink, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NothingOpen, NotFound, PendingBadge, SessionList, SessionPane } from "./views"
+import { AccountPane, BackLink, ChatList, ChatPane, ContactList, ContactPane, GetStarted, NewChatPane, NothingOpen, NotFound, PendingBadge, SessionList, SessionPane } from "./views"
 
 export type Tab = "chats" | "sessions" | "contacts" | "account"
 
@@ -127,7 +128,8 @@ function Tabs({ s, tab }: { s: State; tab: Tab }) {
 }
 
 /** `missing`: an address that isn't one of the inbox's pages, shown as not found in the right pane. */
-export function Inbox({ tab, item, missing }: { tab: Tab; item?: string; missing?: boolean }) {
+/** `chat`: /contacts/<id>/chat, a chat with a contact that hasn't started yet. */
+export function Inbox({ tab, item, missing, chat }: { tab: Tab; item?: string; missing?: boolean; chat?: boolean }) {
   const s = useStore()
   useEffect(() => {
     if (tab === "sessions") refreshList("agents")
@@ -181,6 +183,8 @@ export function Inbox({ tab, item, missing }: { tab: Tab; item?: string; missing
             <ChatPane key={item} s={s} id={item} />
           ) : tab === "sessions" ? (
             <SessionPane key={item} s={s} id={item} />
+          ) : chat ? (
+            <NewChatPane key={item} s={s} id={item} />
           ) : (
             <ContactPane key={item} s={s} id={item} />
           )}
@@ -188,6 +192,7 @@ export function Inbox({ tab, item, missing }: { tab: Tab; item?: string; missing
       </div>
       <SafetyDialogs s={s} />
       <GroupDialogs s={s} />
+      <ContactDialogs s={s} />
     </AppStage>
   )
 }

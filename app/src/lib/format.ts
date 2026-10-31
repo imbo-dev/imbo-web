@@ -32,6 +32,10 @@ export function ago(t: string) {
   return `${Math.round(h / 24)} d ago`
 }
 
+const PLATFORMS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
+/** API-006 `platform`, "macos-aarch64" → "macOS"; a system this page doesn't know shows as the server sent it. */
+export const platformName = (p: string) => PLATFORMS[p.split("-")[0]] ?? p
+
 export const fileSize = (b: number) =>
   b < 1024 ? `${b} B` : b < 1_048_576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1_048_576).toFixed(1)} MB`
 

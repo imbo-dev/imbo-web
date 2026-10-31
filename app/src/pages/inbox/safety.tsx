@@ -16,13 +16,14 @@ import {
   Trash2,
   Undo2,
   Upload,
+  UserMinus,
   UserRound,
 } from "lucide-react"
 import { Popover, RadioGroup } from "radix-ui"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, CopyId, Sep, Tag } from "@/components/bits"
 import type { Conversation, Member, Profile } from "@/data/contract"
 import { ApiError, messageOf, type ReportReason } from "@/data/layer"
@@ -45,6 +46,7 @@ import {
 } from "@/data/store"
 import { shortDate } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
+import { askRemoveContact } from "./contacts"
 import { EmptyState, ErrorState, ListSkeleton } from "./states"
 
 // Pictures, blocking and reporting on the web (FLOW-AVATAR, FLOW-BLOCK, FLOW-REPORT): the account's picture, the
@@ -96,7 +98,7 @@ export function SafetyDialogs({ s }: { s: State }) {
 }
 
 /** Red text above a dialog's buttons when the server refused. */
-function DialogError({ children }: { children?: ReactNode }) {
+export function DialogError({ children }: { children?: ReactNode }) {
   if (!children) return null
   return (
     <p role="alert" className="flex items-start gap-2 text-caption text-destructive">
@@ -106,7 +108,7 @@ function DialogError({ children }: { children?: ReactNode }) {
   )
 }
 
-function Consequence({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+export function Consequence({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <li className="flex gap-3 text-body text-foreground">
       <span aria-hidden="true" className="mt-1 flex-none text-muted-foreground">
@@ -387,6 +389,15 @@ export function PeerMenu({ s, who }: { s: State; who: Profile }) {
             Block {who.name}…
           </DropdownMenuItem>
         )}
+        {contactOf(s, who.id) && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => askRemoveContact(who)} className="text-destructive [&_svg]:text-destructive">
+              <UserMinus size={16} aria-hidden="true" />
+              Remove contact…
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -577,7 +588,7 @@ export function GroupMembers({ s, c, children }: { s: State; c: Conversation; ch
 // ── Account page ─────────────────────────────────────────────────────────────
 
 /** Why a picture wasn't taken, in the words of FLOW-AVATAR; anything else in the server's own words. */
-function pictureRefusal(e: unknown) {
+export function pictureRefusal(e: unknown) {
   if (!(e instanceof ApiError)) return messageOf(e)
   if (e.type === "/errors/file-too-large") return "That image is larger than 5 MB. Pick a JPEG or PNG up to 5 MB."
   if (e.type === "/errors/image-invalid") return "Imbo can't read that image. Pick a JPEG or PNG."

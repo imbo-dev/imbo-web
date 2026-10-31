@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, Block, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
+import type { Account, AdminAccount, Block, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -16,6 +16,8 @@ export type Sending = "ok" | "refused" | "blocked"
 export type Picture = "ok" | "too-large" | "unreadable" | "limit"
 /** Whether canceling a banned account's Waffo subscription works (API-066, API-070). */
 export type Cancel = "ok" | "fails"
+/** What the next file upload meets: taken, or today's 1 GB already used (API-026). */
+export type Upload = "ok" | "quota"
 export type Controls = {
   status: Status
   preset: f.BillingPreset
@@ -26,6 +28,7 @@ export type Controls = {
   sending: Sending
   picture: Picture
   cancel: Cancel
+  upload: Upload
   live: Message[]
   pendingExtra: Record<number, number>
 }
@@ -39,6 +42,7 @@ export let controls: Controls = {
   sending: "ok",
   picture: "ok",
   cancel: "ok",
+  upload: "ok",
   live: [],
   pendingExtra: {},
 }
@@ -125,6 +129,11 @@ function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
 // Stored the way the server stores it: once per client_msg_id, answered by the sessions it went to a moment later.
 
 const sentByCid = new Map<string, Sent>()
+/** Files Dana uploaded, by ID, and how much she uploaded today. */
+const uploads = new Map<string, FileRef>()
+let uploadedToday = 0
+const GB = 1_073_741_824
+const filesOf = (ids: string[] = []) => ids.map((id) => uploads.get(id)!)
 const agentSentByCid = new Map<string, number>()
 /** What sending changed about a session that sending can open: opening, open, or failed (FLOW-WAKE). */
 const woken: Record<string, Partial<MyAgent>> = {}
@@ -142,12 +151,14 @@ const append = (m: Message, pendingFor?: number) =>
     pendingExtra: pendingFor === undefined ? controls.pendingExtra : { ...controls.pendingExtra, [pendingFor]: (controls.pendingExtra[pendingFor] ?? 0) + 1 },
   })
 
-/** The checks every send passes first, in the server's order and wording. */
-async function sending(body: string) {
+/** The checks every send passes first, in the server's order and wording. With files the text can be empty. */
+async function sending(body: string, files: string[] = []) {
   const a = signedIn()
   await wait(450)
   if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
-  if (!body.trim() || [...body].length > 32_000) throw new ApiError(422, "/errors/body-invalid", "The message must be 1 to 32000 characters.")
+  if ((!files.length && !body.trim()) || [...body].length > 32_000) throw new ApiError(422, "/errors/body-invalid", "The message must be 1 to 32000 characters.")
+  if (files.length > 20) throw new ApiError(400, "/errors/invalid-request", "A message can carry at most 20 files.")
+  if (files.some((id) => !uploads.has(id))) throw new ApiError(400, "/errors/invalid-request", "Unknown file.")
   if (controls.preset === "expired") throw new ApiError(402, "/errors/subscription-required", "Your trial has ended. Subscribe to send messages again.")
   if (controls.sending === "refused") throw new ApiError(429, "/errors/rate-limited", "Too many messages in this conversation. Slow down.", 20)
   return a
@@ -176,6 +187,31 @@ function groupOf(id: number) {
   return g
 }
 const asMember = (a: Account) => ({ id: a.id, name: a.name, avatar_url: a.avatar_url, active: true })
+/** Only the owner may change a group (`/errors/not-owner`). */
+function ownGroup(a: Account, id: number) {
+  const g = groupOf(id)
+  if (g.owner?.id !== a.id) throw new ApiError(403, "/errors/not-owner", `Only the owner of ${g.name} can do that.`)
+  return g
+}
+/** The group and its chat, which shows its name and picture. */
+function changeGroup(g: Group, patch: Partial<Group>) {
+  const next = { ...g, ...patch }
+  f.groups[f.groups.indexOf(g)] = next
+  for (const c of f.conversations) if (c.group?.id === g.id) c.group = { id: g.id, name: next.name, avatar_url: next.avatar_url }
+  return next
+}
+/** Left or dissolved: gone from Dana's groups and chats. */
+function dropGroup(g: Group) {
+  f.groups.splice(f.groups.indexOf(g), 1)
+  const i = f.conversations.findIndex((c) => c.group?.id === g.id)
+  if (i >= 0) f.conversations.splice(i, 1)
+}
+
+/** Contact requests Dana sent that are still waiting. */
+let outgoing: Request[] = []
+/** Session titles Dana gave (API-073). */
+const titles: Record<string, string> = {}
+let myDevices: Device[] = [...f.devices]
 
 const codeTries: Record<string, number> = {}
 const codeSentAt: Record<string, number> = {}
@@ -224,6 +260,28 @@ export const mock = {
     await wait(200)
     return { account: signedIn() }
   },
+  /** Same rule as the server: 1 to 32 characters after trimming, no control characters. */
+  async renameMe(name) {
+    const a = signedIn()
+    await wait(450)
+    const n = name.trim()
+    if (!n || [...n].length > 32 || /\p{Cc}/u.test(n)) throw new ApiError(400, "/errors/invalid-request", "A name must be 1 to 32 characters.")
+    const next = { ...a, name: n }
+    setMe(next)
+    return next
+  },
+  devices: () => data(() => myDevices, []),
+  async revokeDevice(id) {
+    signedIn()
+    await wait(450)
+    if (!myDevices.some((d) => d.id === id)) throw new ApiError(404, "/errors/not-found", "No such computer.")
+    myDevices = myDevices.filter((d) => d.id !== id)
+  },
+  async deleteAccount() {
+    signedIn()
+    await wait(800)
+    setMe(null)
+  },
   conversations: () =>
     data(
       () =>
@@ -247,17 +305,17 @@ export const mock = {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
     return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)), p), { messages: [], has_more: false })
   },
-  agents: () => data(() => f.myAgents.map((a) => ({ ...a, ...woken[a.id], unread: unread[a.id].length })), []),
+  agents: () => data(() => f.myAgents.map((a) => ({ ...a, ...woken[a.id], ...(titles[a.id] && { title: titles[a.id] }), unread: unread[a.id].length })), []),
   agentMessages: async (id, p) => {
     if (!f.myAgents.some((a) => a.id === id)) throw new ApiError(404, "/errors/not-found", "No such session.")
     return data(() => page(allMessages().filter((m) => m.from.agent?.id === id || m.to?.id === id).map(withState), p), { messages: [], has_more: false })
   },
   contacts: () => data(() => f.contacts.map((c) => ({ ...c, blocked: blockedByMe(c.id) })), []),
   /** Direct: `<account>` is their terminal inbox, `<account>/<short ID>` one of their sessions, which answers 2.5 s later. */
-  async send(to, body, cid) {
+  async send(to, body, cid, files) {
     const done = sentByCid.get(cid)
     if (done) return done
-    const a = await sending(body)
+    const a = await sending(body, files)
     const group = to.startsWith("#") ? f.conversations.find((c) => c.group && `#${c.group.id}` === to) : undefined
     const [peerId, short] = to.split("/")
     const peer = group ? undefined : f.contacts.find((p) => String(p.id) === peerId)
@@ -265,12 +323,13 @@ export const mock = {
     if (peer && blockedByMe(peer.id)) throw new ApiError(403, "/errors/unblock-first", `You blocked ${peer.name}. Unblock them first.`)
     if (peer && controls.sending === "blocked") throw new ApiError(403, "/errors/blocked", `${peer.name} doesn't accept your messages.`)
     if (peer && !peer.active) throw new ApiError(403, "/errors/recipient-inactive", `${peer.name}'s account is inactive.`)
-    const chat = group ?? f.conversations.find((c) => c.peer?.id === peer!.id)
-    if (!chat) throw new ApiError(404, "/errors/recipient-not-found", `No conversation with ${to}.`)
+    // The first message to a contact starts the chat.
+    let chat = group ?? f.conversations.find((c) => c.peer?.id === peer!.id)
+    if (!chat) f.conversations.push((chat = { id: nextChatId(), kind: "direct", peer: { id: peer!.id, name: peer!.name, avatar_url: peer!.avatar_url }, pending: 0 }))
     const session = short ? f.contactSessions[to] : undefined
     if (short && !session) throw new ApiError(404, "/errors/session-not-found", `${peer!.name} has no session ${short}.`)
     const conversation = chat.group ? { kind: "group" as const, id: chat.id, group: chat.group } : { kind: "direct" as const, id: chat.id, peer: chat.peer }
-    const m = f.msg({ id: nextId(), conversation, from: f.from(a), ...(!group && { to: session ?? f.terminalOf(peer!.id) }), created_at: new Date().toISOString(), body })
+    const m = f.msg({ id: nextId(), conversation, from: f.from(a), ...(!group && { to: session ?? f.terminalOf(peer!.id) }), created_at: new Date().toISOString(), body, files: filesOf(files) })
     append(m)
     if (group)
       later(3000, () => append(f.msg({ id: nextId(), conversation, from: f.from(f.groupAnswer.person, f.groupAnswer.agent), created_at: new Date().toISOString(), body: f.groupAnswer.body }), chat.id))
@@ -284,13 +343,13 @@ export const mock = {
    * An online session takes it within about a second and answers 3.5 s later; an offline one leaves it pending. One that
    * sending can open (FLOW-WAKE) shows as opening, comes online 6 s later and then takes it; search-index's open fails.
    */
-  async sendToAgent(id, body, cid) {
+  async sendToAgent(id, body, cid, files) {
     const done = agentSentByCid.get(cid)
     if (done !== undefined) return withState(allMessages().find((m) => m.id === done)!)
-    const a = await sending(body)
+    const a = await sending(body, files)
     const agent = f.myAgents.find((x) => x.id === id)
     if (!agent) throw new ApiError(404, "/errors/not-found", "No such session.")
-    const m = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a), to: f.ref(agent), created_at: new Date().toISOString(), body })
+    const m = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a), to: f.ref(agent), created_at: new Date().toISOString(), body, files: filesOf(files) })
     const online = agent.online || !!woken[id]?.online
     const opens = !online && agent.wakeable
     states[m.id] = online ? "pushed" : "pending"
@@ -319,6 +378,34 @@ export const mock = {
     }
     return withState(m)
   },
+  /** About 1 s a megabyte; the Demo panel can make today's 1 GB used up. */
+  async upload(file, sha256) {
+    signedIn()
+    await wait(600 + Math.min(4000, file.size / 1000))
+    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (file.size > 104_857_600) throw new ApiError(413, "/errors/file-too-large", "A file can be at most 100 MB (104857600 bytes).")
+    if (controls.upload === "quota" || uploadedToday + file.size > GB)
+      throw new ApiError(429, "/errors/upload-quota-exceeded", "Today's 1 GB upload limit is used up; it resets at 00:00 Beijing time.")
+    uploadedToday += file.size
+    const ref: FileRef = { id: `f-${uploads.size + 1}`, name: file.name, size: file.size, sha256, expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString() }
+    uploads.set(ref.id, ref)
+    const midnight = new Date()
+    midnight.setUTCHours(16, 0, 0, 0)
+    if (midnight.getTime() < Date.now()) midnight.setUTCDate(midnight.getUTCDate() + 1)
+    return { file: ref, quota: { used: uploadedToday, limit: GB, resets_at: midnight.toISOString() } }
+  },
+  /** Up to 200 characters; empty goes back to the title from the tool. */
+  async renameAgent(id, title) {
+    signedIn()
+    await wait(400)
+    const agent = f.myAgents.find((x) => x.id === id)
+    if (!agent) throw new ApiError(404, "/errors/not-found", "No such session.")
+    const t = title.trim()
+    if ([...t].length > 200 || /\p{Cc}/u.test(t)) throw new ApiError(400, "/errors/invalid-request", "A title can be at most 200 characters, without control characters.")
+    if (t) titles[id] = t
+    else delete titles[id]
+    return { ...agent, ...woken[id], title: t || agent.title, unread: unread[id].length }
+  },
   async markRead(id, upTo) {
     signedIn()
     await wait(200)
@@ -328,6 +415,45 @@ export const mock = {
     return marked
   },
   requests: () => data(() => myRequests.filter((r) => r.status === "pending"), []),
+  sentRequests: () => data(() => outgoing.filter((r) => r.status === "pending"), []),
+  /**
+   * By email or ID, in the server's order: no such account, myself, blocked either way, already contacts, they asked
+   * first (accepted at once), already asked, 20 a day. Sam (sam@orbit.dev, 60391827) is someone new.
+   */
+  async askContact(to, note) {
+    const a = signedIn()
+    await wait(500)
+    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (controls.preset === "expired") throw new ApiError(402, "/errors/subscription-required", "Your trial has ended. Subscribe to add contacts.")
+    const email = "email" in to ? to.email.trim().toLowerCase() : undefined
+    if (email !== undefined && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ApiError(400, "/errors/invalid-email", "That isn't an email address.")
+    const who = email !== undefined ? f.byEmail[email] : f.byId.find((p) => "account_id" in to && p.id === to.account_id)
+    if (!who) throw new ApiError(404, "/errors/account-not-found", email !== undefined ? `No account with email ${email}.` : `No account with ID ${"account_id" in to ? to.account_id : ""}.`)
+    if (who.id === a.id) throw new ApiError(422, "/errors/cannot-add-self", email !== undefined ? "That is your own email." : "That is your own account ID.")
+    if ([...(note ?? "").trim()].length > 200) throw new ApiError(400, "/errors/invalid-request", "The note can be at most 200 characters.")
+    if (blockedByMe(who.id)) throw new ApiError(403, "/errors/unblock-first", `You blocked ${who.name}. Unblock them first.`)
+    if (who.id === f.rex.id) throw new ApiError(403, "/errors/blocked", `${who.name} doesn't accept your messages.`)
+    if (f.contacts.some((c) => c.id === who.id)) throw new ApiError(409, "/errors/already-contacts", `${who.name} is already your contact.`)
+    const theirs = myRequests.find((r) => r.kind === "contact" && r.from.id === who.id && r.status === "pending")
+    if (theirs) {
+      settle(theirs.id, "accepted")
+      f.contacts.push({ ...who, active: true, blocked: false, sessions: [] })
+      return { contact: who }
+    }
+    if (outgoing.some((r) => r.to.id === who.id && r.status === "pending")) throw new ApiError(409, "/errors/request-pending", `You already have a pending request to ${who.name}.`)
+    if (outgoing.length >= 20) throw new ApiError(429, "/errors/rate-limited", "At most 20 contact requests per day.", 3600)
+    const request: Request = { id: 800 + outgoing.length, kind: "contact", from: { id: a.id, name: a.name }, to: who, status: "pending", created_at: new Date().toISOString() }
+    outgoing = [request, ...outgoing]
+    return { request }
+  },
+  /** Both lose each other; the chat stays. */
+  async removeContact(id) {
+    signedIn()
+    await wait(400)
+    const i = f.contacts.findIndex((c) => c.id === id)
+    if (i < 0) throw new ApiError(403, "/errors/not-contact", `${id} is not your contact.`)
+    f.contacts.splice(i, 1)
+  },
   async accept(id) {
     const a = signedIn()
     await wait(500)
@@ -400,6 +526,56 @@ export const mock = {
     const key = `${groupId}/${accountId}`
     if (invitations.has(key)) throw new ApiError(409, "/errors/request-pending", "They already have a pending invite to this group.")
     invitations.add(key)
+  },
+  async renameGroup(groupId, name) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(450)
+    const n = name.trim()
+    if (!n || [...n].length > 64 || n.includes("/") || n.startsWith("#") || /\p{Cc}/u.test(n))
+      throw new ApiError(400, "/errors/invalid-request", "Group name must be 1 to 64 characters, without a slash or control characters, and not start with #.")
+    return changeGroup(g, { name: n })
+  },
+  async setGroupAvatar(groupId, picture) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(700)
+    if (controls.picture === "too-large") throw new ApiError(413, "/errors/file-too-large", "The picture can be at most 5 MB (5242880 bytes).")
+    if (controls.picture === "unreadable") throw new ApiError(422, "/errors/image-invalid", "Only JPEG and PNG pictures can be avatars; convert it to JPEG or PNG first.")
+    if (controls.picture === "limit") throw new ApiError(429, "/errors/rate-limited", "You can change pictures 20 times a day. Try again later.", 3600)
+    const avatar_url = URL.createObjectURL(picture)
+    changeGroup(g, { avatar_url })
+    return avatar_url
+  },
+  async removeGroupAvatar(groupId) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(400)
+    changeGroup(g, { avatar_url: undefined })
+  },
+  async removeMember(groupId, accountId) {
+    const a = signedIn()
+    const g = ownGroup(a, groupId)
+    await wait(450)
+    if (accountId === a.id) throw new ApiError(400, "/errors/invalid-request", "Use leave to leave a group you're in.")
+    if (!g.members.some((m) => m.id === accountId)) throw new ApiError(403, "/errors/not-member", `${accountId} isn't in ${g.name}.`)
+    changeGroup(g, { members: g.members.filter((m) => m.id !== accountId) })
+  },
+  async transferGroup(groupId, accountId) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(450)
+    const to = g.members.find((m) => m.id === accountId)
+    if (!to) throw new ApiError(403, "/errors/not-member", `${accountId} isn't in ${g.name}.`)
+    return changeGroup(g, { owner: { id: to.id, name: to.name } })
+  },
+  async dissolveGroup(groupId) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(500)
+    dropGroup(g)
+  },
+  async leaveGroup(groupId) {
+    const a = signedIn()
+    await wait(450)
+    const g = groupOf(groupId)
+    if (g.owner?.id === a.id) throw new ApiError(409, "/errors/owner-cannot-leave", "The owner can't leave. Hand the group to someone else or dissolve it.")
+    dropGroup(g)
   },
   async setGroupSessions(groupId, sessions) {
     signedIn()
@@ -644,3 +820,13 @@ export function skipSignIn(admin = false) {
   setMe(a)
   return a
 }
+
+/** Who owns release-team, Leo or Dana: the Demo panel switches it to show the owner's group details or a member's. */
+export const releaseOwner = () => (f.groups.find((g) => g.id === RELEASE)?.owner?.id === f.account.id ? "dana" : "leo")
+export function setReleaseOwner(who: "leo" | "dana") {
+  const g = f.groups.find((x) => x.id === RELEASE)
+  if (!g) return
+  const m = g.members.find((x) => (who === "dana" ? x.id === f.account.id : x.name === "Leo"))
+  if (m) changeGroup(g, { owner: { id: m.id, name: m.name } })
+}
+const RELEASE = 5520183

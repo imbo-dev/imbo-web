@@ -1,7 +1,7 @@
 // Demo data in the server's response shapes (src/data/contract.ts). Account IDs are 8 digits, short IDs the last 6
 // characters of a session ID, group IDs 7 digits (shown as "#" + ID), files kept 7 days.
 
-import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, Stats } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, Stats } from "@/data/contract"
 
 const DAY = 86_400_000
 const now = Date.now()
@@ -114,8 +114,25 @@ export const noor = { id: 41298730, name: "Noor" }
 export const infraOncall = { id: 6630147, name: "infra-oncall" }
 /** API-009 when the demo starts: Noor's contact request, with a note, and Leo's invitation to infra-oncall. */
 export const requests: Request[] = [
-  { id: 701, kind: "contact", from: noor, note: "Hi Dana, I'm on the payments team. Mia said you know the checkout flow.", status: "pending" },
-  { id: 702, kind: "group", from: leo, group: infraOncall, status: "pending" },
+  { id: 701, kind: "contact", from: noor, to: dana, note: "Hi Dana, I'm on the payments team. Mia said you know the checkout flow.", status: "pending", created_at: at(0, "08:40") },
+  { id: 702, kind: "group", from: leo, to: dana, group: infraOncall, status: "pending", created_at: at(0, "08:55") },
+]
+/** Accounts Dana can find by email in Add a contact (API-008); any other email has no account. */
+export const byEmail: Record<string, { id: number; name: string }> = {
+  "dana@example.com": dana,
+  "mia@example.com": mia,
+  "noor@example.com": noor,
+  "sam@orbit.dev": { id: 60391827, name: "Sam" },
+  "bob@example.com": bob,
+}
+/** Accounts Dana can add by ID besides those: Kai is blocked by her, Rex blocked her. */
+export const byId = [...Object.values(byEmail), kai, rex]
+
+/** API-006: the computers Dana ran imbo login on. */
+export const devices: Device[] = [
+  { id: "d1", name: "dana-mbp", platform: "macos-aarch64", created_at: at(19, "10:12"), last_seen_at: iso(now - 2 * 60_000), current: false },
+  { id: "d2", name: "build-box", platform: "linux-x86_64", created_at: at(11, "14:30"), last_seen_at: iso(now - 6 * 60_000), current: false },
+  { id: "d3", name: "old-laptop", platform: "macos-x86_64", created_at: at(31, "09:05"), last_seen_at: iso(now - 19 * DAY), current: false },
 ]
 
 /** API-030 minus `last_message`, which the store derives from the messages. */

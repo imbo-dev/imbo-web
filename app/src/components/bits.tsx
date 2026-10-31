@@ -59,12 +59,13 @@ export function Presence({ s, plain }: { s: { online: boolean; last_online_at?: 
 /** Thin 10 px divider between items on one line (instead of a middle dot). */
 export const Sep = () => <span aria-hidden="true" className="h-2.5 w-(--semantic-layout-hairline) flex-none bg-border" />
 
-/** "Mia" + "orders-api": the server's sender label, as two pieces. */
-export function SessionName({ owner, title, strong }: { owner: string; title: string; strong?: boolean }) {
+/** "Mia" + "orders-api": the server's sender label, as two pieces. In a group the session leads: "orders-api" + "#Mia". */
+export function SessionName({ owner, title, strong, group }: { owner: string; title: string; strong?: boolean; group?: boolean }) {
+  const lead = cn("truncate", strong ? "text-body-strong" : "text-body")
   return (
     <span className="flex min-w-0 items-baseline gap-2">
-      <span className={cn("truncate", strong ? "text-body-strong" : "text-body")}>{owner}</span>
-      <span className="truncate text-muted-foreground">{title}</span>
+      <span className={lead}>{group ? title : owner}</span>
+      <span className="truncate text-muted-foreground">{group ? `#${owner}` : title}</span>
     </span>
   )
 }
