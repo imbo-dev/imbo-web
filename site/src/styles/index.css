@@ -116,3 +116,58 @@ header[data-autohide][data-hidden]:not(:has(:focus-visible)) {
     translate: none;
   }
 }
+
+/* 首屏 TestFlight 按钮：鼠标悬停或键盘焦点时在下方显示二维码，点按钮打开 TestFlight 页面；触屏没有悬停，点一下直接打开。
+   二维码只是补充（链接本身可点），所以按 tooltip 做，不放可点内容（A11Y-010）；Esc 收起见 heroTestflight.js */
+.imbo-tf {
+  position: relative;
+  display: inline-flex;
+}
+.imbo-tf__tip {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  z-index: 20;
+  width: 10.5rem;
+  padding: 0.75rem 0.75rem 0.625rem;
+  border-radius: var(--lp-radius-card);
+  background: var(--semantic-color-surface-overlay);
+  box-shadow:
+    inset 0 0 0 var(--lp-hairline) var(--lp-line),
+    var(--semantic-elevation-overlay);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -0.25rem) scale(0.96);
+  transform-origin: top center;
+  transition:
+    opacity var(--lp-dur-fast) var(--lp-ease),
+    transform var(--lp-dur-fast) var(--lp-ease);
+}
+/* 按钮和二维码之间的空隙也算悬停区，鼠标移过去时不会收起 */
+.imbo-tf__tip::before {
+  content: "";
+  position: absolute;
+  inset: -0.5rem 0 auto;
+  height: 0.5rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  .imbo-tf:hover .imbo-tf__tip {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+.imbo-tf:has(:focus-visible) .imbo-tf__tip {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+.imbo-tf[data-dismissed] .imbo-tf__tip {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .imbo-tf__tip,
+  .imbo-tf:hover .imbo-tf__tip {
+    transform: translate(-50%, 0);
+  }
+}
