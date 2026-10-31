@@ -22,7 +22,7 @@ nav._asciiTimer=setInterval(function(){if(!nav.isConnected){clearInterval(nav._a
 if(spin&&frame%2===0)spin.textContent=spinChars[(frame/2)%4];
 if(hold>0){hold--;if(hold===0)pos=0;}else{pos++;if(pos>=L-1){hold=9;}}
 drawLane();drawBg(frame);
-if(tick){var h=(frame*37)%4096;tick.textContent='0x'+('000'+h.toString(16)).slice(-3)+' msg/s';}
+if(tick){var h=(frame*37)%4096;tick.textContent='0x'+('000'+h.toString(16)).slice(-3);}
 },110);
 var glyphs='#%&*+=-/\\<>_:;.?!';
 var links=nav.querySelectorAll('[data-scramble]');
