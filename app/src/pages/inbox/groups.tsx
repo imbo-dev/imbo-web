@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react"
 import { toast } from "sonner"
 import {
-  ArrowLeft,
   BellOff,
   Camera,
   Check,
+  ChevronDown,
   CircleAlert,
   Crown,
   LogOut,
@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DrawerContent } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Avatar, Presence, Sep, Tag } from "@/components/bits"
@@ -48,6 +48,7 @@ import {
   uploadGroupPicture,
   type State,
 } from "@/data/store"
+import { t } from "@/i18n"
 import { toolName } from "@/lib/format"
 import { navigate } from "@/lib/router"
 import { ConfirmContent } from "./confirm"
@@ -56,13 +57,14 @@ import { pictureRefusal } from "./safety"
 import { ListSkeleton } from "./states"
 
 // Groups on the web (FLOW-GROUP-CREATE, FLOW-GROUP-SESSIONS, FLOW-GROUP-JOIN): New group, and a group's details with
-// its members, which of my sessions get its messages, and inviting contacts; for its owner also its name and picture,
-// removing members, handing it on and dissolving it, for everyone else leaving it. One dialog for the whole page
-// (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all open it.
+// its members, inviting contacts and which of my sessions get its messages; for its owner also its name and picture,
+// removing members, handing it on and dissolving it, for everyone else leaving it. One drawer for the whole page
+// (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all open it;
+// inviting and the questions before removing, handing on, dissolving or leaving open over it.
 
 type Open = { kind: "new" } | { kind: "details"; groupId: number }
 let opened: Open | undefined
-/** Where focus goes back to on close: nothing triggers these dialogs in Radix's sense. */
+/** Where focus goes back to on close: nothing triggers these drawers in Radix's sense. */
 let returnTo: Element | null = null
 const listeners = new Set<() => void>()
 function setOpened(o: Open | undefined) {
@@ -102,11 +104,11 @@ function say(lines: string[]) {
 
 /** The server's rules for a group name (API-018), checked before sending. */
 function nameProblem(name: string) {
-  if (!name) return "Give the group a name."
-  if ([...name].length > 64) return "A group name is at most 64 characters."
-  if (name.includes("/")) return "A group name can't contain /."
-  if (name.startsWith("#")) return "A group name can't start with #."
-  if (/[\u0000-\u001f\u007f]/.test(name)) return "A group name can't contain control characters."
+  if (!name) return t("Give the group a name.")
+  if ([...name].length > 64) return t("A group name is at most 64 characters.")
+  if (name.includes("/")) return t("A group name can't contain /.")
+  if (name.startsWith("#")) return t("A group name can't start with #.")
+  if (/[\u0000-\u001f\u007f]/.test(name)) return t("A group name can't contain control characters.")
 }
 
 const flip = <K,>(set: Set<K>, k: K) => {
@@ -139,10 +141,10 @@ function DialogError({ children }: { children?: ReactNode }) {
   )
 }
 
-/** A row that is all label for its checkbox, so a click anywhere on it ticks the box. */
-function Pick({ checked, onChange, children }: { checked: boolean; onChange: () => void; children: ReactNode }) {
+/** A row that is all label for its checkbox, so a click anywhere on it ticks the box. `appear`: fades in, as rows Load more adds. */
+function Pick({ checked, onChange, appear, children }: { checked: boolean; onChange: () => void; appear?: boolean; children: ReactNode }) {
   return (
-    <li>
+    <li className={cn(appear && "pick-in")}>
       <label className="state-layer grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 rounded-md px-2 py-1.5">
         <Checkbox checked={checked} onCheckedChange={onChange} />
         {children}
@@ -151,34 +153,62 @@ function Pick({ checked, onChange, children }: { checked: boolean; onChange: () 
   )
 }
 
-/** My sessions (API-014); one picked in the group that API-014 no longer lists (not seen for 7 days) shows by name. */
-function SessionPicks({ list, chosen, onChange }: { list: (MyAgent | AgentRef)[]; chosen: Set<string>; onChange: (next: Set<string>) => void }) {
+const PAGE = 20
+
+/**
+ * My sessions (API-014: online first, then by when they were last online), the first 20 and then 20 more each time Load
+ * more is pressed (RULE-016); the first `keep` always show. One picked in the group that API-014 no longer lists (not
+ * seen for 7 days) shows by name.
+ */
+function SessionPicks({ list, chosen, onChange, keep = 0 }: { list: (MyAgent | AgentRef)[]; chosen: Set<string>; onChange: (next: Set<string>) => void; keep?: number }) {
+  const first = Math.max(PAGE, keep)
+  const [limit, setLimit] = useState(first)
+  const ul = useRef<HTMLUListElement>(null)
+  const rest = list.length - limit
+  // Focus moves to the first row just shown, so the keyboard carries on down the list.
+  const more = () => {
+    setLimit(limit + PAGE)
+    requestAnimationFrame(() => ul.current?.querySelectorAll<HTMLElement>("[role=checkbox]")[limit]?.focus())
+  }
   return (
-    <ul className="flex flex-col">
-      {list.map((a) => (
-        <Pick key={a.id} checked={chosen.has(a.id)} onChange={() => onChange(flip(chosen, a.id))}>
-          <Avatar kind="agent" />
-          <span className="min-w-0">
-            <span className="block truncate text-body text-foreground">{a.title}</span>
-            <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
-              {"online" in a && (
-                <>
-                  <Presence s={a} plain />
-                  <Sep />
-                </>
-              )}
-              <span className="truncate">{toolName(a.tool)}</span>
-              {"online" in a && a.device_name && (
-                <>
-                  <Sep />
-                  <span className="truncate">{a.device_name}</span>
-                </>
-              )}
+    <>
+      <ul ref={ul} className="flex flex-col">
+        {list.slice(0, limit).map((a, i) => (
+          <Pick key={a.id} checked={chosen.has(a.id)} onChange={() => onChange(flip(chosen, a.id))} appear={i >= first}>
+            <Avatar kind="agent" tool={a.tool} />
+            <span className="min-w-0">
+              <span className="block truncate text-body text-foreground">{a.title}</span>
+              <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+                {"online" in a && (
+                  <>
+                    <Presence s={a} plain />
+                    <Sep />
+                  </>
+                )}
+                <span className="truncate">{toolName(a.tool)}</span>
+                {"online" in a && a.device_name && (
+                  <>
+                    <Sep />
+                    <span className="truncate">{a.device_name}</span>
+                  </>
+                )}
+              </span>
             </span>
-          </span>
-        </Pick>
-      ))}
-    </ul>
+          </Pick>
+        ))}
+      </ul>
+      {rest > 0 && (
+        <div className="px-2 pt-2">
+          <Button variant="outline" size="sm" onClick={more} aria-label={t("Load more sessions, {n} left", { n: rest })}>
+            <ChevronDown size={14} aria-hidden="true" />
+            <span className="flex gap-2">
+              {t("Load more")}
+              <span className="text-muted-foreground">{t("{n} left", { n: rest })}</span>
+            </span>
+          </Button>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -190,7 +220,7 @@ function ContactPicks({ list, chosen, onChange }: { list: Contact[]; chosen: Set
           <Avatar kind="person" label={p.name} src={p.avatar_url} />
           <span className="min-w-0">
             <span className="block truncate text-body text-foreground">{p.name}</span>
-            <span className="block text-caption tabular-nums text-muted-foreground">ID {p.id}</span>
+            <span className="block text-caption tabular-nums text-muted-foreground">{t("ID {id}", { id: p.id })}</span>
           </span>
         </Pick>
       ))}
@@ -235,7 +265,7 @@ function NewGroupDialog({ s }: { s: State }) {
       const made = await createGroup(n, [...sessions], chosen)
       close()
       if (made.chat) navigate(`/chats/${made.chat}`)
-      say(made.refused.length ? [`${n} created.`, ...made.refused] : [chosen.length ? `${n} created. Invitations sent.` : `${n} created.`])
+      say(made.refused.length ? [t("{group} created.", { group: n }), ...made.refused] : [chosen.length ? t("{group} created. Invitations sent.", { group: n }) : t("{group} created.", { group: n })])
     } catch (e) {
       setBusy(false)
       setError(messageOf(e))
@@ -244,12 +274,19 @@ function NewGroupDialog({ s }: { s: State }) {
 
   const agents = s.agents
   return (
-    <DialogContent aria-describedby={undefined} onCloseAutoFocus={giveFocusBack}>
-      <DialogTitle>New group</DialogTitle>
+    <DrawerContent
+      title={t("New group")}
+      onCloseAutoFocus={giveFocusBack}
+      action={
+        <Button type="submit" form={formId} disabled={!name.trim()} aria-disabled={busy}>
+          {busy ? t("Creating…") : t("Create group")}
+        </Button>
+      }
+    >
       <form id={formId} onSubmit={create} noValidate className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={nameId} className="text-label text-foreground">
-            Group name
+            {t("Group name")}
           </label>
           <Input
             ref={input}
@@ -262,56 +299,49 @@ function NewGroupDialog({ s }: { s: State }) {
             invalid={!!problem}
             aria-describedby={`${nameId}-problem`}
             autoComplete="off"
-            autoFocus
+            data-autofocus
           />
           <p id={`${nameId}-problem`} role="alert" className="min-h-5 text-caption text-destructive">
             {problem}
           </p>
         </div>
-        <Section title="Your sessions" hint="They get the group's messages and can reply. You can change this later in the group's details.">
+        <Section title={t("Your sessions")} hint={t("They get the group's messages and can reply. You can change this later in the group's details.")}>
           {agents.status === "loading" ? (
             <ListSkeleton rows={2} />
           ) : agents.status === "error" ? (
-            <Retry what="your sessions" message={agents.error.message} onRetry={() => retry("agents")} />
+            <Retry failed={t("Couldn't load your sessions.")} message={agents.error.message} onRetry={() => retry("agents")} />
           ) : agents.data.length ? (
             <SessionPicks list={agents.data} chosen={sessions} onChange={setSessions} />
           ) : (
-            <Note>No sessions online or seen in the last 7 days. You can pick some later.</Note>
+            <Note>{t("No sessions online or seen in the last 7 days. You can pick some later.")}</Note>
           )}
         </Section>
-        <Section title="Invite contacts" hint="They can accept it in Contacts, or run imbo group join.">
+        <Section title={t("Invite contacts")} hint={t("They can accept it in Contacts, or run imbo group join.")}>
           {s.contacts.status === "loading" ? (
             <ListSkeleton rows={2} />
           ) : s.contacts.status === "error" ? (
-            <Retry what="contacts" message={s.contacts.error.message} onRetry={() => retry("contacts")} />
+            <Retry failed={t("Couldn't load contacts.")} message={s.contacts.error.message} onRetry={() => retry("contacts")} />
           ) : contacts.length ? (
             <ContactPicks list={contacts} chosen={people} onChange={setPeople} />
           ) : (
-            <Note>No contacts to invite yet.</Note>
+            <Note>{t("No contacts to invite yet.")}</Note>
           )}
         </Section>
       </form>
       <DialogError>{error}</DialogError>
-      <DialogFooter>
-        <Button variant="ghost" className="text-foreground" onClick={close}>
-          Cancel
-        </Button>
-        <Button type="submit" form={formId} disabled={!name.trim()} aria-disabled={busy}>
-          {busy ? "Creating…" : "Create group"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
+    </DrawerContent>
   )
 }
 
-function Retry({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
+/** `failed` says what didn't load; `message` is why. */
+function Retry({ failed, message, onRetry }: { failed: string; message: string; onRetry: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 px-2">
       <p className="min-w-0 text-caption text-muted-foreground">
-        Couldn't load {what}. {message}
+        {failed} {message}
       </p>
       <Button variant="outline" size="sm" onClick={onRetry}>
-        Try again
+        {t("Try again")}
       </Button>
     </div>
   )
@@ -319,7 +349,10 @@ function Retry({ what, message, onRetry }: { what: string; message: string; onRe
 
 const same = (a: Set<string>, b: AgentRef[]) => a.size === b.length && b.every((x) => a.has(x.id))
 
-/** API-021: my sessions in API-014, then any picked in the group that API-014 no longer lists. Save shows once changed. */
+/**
+ * API-021: the sessions already in the group first, then the rest of API-014, then any in the group that API-014 no
+ * longer lists. Save shows once changed.
+ */
 function MySessions({ s, g }: { s: State; g: Group }) {
   const [chosen, setChosen] = useState(() => new Set(g.my_sessions.map((x) => x.id)))
   const [busy, setBusy] = useState(false)
@@ -329,7 +362,13 @@ function MySessions({ s, g }: { s: State; g: Group }) {
     try {
       await setGroupSessions(g.id, [...chosen])
       const n = chosen.size
-      toast(n ? `Saved. ${n === 1 ? "1 session gets" : `${n} sessions get`} ${g.name}'s messages.` : `Saved. None of your sessions get ${g.name}'s messages.`)
+      toast(
+        n === 0
+          ? t("Saved. None of your sessions get {group}'s messages.", { group: g.name })
+          : n === 1
+            ? t("Saved. 1 session gets {group}'s messages.", { group: g.name })
+            : t("Saved. {n} sessions get {group}'s messages.", { n, group: g.name })
+      )
     } catch (e) {
       toast.error(messageOf(e))
     } finally {
@@ -338,18 +377,20 @@ function MySessions({ s, g }: { s: State; g: Group }) {
   }
   const agents = s.agents
   if (agents.status === "loading") return <ListSkeleton rows={2} />
-  if (agents.status === "error") return <Retry what="your sessions" message={agents.error.message} onRetry={() => retry("agents")} />
+  if (agents.status === "error") return <Retry failed={t("Couldn't load your sessions.")} message={agents.error.message} onRetry={() => retry("agents")} />
   const listed = new Set(agents.data.map((a) => a.id))
-  const list = [...agents.data, ...g.my_sessions.filter((x) => !listed.has(x.id))]
-  if (!list.length) return <Note>No sessions online or seen in the last 7 days.</Note>
+  const picked = new Set(g.my_sessions.map((x) => x.id))
+  const all = [...agents.data, ...g.my_sessions.filter((x) => !listed.has(x.id))]
+  const list = [...all.filter((a) => picked.has(a.id)), ...all.filter((a) => !picked.has(a.id))]
+  if (!list.length) return <Note>{t("No sessions online or seen in the last 7 days.")}</Note>
   return (
     <>
-      <SessionPicks list={list} chosen={chosen} onChange={setChosen} />
+      <SessionPicks list={list} chosen={chosen} onChange={setChosen} keep={picked.size} />
       {!same(chosen, g.my_sessions) && (
         <div className="px-2 pt-2">
           <Button aria-disabled={busy} onClick={save}>
             <Check size={16} aria-hidden="true" />
-            {busy ? "Saving…" : "Save"}
+            {busy ? t("Saving…") : t("Save")}
           </Button>
         </div>
       )}
@@ -357,7 +398,7 @@ function MySessions({ s, g }: { s: State; g: Group }) {
   )
 }
 
-/** Menus opened from the group's details sit over the dialog, not under it. */
+/** Menus opened from the group's details sit over the drawer, not under it. */
 const IN_DIALOG = "z-(--semantic-layout-z-index-modal)"
 
 /** The owner's "…" on each other member: hand the group on, or remove them. */
@@ -365,18 +406,18 @@ function MemberActions({ m, onAsk }: { m: Member; onAsk: (kind: "transfer" | "re
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Actions for ${m.name}`} className="text-muted-foreground">
+        <Button variant="ghost" size="icon" aria-label={t("Actions for {name}", { name: m.name })} className="text-muted-foreground">
           <MoreHorizontal size={16} aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={IN_DIALOG}>
         <DropdownMenuItem onSelect={() => onAsk("transfer")}>
           <Crown size={16} aria-hidden="true" />
-          Make {m.name} the owner…
+          {t("Make {name} the owner…", { name: m.name })}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onAsk("remove")} className="text-destructive [&_svg]:text-destructive">
           <UserMinus size={16} aria-hidden="true" />
-          Remove {m.name}…
+          {t("Remove {name}…", { name: m.name })}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -392,28 +433,16 @@ function Members({ s, g, onAsk }: { s: State; g: Group; onAsk?: (kind: "transfer
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-body wrap-anywhere text-foreground">{m.name}</span>
-              {g.owner?.id === m.id && <Tag>Owner</Tag>}
-              {isMe(s, m.id) && <Tag>You</Tag>}
-              {!m.active && <Tag>Inactive</Tag>}
+              {g.owner?.id === m.id && <Tag>{t("Owner")}</Tag>}
+              {isMe(s, m.id) && <Tag>{t("You")}</Tag>}
+              {!m.active && <Tag>{t("Inactive")}</Tag>}
             </span>
-            <span className="block text-caption tabular-nums text-muted-foreground">ID {m.id}</span>
+            <span className="block text-caption tabular-nums text-muted-foreground">{t("ID {id}", { id: m.id })}</span>
           </span>
           {onAsk && !isMe(s, m.id) ? <MemberActions m={m} onAsk={(kind) => onAsk(kind, m)} /> : <span />}
         </li>
       ))}
     </ul>
-  )
-}
-
-/** `start`: a button on the other side, such as Leave group…. */
-function CloseFooter({ start }: { start?: ReactNode }) {
-  return (
-    <DialogFooter className={cn(start && "sm:justify-between")}>
-      {start}
-      <Button variant="ghost" className="text-foreground" onClick={close}>
-        Close
-      </Button>
-    </DialogFooter>
   )
 }
 
@@ -428,7 +457,7 @@ function GroupPicture({ g }: { g: Group }) {
       toast(done)
     } catch (e) {
       // Pictures of my own and of my groups share the day's 20 changes.
-      toast.error(e instanceof ApiError && e.status === 429 ? "You've changed pictures 20 times today. Try again tomorrow." : pictureRefusal(e))
+      toast.error(e instanceof ApiError && e.status === 429 ? t("You've changed pictures 20 times today. Try again tomorrow.") : pictureRefusal(e))
     } finally {
       setBusy(false)
     }
@@ -438,7 +467,7 @@ function GroupPicture({ g }: { g: Group }) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className="state-layer focus-ring relative flex-none rounded-full"
-          aria-label="Change group picture"
+          aria-label={t("Change group picture")}
           aria-disabled={busy}
           onPointerDown={(e) => busy && e.preventDefault()}
         >
@@ -452,16 +481,16 @@ function GroupPicture({ g }: { g: Group }) {
         <DropdownMenuContent align="start" className={cn("max-w-64", IN_DIALOG)}>
           <DropdownMenuItem onSelect={() => file.current?.click()}>
             <Upload size={16} aria-hidden="true" />
-            Upload picture…
+            {t("Upload picture…")}
           </DropdownMenuItem>
           {g.avatar_url && (
-            <DropdownMenuItem onSelect={() => run(() => removeGroupPicture(g.id), "Group picture removed.")} className="text-destructive [&_svg]:text-destructive">
+            <DropdownMenuItem onSelect={() => run(() => removeGroupPicture(g.id), t("Group picture removed."))} className="text-destructive [&_svg]:text-destructive">
               <Trash2 size={16} aria-hidden="true" />
-              Remove picture
+              {t("Remove picture")}
             </DropdownMenuItem>
           )}
           <p className="mt-1 border-t-(length:--semantic-layout-hairline) border-border px-2 pt-2 pb-1 text-caption text-muted-foreground">
-            JPEG or PNG, up to 5 MB. Imbo crops it to a square.
+            {t("JPEG or PNG, up to 5 MB. Imbo crops it to a square.")}
           </p>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -473,7 +502,7 @@ function GroupPicture({ g }: { g: Group }) {
         onChange={(e) => {
           const f = e.target.files?.[0]
           e.target.value = ""
-          if (f) run(() => uploadGroupPicture(g.id, f), "Group picture updated.")
+          if (f) run(() => uploadGroupPicture(g.id, f), t("Group picture updated."))
         }}
       />
     </>
@@ -486,7 +515,7 @@ function RenameGroup({ g, onDone }: { g: Group; onDone: () => void }) {
   return (
     <>
       <DialogTitle className="sr-only">{g.name}</DialogTitle>
-      <RenameRow r={r} label="Group name" hint="Members see the new name in their group list. 1–64 characters, can't start with #." />
+      <RenameRow r={r} label={t("Group name")} hint={t("Members see the new name in their group list. 1–64 characters, can't start with #.")} />
     </>
   )
 }
@@ -497,7 +526,7 @@ type View =
   | { kind: "remove" | "transfer"; m: Member }
   | { kind: "dissolve" | "leave" }
 
-/** Out of the group or the group is gone: the dialog closes, and its chat with it if that's where I am. */
+/** Out of the group or the group is gone: the drawer closes, and its chat with it if that's where I am. */
 function left(g: Group, s: State, say: string) {
   close()
   const chat = dataOf(s.conversations)?.find((c) => c.group?.id === g.id)?.id
@@ -505,8 +534,20 @@ function left(g: Group, s: State, say: string) {
   toast(say)
 }
 
-/** One of the owner's or a member's questions in place of the details; Cancel goes back to them. */
-function GroupConfirm({ s, g, v, onBack }: { s: State; g: Group; v: Exclude<View, { kind: "details" | "invite" }>; onBack: () => void }) {
+/** One of the owner's or a member's questions over the details; Cancel goes back to them. */
+function GroupConfirm({
+  s,
+  g,
+  v,
+  onBack,
+  onCloseAutoFocus,
+}: {
+  s: State
+  g: Group
+  v: Exclude<View, { kind: "details" | "invite" }>
+  onBack: () => void
+  onCloseAutoFocus: (e: Event) => void
+}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const run = async (f: () => Promise<void>, then: () => void) => {
@@ -521,24 +562,24 @@ function GroupConfirm({ s, g, v, onBack }: { s: State; g: Group; v: Exclude<View
       setError(messageOf(e))
     }
   }
-  const common = { busy, error, onCancel: onBack, onCloseAutoFocus: giveFocusBack }
+  const common = { busy, error, onCancel: onBack, onCloseAutoFocus }
   const n = g.members.length
   switch (v.kind) {
     case "remove":
       return (
         <ConfirmContent
           {...common}
-          title={`Remove ${v.m.name} from ${g.name}?`}
+          title={t("Remove {name} from {group}?", { name: v.m.name, group: g.name })}
           consequences={[
-            [<BellOff size={16} />, `${v.m.name}'s sessions stop getting this group's messages.`],
-            [<Undo2 size={16} />, `Messages to ${v.m.name} from this group that haven't been delivered yet are taken back.`],
-            [<UserRound size={16} />, `${v.m.name} sees a notice in their terminal inbox. You can invite them again later.`],
+            [<BellOff size={16} />, t("{name}'s sessions stop getting this group's messages.", { name: v.m.name })],
+            [<Undo2 size={16} />, t("Messages to {name} from this group that haven't been delivered yet are taken back.", { name: v.m.name })],
+            [<UserRound size={16} />, t("{name} sees a notice in their terminal inbox. You can invite them again later.", { name: v.m.name })],
           ]}
-          action={{ label: `Remove ${v.m.name}`, busyLabel: "Removing…", icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
+          action={{ label: t("Remove {name}", { name: v.m.name }), busyLabel: t("Removing…"), icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
           onConfirm={() =>
             run(
               () => removeMember(g.id, v.m.id),
-              () => (onBack(), toast(`${v.m.name} was removed from ${g.name}.`)),
+              () => (onBack(), toast(t("{name} was removed from {group}.", { name: v.m.name, group: g.name }))),
             )
           }
         />
@@ -547,16 +588,16 @@ function GroupConfirm({ s, g, v, onBack }: { s: State; g: Group; v: Exclude<View
       return (
         <ConfirmContent
           {...common}
-          title={`Make ${v.m.name} the owner of ${g.name}?`}
+          title={t("Make {name} the owner of {group}?", { name: v.m.name, group: g.name })}
           consequences={[
-            [<Crown size={16} />, `${v.m.name} can rename the group, change its picture, remove members, hand it on and dissolve it.`],
-            [<UserRound size={16} />, "You stay in the group as a member, and can't undo this yourself."],
+            [<Crown size={16} />, t("{name} can rename the group, change its picture, remove members, hand it on and dissolve it.", { name: v.m.name })],
+            [<UserRound size={16} />, t("You stay in the group as a member, and can't undo this yourself.")],
           ]}
-          action={{ label: `Make ${v.m.name} the owner`, busyLabel: "Handing it on…", icon: <Crown size={16} aria-hidden="true" /> }}
+          action={{ label: t("Make {name} the owner", { name: v.m.name }), busyLabel: t("Handing it on…"), icon: <Crown size={16} aria-hidden="true" /> }}
           onConfirm={() =>
             run(
               () => transferGroup(g.id, v.m.id),
-              () => (onBack(), toast(`${v.m.name} is now the owner of ${g.name}.`)),
+              () => (onBack(), toast(t("{name} is now the owner of {group}.", { name: v.m.name, group: g.name }))),
             )
           }
         />
@@ -565,43 +606,45 @@ function GroupConfirm({ s, g, v, onBack }: { s: State; g: Group; v: Exclude<View
       return (
         <ConfirmContent
           {...common}
-          title={`Dissolve ${g.name}?`}
+          title={t("Dissolve {group}?", { group: g.name })}
           consequences={[
-            [<Users size={16} />, n === 1 ? "You leave the group, and nobody is left in it." : `All ${n} members leave the group, you included.`],
-            [<Undo2 size={16} />, "Messages to the group that haven't been delivered yet are taken back."],
-            [<MessageSquareOff size={16} />, `Nobody can message or join ${g.name} again. This can't be undone.`],
+            [<Users size={16} />, n === 1 ? t("You leave the group, and nobody is left in it.") : t("All {n} members leave the group, you included.", { n })],
+            [<Undo2 size={16} />, t("Messages to the group that haven't been delivered yet are taken back.")],
+            [<MessageSquareOff size={16} />, t("Nobody can message or join {group} again. This can't be undone.", { group: g.name })],
           ]}
-          action={{ label: "Dissolve group", busyLabel: "Dissolving…", icon: <Trash2 size={16} aria-hidden="true" />, destructive: true }}
-          onConfirm={() => run(() => dissolveGroup(g.id), () => left(g, s, `${g.name} was dissolved.`))}
+          action={{ label: t("Dissolve group"), busyLabel: t("Dissolving…"), icon: <Trash2 size={16} aria-hidden="true" />, destructive: true }}
+          onConfirm={() => run(() => dissolveGroup(g.id), () => left(g, s, t("{group} was dissolved.", { group: g.name })))}
         />
       )
     case "leave":
       return (
         <ConfirmContent
           {...common}
-          title={`Leave ${g.name}?`}
+          title={t("Leave {group}?", { group: g.name })}
           consequences={[
-            [<BellOff size={16} />, "Your sessions stop getting this group's messages."],
-            [<Undo2 size={16} />, "Messages to you from this group that haven't been delivered yet are taken back."],
-            [<UserPlus size={16} />, "To come back, someone in the group has to invite you again."],
+            [<BellOff size={16} />, t("Your sessions stop getting this group's messages.")],
+            [<Undo2 size={16} />, t("Messages to you from this group that haven't been delivered yet are taken back.")],
+            [<UserPlus size={16} />, t("To come back, someone in the group has to invite you again.")],
           ]}
-          action={{ label: "Leave group", busyLabel: "Leaving…", icon: <LogOut size={16} aria-hidden="true" />, destructive: true }}
-          onConfirm={() => run(() => leaveGroup(g.id), () => left(g, s, `You left ${g.name}.`))}
+          action={{ label: t("Leave group"), busyLabel: t("Leaving…"), icon: <LogOut size={16} aria-hidden="true" />, destructive: true }}
+          onConfirm={() => run(() => leaveGroup(g.id), () => left(g, s, t("You left {group}.", { group: g.name })))}
         />
       )
   }
 }
 
 /**
- * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS): who is in the group and who owns it (API-019), which of my sessions get its
- * messages (API-021), and inviting contacts (API-020), who accept in Contacts or from a terminal. Its owner renames
- * it, changes its picture, removes members, hands it on and dissolves it (API-077, API-056/057, API-037, API-038,
- * API-039); anyone else can leave it (API-022).
+ * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS): who is in the group and who owns it (API-019), inviting contacts (API-020), who
+ * accept in Contacts or from a terminal, and which of my sessions get its messages (API-021). Its owner renames it,
+ * changes its picture, removes members, hands it on and dissolves it (API-077, API-056/057, API-037, API-038,
+ * API-039); anyone else can leave it (API-022). Nothing here is one form, so the drawer's bar has only Close.
  */
 function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
   const [view, setView] = useState<View>({ kind: "details" })
   const [renaming, setRenaming] = useState(false)
   const pencil = useReturnFocus(renaming)
+  // What had focus when a question or the invitations opened over the details, to have it back after.
+  const opener = useRef<Element | null>(null)
   useEffect(() => {
     refreshList("groups")
     refreshList("agents")
@@ -609,31 +652,33 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
   }, [])
   const l = s.groups
   const g = groupOf(s, groupId)
-  if (l.status === "loading" || (l.status === "ready" && !g))
+  if (l.status !== "ready" || !g)
     return (
-      <DialogContent aria-describedby={undefined} onCloseAutoFocus={giveFocusBack}>
-        <DialogTitle>Group details</DialogTitle>
-        {l.status === "loading" ? <ListSkeleton rows={3} /> : <p className="text-body text-muted-foreground">This group isn't here. It may have been dissolved, or you left it.</p>}
-        <CloseFooter />
-      </DialogContent>
+      <DrawerContent title={t("Group details")} cancel={t("Close")} onCloseAutoFocus={giveFocusBack}>
+        {l.status === "loading" ? (
+          <ListSkeleton rows={3} />
+        ) : l.status === "error" ? (
+          <Retry failed={t("Couldn't load this group.")} message={l.error.message} onRetry={() => retry("groups")} />
+        ) : (
+          <p className="text-body text-muted-foreground">{t("This group isn't here. It may have been dissolved, or you left it.")}</p>
+        )}
+      </DrawerContent>
     )
-  if (l.status === "error" || !g)
-    return (
-      <DialogContent aria-describedby={undefined} onCloseAutoFocus={giveFocusBack}>
-        <DialogTitle>Group details</DialogTitle>
-        <Retry what="this group" message={l.status === "error" ? l.error.message : ""} onRetry={() => retry("groups")} />
-        <CloseFooter />
-      </DialogContent>
-    )
-  const back = () => setView({ kind: "details" })
-  if (view.kind === "invite") return <InviteView s={s} g={g} onDone={back} />
-  if (view.kind !== "details") return <GroupConfirm s={s} g={g} v={view} onBack={back} />
   const owner = !!g.owner && isMe(s, g.owner.id)
   const n = g.members.length
   const renamed = () => setRenaming(false)
+  const ask = (v: View) => {
+    opener.current = document.activeElement
+    setView(v)
+  }
+  const back = () => setView({ kind: "details" })
+  const focusOpener = (e: Event) => {
+    e.preventDefault()
+    if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus()
+  }
   return (
-    <DialogContent
-      aria-describedby={undefined}
+    <DrawerContent
+      cancel={t("Close")}
       onCloseAutoFocus={giveFocusBack}
       // Escape while renaming leaves the name as it was and keeps the details open.
       onEscapeKeyDown={(e) => {
@@ -641,62 +686,68 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         e.preventDefault()
         renamed()
       }}
-    >
-      <div className="flex items-center gap-3">
-        {owner ? <GroupPicture g={g} /> : <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />}
-        {owner && renaming ? (
-          <RenameGroup g={g} onDone={renamed} />
-        ) : (
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1">
-              <DialogTitle className="min-w-0 wrap-anywhere">{g.name}</DialogTitle>
-              {owner && (
-                <Button ref={pencil} variant="ghost" size="icon" aria-label="Rename group" className="flex-none text-muted-foreground" onClick={() => setRenaming(true)}>
-                  <Pencil size={14} aria-hidden="true" />
-                </Button>
-              )}
+      header={
+        <div className="flex items-center gap-3">
+          {owner ? <GroupPicture g={g} /> : <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />}
+          {owner && renaming ? (
+            <RenameGroup g={g} onDone={renamed} />
+          ) : (
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-1">
+                <DialogTitle className="min-w-0 wrap-anywhere">{g.name}</DialogTitle>
+                {owner && (
+                  <Button ref={pencil} variant="ghost" size="icon" aria-label={t("Rename group")} className="flex-none text-muted-foreground" onClick={() => setRenaming(true)}>
+                    <Pencil size={14} aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
+              <p className="flex items-center gap-2 text-caption tabular-nums text-muted-foreground">
+                {t("Group {id}", { id: g.id })}
+                <Sep />
+                {n === 1 ? t("1 member") : t("{n} members", { n })}
+              </p>
             </div>
-            <p className="flex items-center gap-2 text-caption tabular-nums text-muted-foreground">
-              Group {g.id}
-              <Sep />
-              {n === 1 ? "1 member" : `${n} members`}
-            </p>
-          </div>
+          )}
+        </div>
+      }
+    >
+      <Section title={t("Members")}>
+        {/* The owner's menu asks on the next frame, once it has closed and handed focus back to its "…". */}
+        <Members s={s} g={g} onAsk={owner ? (kind, m) => requestAnimationFrame(() => ask({ kind, m })) : undefined} />
+      </Section>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => ask({ kind: "invite" })}>
+          <UserPlus size={16} aria-hidden="true" />
+          {t("Invite contacts")}
+        </Button>
+        {owner ? (
+          <Button variant="destructive" onClick={() => ask({ kind: "dissolve" })}>
+            <Trash2 size={16} aria-hidden="true" />
+            {t("Dissolve group…")}
+          </Button>
+        ) : (
+          <Button variant="destructive" onClick={() => ask({ kind: "leave" })}>
+            <LogOut size={16} aria-hidden="true" />
+            {t("Leave group…")}
+          </Button>
         )}
       </div>
-      <Section title="Your sessions in this group" hint="They get the group's messages and can reply.">
+      <Section title={t("Your sessions in this group")} hint={t("They get the group's messages and can reply.")}>
         <MySessions key={g.my_sessions.map((x) => x.id).join()} s={s} g={g} />
       </Section>
-      <Section title="Members">
-        <Members s={s} g={g} onAsk={owner ? (kind, m) => setView({ kind, m }) : undefined} />
-      </Section>
-      <div>
-        <Button variant="outline" onClick={() => setView({ kind: "invite" })}>
-          <UserPlus size={16} aria-hidden="true" />
-          Invite contacts
-        </Button>
-      </div>
-      <CloseFooter
-        start={
-          owner ? (
-            <Button variant="destructive" onClick={() => setView({ kind: "dissolve" })}>
-              <Trash2 size={16} aria-hidden="true" />
-              Dissolve group…
-            </Button>
-          ) : (
-            <Button variant="destructive" onClick={() => setView({ kind: "leave" })}>
-              <LogOut size={16} aria-hidden="true" />
-              Leave group…
-            </Button>
-          )
-        }
-      />
-    </DialogContent>
+      <Dialog open={view.kind !== "details"} onOpenChange={(open) => !open && back()}>
+        {view.kind === "invite" ? (
+          <InviteView s={s} g={g} onDone={back} onCloseAutoFocus={focusOpener} />
+        ) : (
+          view.kind !== "details" && <GroupConfirm s={s} g={g} v={view} onBack={back} onCloseAutoFocus={focusOpener} />
+        )}
+      </Dialog>
+    </DrawerContent>
   )
 }
 
-/** Invitations from the group's details; back to the details when sent, with what was refused in the toast. */
-function InviteView({ s, g, onDone }: { s: State; g: Group; onDone: () => void }) {
+/** Invitations over the group's details; back to the details when sent, with what was refused in the toast. */
+function InviteView({ s, g, onDone, onCloseAutoFocus }: { s: State; g: Group; onDone: () => void; onCloseAutoFocus: (e: Event) => void }) {
   const [people, setPeople] = useState(new Set<number>())
   const [busy, setBusy] = useState(false)
   const inGroup = new Set(g.members.map((m) => m.id))
@@ -708,13 +759,13 @@ function InviteView({ s, g, onDone }: { s: State; g: Group; onDone: () => void }
     const refused = await invite(g.id, chosen)
     const sent = chosen.length - refused.length
     onDone()
-    say([sent ? (sent === 1 ? "Invitation sent." : `${sent} invitations sent.`) : "", ...refused].filter(Boolean))
+    say([sent ? (sent === 1 ? t("Invitation sent.") : t("{n} invitations sent.", { n: sent })) : "", ...refused].filter(Boolean))
   }
   return (
-    <DialogContent onCloseAutoFocus={giveFocusBack}>
+    <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
       <div className="flex flex-col gap-1">
-        <DialogTitle className="wrap-anywhere">Invite to {g.name}</DialogTitle>
-        <DialogDescription>They can accept it in Contacts, or run imbo group join #{g.id}.</DialogDescription>
+        <DialogTitle className="wrap-anywhere">{t("Invite to {group}", { group: g.name })}</DialogTitle>
+        <DialogDescription>{t("They can accept it in Contacts, or run imbo group join #{id}.", { id: g.id })}</DialogDescription>
       </div>
       <div className="-mx-2">
         {s.contacts.status === "loading" ? (
@@ -722,17 +773,16 @@ function InviteView({ s, g, onDone }: { s: State; g: Group; onDone: () => void }
         ) : list.length ? (
           <ContactPicks list={list} chosen={people} onChange={setPeople} />
         ) : (
-          <Note>{dataOf(s.contacts)?.length ? "All your contacts are already in this group." : "No contacts to invite yet."}</Note>
+          <Note>{dataOf(s.contacts)?.length ? t("All your contacts are already in this group.") : t("No contacts to invite yet.")}</Note>
         )}
       </div>
       <DialogFooter>
         <Button variant="ghost" className="text-foreground" onClick={onDone}>
-          <ArrowLeft size={16} aria-hidden="true" />
-          Back
+          {t("Cancel")}
         </Button>
         <Button disabled={!people.size} aria-disabled={busy} onClick={go}>
           <Users size={16} aria-hidden="true" />
-          {busy ? "Inviting…" : "Invite"}
+          {busy ? t("Inviting…") : t("Invite")}
         </Button>
       </DialogFooter>
     </DialogContent>

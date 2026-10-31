@@ -1,5 +1,5 @@
-// TC-346 (docs/TEST.md): on a phone-wide window, where a dialog rises from the bottom of the screen, a notice doesn't cover
-// the dialog's buttons; on a wide window notices stay at the bottom. Setup is §3「网页建群、处理申请与换邮箱」, the page
+// TC-346 (docs/TEST.md): on a phone-wide window a notice doesn't cover the buttons of the group's details (Close in its
+// top bar, Invite contacts); on a wide window notices stay at the bottom. Setup is §3「网页建群、处理申请与换邮箱」, the page
 // http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step. Codes are read from $L/server.log and never printed.
 // usage: node web/app/tests/toast-place.mjs <screenshot dir>
 import { execFileSync } from 'node:child_process';
@@ -77,7 +77,7 @@ try {
     const i = await invite().boundingBox();
     const c = await close().boundingBox();
     await page.screenshot({ path: `${out}/tc346-1.png` });
-    ok('TC-346 #1 phone: the notice in the top half, clear of Invite contacts and Close',
+    ok('TC-346 #1 phone: the notice in the top half, clear of Invite contacts and the top bar\'s Close',
       !!t && t.y + t.height <= 844 / 2 && !overlap(t, i) && !overlap(t, c),
       `notice ${fmt(t)} / Invite contacts ${fmt(i)} / Close ${fmt(c)}`);
   });
@@ -94,6 +94,9 @@ try {
   });
 
   await step('TC-346 #3', async () => {
+    // The first Esc closes the invitation, the second the group's details under it.
+    await page.keyboard.press('Escape');
+    await dialog().getByRole('heading', { name: 'Invite to T346' }).waitFor({ state: 'detached', timeout: 5000 });
     await page.keyboard.press('Escape');
     await dialog().waitFor({ state: 'detached', timeout: 5000 });
     await page.setViewportSize({ width: 1280, height: 800 });

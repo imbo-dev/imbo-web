@@ -143,7 +143,7 @@ export function Users({ recount }: { recount: () => void }) {
         {list.status === "loading" ? (
           <ListSkeleton rows={7} />
         ) : list.status === "error" ? (
-          <ErrorState what="accounts" error={list.error} onRetry={load} />
+          <ErrorState title="Couldn't load accounts" error={list.error} onRetry={load} />
         ) : !list.data.accounts.length ? (
           <EmptyState icon={<UsersIcon size={24} />} title={q ? "No account matches" : "No accounts yet"}>
             {q && <p>Search by the 8-digit account ID, or by part of the email.</p>}

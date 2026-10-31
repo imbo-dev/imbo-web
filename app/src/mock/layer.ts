@@ -1,6 +1,6 @@
 import type { Account, AdminAccount, Block, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
-import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan } from "@/data/layer"
+import { ApiError, noAnswer, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
 
 // The demo fixtures behind the same DataLayer as the server, answering the way the server does (errors, paging,
@@ -92,7 +92,7 @@ async function data<T>(value: () => T, empty: T): Promise<T> {
   const a = signedIn()
   await wait(350)
   await settled()
-  if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+  if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
   return controls.status === "empty" || a.id === f.newAccountId ? empty : value()
 }
 
@@ -155,7 +155,7 @@ const append = (m: Message, pendingFor?: number) =>
 async function sending(body: string, files: string[] = []) {
   const a = signedIn()
   await wait(450)
-  if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+  if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
   if ((!files.length && !body.trim()) || [...body].length > 32_000) throw new ApiError(422, "/errors/body-invalid", "The message must be 1 to 32000 characters.")
   if (files.length > 20) throw new ApiError(400, "/errors/invalid-request", "A message can carry at most 20 files.")
   if (files.some((id) => !uploads.has(id))) throw new ApiError(400, "/errors/invalid-request", "Unknown file.")
@@ -382,7 +382,7 @@ export const mock = {
   async upload(file, sha256) {
     signedIn()
     await wait(600 + Math.min(4000, file.size / 1000))
-    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
     if (file.size > 104_857_600) throw new ApiError(413, "/errors/file-too-large", "A file can be at most 100 MB (104857600 bytes).")
     if (controls.upload === "quota" || uploadedToday + file.size > GB)
       throw new ApiError(429, "/errors/upload-quota-exceeded", "Today's 1 GB upload limit is used up; it resets at 00:00 Beijing time.")
@@ -423,7 +423,7 @@ export const mock = {
   async askContact(to, note) {
     const a = signedIn()
     await wait(500)
-    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
     if (controls.preset === "expired") throw new ApiError(402, "/errors/subscription-required", "Your trial has ended. Subscribe to add contacts.")
     const email = "email" in to ? to.email.trim().toLowerCase() : undefined
     if (email !== undefined && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ApiError(400, "/errors/invalid-email", "That isn't an email address.")
@@ -457,7 +457,7 @@ export const mock = {
   async accept(id) {
     const a = signedIn()
     await wait(500)
-    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
     const r = waiting(id)
     settle(id, "accepted")
     if (r.group) {
@@ -472,7 +472,7 @@ export const mock = {
   async decline(id) {
     signedIn()
     await wait(400)
-    if (controls.status === "error") throw new ApiError(0, "network", NO_ANSWER)
+    if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
     waiting(id)
     settle(id, "declined")
   },

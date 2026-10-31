@@ -274,7 +274,7 @@ try {
     await a.getByRole('button', { name: 'More for bob' }).click();
     const items = (await a.getByRole('menuitem').allInnerTexts()).map((x) => x.trim());
     await a.keyboard.press('Escape');
-    ok('TC-223 #1 the … menu in a direct chat', items.join('|') === 'Report bob…|Block bob…', items.join(' | '));
+    ok('TC-223 #1 the … menu in a direct chat', items.join('|') === 'Report bob…|Block bob…|Remove contact…', items.join(' | '));
   });
   await step('TC-223 #2 block dialog, focus on Cancel', async () => {
     await menu(a, 'bob', 'Block bob…');
@@ -610,7 +610,8 @@ try {
     await adm.waitForURL(/status=all/);
     await rows().first().waitFor();
     const current = await adm.getByRole('navigation', { name: 'Reports', exact: true }).locator('a[aria-current=page]').innerText();
-    ok('TC-230 #4 All', (await rows().count()) === 2 && /bob/.test(current) && new URL(adm.url()).searchParams.get('report') === String(made.R1), adm.url());
+    const n = await rows().count();
+    ok('TC-230 #4 All', n === 2 && /bob/.test(current) && new URL(adm.url()).searchParams.get('report') === String(made.R1), `${adm.url()}; ${n} rows, current ${current.replace(/\s+/g, ' ')}`);
   });
 
   // ── TC-231: banning carol from her report ──

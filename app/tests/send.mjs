@@ -1,4 +1,4 @@
-// TC-161~TC-163 (docs/TEST.md): sending from the web against the local test server. Setup is the TCs' 前置; the page
+// TC-428, TC-162, TC-163 (docs/TEST.md): sending from the web against the local test server. Setup is the TCs' 前置; the page
 // must be http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step, then any unexpected console errors.
 // usage: node web/app/tests/send.mjs <screenshot dir>
 import { execFileSync } from 'node:child_process';
@@ -18,6 +18,10 @@ const as = (who, args) => sh(`IMBO_HOME=$L/${who} "$IMBO" ${args}`);
 const ids = Object.fromEntries(fs.readFileSync(`${L}/ids.tsv`, 'utf8').trim().split('\n').map((l) => l.split('\t').slice(0, 2)));
 const checkout = 'claude-code:55555555-aaaa-bbbb-cccc-0000000a0001';
 const asCheckout = (tool, args) => sh(`python3 $M $L/alice ${tool} '${JSON.stringify(args)}' --session ${checkout}`);
+// A Codex session of alice's, offline: it can't be opened from here (TC-428 #7).
+const nightly = '55555555-aaaa-bbbb-cccc-0000000a0428';
+// API-014 as alice's terminal sees it.
+const myAgents = () => JSON.parse(sh(`curl -s --noproxy '*' -H "authorization: Bearer $(sed -n 's/^token = \"\\(.*\\)\"/\\1/p' $L/alice/credentials)" http://127.0.0.1:18080/v1/agents`)).agents;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const codeLines = (email) => fs.readFileSync(`${L}/server.log`, 'utf8').split('\n').filter((l) => l.includes('mail-log-only code=') && l.endsWith(`email=${email}`));
@@ -68,59 +72,88 @@ try {
   await page.keyboard.type(await codeFor('alice@imbo.test', before));
   await page.waitForURL('**/chats');
 
-  // TC-161: my own sessions
-  await step('TC-161 #1 sessions listed, no unread', async () => {
+  // TC-428: my own sessions
+  await step('TC-428 #1 sessions listed, no unread', async () => {
     await page.goto(base + '/sessions');
     await session(/docs-site/).waitFor();
     const names = await page.getByRole('navigation', { name: 'Sessions' }).getByRole('link').allTextContents();
     const t = await sessionsTab();
-    ok('TC-161 #1 sessions listed, no unread', names.some((n) => n.includes('checkout')) && /Sessions(?!\s*\d)/.test(t), `${names.join(' | ')} / ${t.replace(/\n/g, ' ')}`);
+    ok('TC-428 #1 sessions listed, no unread', names.some((n) => n.includes('checkout')) && /Sessions(?!\s*\d)/.test(t), `${names.join(' | ')} / ${t.replace(/\n/g, ' ')}`);
   });
-  await step('TC-161 #2 docs-site composer, no attach', async () => {
+  await step('TC-428 #2 docs-site composer takes a file', async () => {
     await session(/docs-site/).click();
     await composer().waitFor();
     const ph = await composer().getAttribute('placeholder');
-    const attach = await page.locator('input[type=file], button[aria-label*="ttach"], button[aria-label*="file" i]').count();
-    ok('TC-161 #2 docs-site composer, no attach', ph === 'Message docs-site' && attach === 0, `${ph}, file controls ${attach}`);
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await (await chooser).setFiles(`${L}/orders-api-v2.3.md`);
+    const listed = page.getByRole('list', { name: 'Attached files' }).getByText('orders-api-v2.3.md');
+    await listed.waitFor({ timeout: 6000 });
+    await shot('428-02');
+    await page.getByRole('button', { name: 'Remove orders-api-v2.3.md' }).click();
+    await listed.waitFor({ state: 'detached', timeout: 6000 });
+    ok('TC-428 #2 docs-site composer takes a file', ph === 'Message docs-site', ph);
   });
-  await step('TC-161 #3 sending to an online session', async () => {
-    await send('T161 status?');
-    await rows('T161 status?').getByText('Sending…').waitFor({ timeout: 6000 });
-    ok('TC-161 #3 sending to an online session', (await rows('T161 status?').count()) === 1);
-    await shot('161-03');
+  await step('TC-428 #3 sending to an online session', async () => {
+    await send('T428 status?');
+    await rows('T428 status?').getByText('Sending…').waitFor({ timeout: 6000 });
+    ok('TC-428 #3 sending to an online session', (await rows('T428 status?').count()) === 1);
+    await shot('428-03');
   });
-  await step('TC-161 #4 checkout goes offline as 0a0001', async () => {
+  await step('TC-428 #4 checkout goes offline as 0a0001', async () => {
     asCheckout('inbox', {});
     await session(/0a0001/).getByText(/Seen/).waitFor({ timeout: 15000 });
-    ok('TC-161 #4 checkout goes offline as 0a0001', true);
+    ok('TC-428 #4 checkout goes offline as 0a0001', true);
   });
-  await step('TC-161 #5 waiting for an offline session', async () => {
+  // Its computer is online, so sending opens it in the background there (FLOW-WAKE); the test computer has no Claude Code
+  // record of this session, so the try fails and says so.
+  const device = myAgents().find((a) => a.short_id === '0a0001')?.device_name;
+  await step('TC-428 #5 an offline Claude Code session opens on its computer', async () => {
     await session(/0a0001/).click();
-    await send('T161 switch done?');
-    await rows('T161 switch done?').getByText('Waiting for 0a0001 to come online').waitFor({ timeout: 6000 });
-    await page.getByText('0a0001 is offline. It gets your message when it comes back online.').waitFor();
-    ok('TC-161 #5 waiting for an offline session', true);
-    await shot('161-05');
+    await page.getByText(`0a0001 is offline. Sending opens it in the background on ${device}.`, { exact: true }).waitFor({ timeout: 6000 });
+    ok('TC-428 #5 an offline Claude Code session opens on its computer', true, device);
+    await shot('428-05');
   });
-  await step('TC-161 #6 unread count for a reply', async () => {
+  await step('TC-428 #6 waiting for it, and why it did not open', async () => {
+    await send('T428 switch done?');
+    await rows('T428 switch done?').getByText('Waiting for 0a0001 to come online').waitFor({ timeout: 6000 });
+    await page.getByText(`Couldn't open 0a0001 on ${device}: No record of this session on this computer. It gets your message when it comes back online.`, { exact: true }).waitFor({ timeout: 15000 });
+    ok('TC-428 #6 waiting for it, and why it did not open', true);
+    await shot('428-06');
+  });
+  await step('TC-428 #7 an offline Codex session waits to come online', async () => {
+    as('alice', `dev fake-session ${nightly} --title nightly --tool codex`);
+    as('alice', `dev fake-session ${nightly} --title nightly --tool codex --remove`);
+    await session(/nightly/).getByText(/Seen/).waitFor({ timeout: 15000 });
+    await session(/nightly/).click();
+    const note = 'nightly is offline. It gets your message when it comes back online.';
+    await page.getByText(note, { exact: true }).waitFor({ timeout: 6000 });
+    await send('T428 later?');
+    await rows('T428 later?').getByText('Waiting for nightly to come online').waitFor({ timeout: 6000 });
+    await wait(5000);
+    const still = await page.getByText(note, { exact: true }).count();
+    ok('TC-428 #7 an offline Codex session waits to come online', still === 1, `note shown ${still}`);
+    await shot('428-07');
+  });
+  await step('TC-428 #8 unread count for a reply', async () => {
     await session(/docs-site/).click();
     await composer().waitFor();
-    asCheckout('send', { to: ids.alice, body: 'T161 412 tests pass' });
+    asCheckout('send', { to: ids.alice, body: 'T428 412 tests pass' });
     await page.waitForFunction((f) => /Sessions\s*1/.test(eval(f)()), tabs.toString(), { timeout: 15000 });
     const row = await session(/0a0001/).innerText();
-    ok('TC-161 #6 unread count for a reply', /\b1\b/.test(row), row.replace(/\n/g, ' '));
-    await shot('161-06');
+    ok('TC-428 #8 unread count for a reply', /\b1\b/.test(row), row.replace(/\n/g, ' '));
+    await shot('428-08');
   });
-  await step('TC-161 #7 opening it marks it read', async () => {
+  await step('TC-428 #9 opening it marks it read', async () => {
     await session(/0a0001/).click();
-    await page.getByText('T161 412 tests pass').waitFor({ timeout: 6000 });
+    await page.getByText('T428 412 tests pass').waitFor({ timeout: 6000 });
     await page.waitForFunction((f) => !/Sessions\s*\d/.test(eval(f)()), tabs.toString(), { timeout: 15000 });
-    ok('TC-161 #7 opening it marks it read', true);
-    await shot('161-07');
+    ok('TC-428 #9 opening it marks it read', true);
+    await shot('428-09');
   });
-  await step('TC-161 #8 terminal inbox no longer lists it', async () => {
+  await step('TC-428 #10 terminal inbox no longer lists it', async () => {
     const inbox = as('alice', 'inbox');
-    ok('TC-161 #8 terminal inbox no longer lists it', !inbox.includes('T161 412 tests pass'), inbox.split('\n')[0]);
+    ok('TC-428 #10 terminal inbox no longer lists it', !inbox.includes('T428 412 tests pass'), inbox.split('\n')[0]);
   });
 
   // TC-162: chats

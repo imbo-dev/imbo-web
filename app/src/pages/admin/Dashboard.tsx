@@ -45,7 +45,7 @@ export function Dashboard() {
   if (stats.status === "error")
     return (
       <div className="grid flex-1 place-items-center">
-        <ErrorState what="the numbers" error={stats.error} onRetry={load} />
+        <ErrorState title="Couldn't load the numbers" error={stats.error} onRetry={load} />
       </div>
     )
   const d = stats.status === "ready" ? stats.data : undefined

@@ -2,24 +2,26 @@ import { useId, useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogTrigger, DrawerContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { ApiError, messageOf } from "@/data/layer"
 import { emailSchema, problem } from "@/data/schema"
 import { changeEmail, requestEmailChange } from "@/data/store"
+import { t } from "@/i18n"
 import { useSecondsUntil } from "@/lib/useSecondsUntil"
 
-// FLOW-EMAIL-CHANGE on the web: Change on the account page opens a dialog with the new email (S2), then the 6-digit
-// code sent to it (S4). Only the new email gets a code (ADR-047). Back from the code goes back to the email.
+// FLOW-EMAIL-CHANGE on the web: Change on the account page opens a drawer with the new email (S2), then the 6-digit
+// code sent to it (S4). Only the new email gets a code (ADR-047). Back from the code goes back to the email. The button
+// in the drawer's bar sends whichever step is showing.
 
 export function ChangeEmail() {
   const [open, setOpen] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" aria-label="Change email">
-          Change
+        <Button variant="outline" size="sm" aria-label={t("Change email")}>
+          {t("Change")}
         </Button>
       </DialogTrigger>
       {open && <ChangeEmailDialog onDone={() => setOpen(false)} />}
@@ -27,45 +29,93 @@ export function ChangeEmail() {
   )
 }
 
+/** What the step shows in the drawer's bar: whether its request is out, and for the code, what's typed and whether it's locked. */
+type Bar = { busy: boolean; code: string; locked: boolean }
+const FRESH: Bar = { busy: false, code: "", locked: false }
+
 function ChangeEmailDialog({ onDone }: { onDone: () => void }) {
+  const formId = useId()
   const [sent, setSent] = useState<{ email: string; resendAt: number }>()
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string>()
+  const [bar, setBar] = useState(FRESH)
+  // Back from the code: the email box takes focus as it comes back. On opening the drawer focuses it (data-autofocus).
+  const [returned, setReturned] = useState(false)
+  const patch = (p: Partial<Bar>) => setBar((b) => ({ ...b, ...p }))
   const back = (why?: string) => {
+    setReturned(true)
     setSent(undefined)
+    setBar(FRESH)
     setError(why)
   }
+  const [sentTo, expires] = t("Enter the code we sent to {email}. It expires in 10 minutes.").split("{email}")
   return (
-    <DialogContent aria-describedby={undefined}>
-      <DialogTitle>Change email</DialogTitle>
+    <DrawerContent
+      title={t("Change email")}
+      description={
+        sent && (
+          <>
+            {sentTo}
+            <span className="text-foreground wrap-anywhere">{sent.email}</span>
+            {expires}
+          </>
+        )
+      }
+      action={
+        sent ? (
+          <Button type="submit" form={formId} aria-disabled={bar.busy || bar.locked || bar.code.length < 6}>
+            {bar.busy ? t("Changing…") : t("Change email")}
+          </Button>
+        ) : (
+          <Button type="submit" form={formId} disabled={!email.trim()} aria-disabled={bar.busy}>
+            {bar.busy ? t("Sending code…") : t("Send code")}
+          </Button>
+        )
+      }
+    >
       {sent ? (
-        <CodeStep key={sent.email} email={sent.email} resendAt={sent.resendAt} onBack={back} onDone={onDone} />
+        <CodeStep key={sent.email} formId={formId} email={sent.email} resendAt={sent.resendAt} bar={bar} patch={patch} onBack={back} onDone={onDone} />
       ) : (
-        <EmailStep email={email} setEmail={setEmail} error={error} setError={setError} onSent={(e, wait) => setSent({ email: e, resendAt: Date.now() + wait * 1000 })} onCancel={onDone} />
+        <EmailStep
+          formId={formId}
+          returned={returned}
+          email={email}
+          setEmail={setEmail}
+          error={error}
+          setError={setError}
+          busy={bar.busy}
+          setBusy={(busy) => patch({ busy })}
+          onSent={(e, wait) => (setBar(FRESH), setSent({ email: e, resendAt: Date.now() + wait * 1000 }))}
+        />
       )}
-    </DialogContent>
+    </DrawerContent>
   )
 }
 
 /** API-075. A taken email, the current one or the review email are refused here, before any code goes out. */
 function EmailStep({
+  formId,
+  returned,
   email,
   setEmail,
   error,
   setError,
+  busy,
+  setBusy,
   onSent,
-  onCancel,
 }: {
+  formId: string
+  returned: boolean
   email: string
   setEmail: (v: string) => void
   error?: string
   setError: (v?: string) => void
+  busy: boolean
+  setBusy: (v: boolean) => void
   onSent: (email: string, wait: number) => void
-  onCancel: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
   const send = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
@@ -84,10 +134,10 @@ function EmailStep({
     }
   }
   return (
-    <form onSubmit={send} noValidate className="flex flex-col gap-4">
+    <form id={formId} onSubmit={send} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor={id} className="text-label text-foreground">
-          New email
+          {t("New email")}
         </label>
         <Input
           ref={input}
@@ -95,7 +145,8 @@ function EmailStep({
           type="email"
           inputMode="email"
           autoComplete="email"
-          autoFocus
+          data-autofocus
+          autoFocus={returned}
           placeholder="you@example.com"
           value={email}
           onChange={(e) => {
@@ -107,28 +158,37 @@ function EmailStep({
         />
         {/* One line under the field: why it was refused, or what happens next. */}
         <p id={`${id}-note`} role={error ? "alert" : undefined} className={error ? "text-caption text-destructive" : "text-caption text-muted-foreground"}>
-          {error ?? "We'll send a code to the new email."}
+          {error ?? t("We'll send a code to the new email.")}
         </p>
       </div>
-      <DialogFooter>
-        <Button type="button" variant="ghost" className="text-foreground" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={!email.trim()} aria-disabled={busy}>
-          {busy ? "Sending code…" : "Send code"}
-        </Button>
-      </DialogFooter>
     </form>
   )
 }
 
 /** API-076. Someone signing up with this email after the code went out sends you back to pick another one. */
-function CodeStep({ email, resendAt: firstResendAt, onBack, onDone }: { email: string; resendAt: number; onBack: (why?: string) => void; onDone: () => void }) {
+function CodeStep({
+  formId,
+  email,
+  resendAt: firstResendAt,
+  bar,
+  patch,
+  onBack,
+  onDone,
+}: {
+  formId: string
+  email: string
+  resendAt: number
+  bar: Bar
+  patch: (p: Partial<Bar>) => void
+  onBack: (why?: string) => void
+  onDone: () => void
+}) {
   const id = useId()
-  const [code, setCode] = useState("")
+  const { code, locked, busy: checking } = bar
+  const setCode = (v: string) => patch({ code: v })
+  const setLocked = (v: boolean) => patch({ locked: v })
+  const setChecking = (v: boolean) => patch({ busy: v })
   const [error, setError] = useState<string>()
-  const [locked, setLocked] = useState(false)
-  const [checking, setChecking] = useState(false)
   const [resendAt, setResendAt] = useState(firstResendAt)
   const [sending, setSending] = useState(false)
   const [resent, setResent] = useState(false)
@@ -141,7 +201,7 @@ function CodeStep({ email, resendAt: firstResendAt, onBack, onDone }: { email: s
     try {
       const a = await changeEmail(email, code)
       onDone()
-      toast(`Email changed to ${a.email}.`)
+      toast(t("Email changed to {email}.", { email: a.email ?? email }))
     } catch (e) {
       setChecking(false)
       if (e instanceof ApiError && e.type === "/errors/email-taken") return onBack(e.message)
@@ -170,13 +230,10 @@ function CodeStep({ email, resendAt: firstResendAt, onBack, onDone }: { email: s
   }
 
   return (
-    <form onSubmit={check} noValidate className="flex flex-col gap-4">
-      <DialogDescription>
-        Enter the code we sent to <span className="text-foreground wrap-anywhere">{email}</span>. It expires in 10 minutes.
-      </DialogDescription>
+    <form id={formId} onSubmit={check} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <label htmlFor={`${id}-code`} className="text-label text-foreground">
-          Code
+          {t("Code")}
         </label>
         <InputOTP
           id={`${id}-code`}
@@ -204,23 +261,18 @@ function CodeStep({ email, resendAt: firstResendAt, onBack, onDone }: { email: s
           {error}
         </p>
         <p aria-live="polite" className="-mt-2 min-h-5 text-caption text-muted-foreground">
-          {checking ? "Checking…" : resent ? "We sent a new code." : ""}
+          {checking ? t("Checking…") : resent ? t("We sent a new code.") : ""}
         </p>
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" aria-disabled={cooldown > 0 || sending} onClick={resend} className="tabular-nums">
-            {sending ? "Sending code…" : cooldown > 0 ? `Send a new code in ${cooldown} s` : "Send a new code"}
+            {sending ? t("Sending code…") : cooldown > 0 ? t("Send a new code in {n} s", { n: cooldown }) : t("Send a new code")}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="text-foreground" onClick={() => onBack()}>
+            <ArrowLeft size={14} aria-hidden="true" />
+            {t("Use a different email")}
           </Button>
         </div>
       </div>
-      <DialogFooter>
-        <Button type="button" variant="ghost" className="text-foreground" onClick={() => onBack()}>
-          <ArrowLeft size={16} aria-hidden="true" />
-          Use a different email
-        </Button>
-        <Button type="submit" aria-disabled={checking || locked || code.length < 6}>
-          {checking ? "Changing…" : "Change email"}
-        </Button>
-      </DialogFooter>
     </form>
   )
 }

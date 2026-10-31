@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react"
 import type { Accepted, Account, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Request, Uploaded } from "./contract"
-import { ApiError, NO_ANSWER, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
+import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
+import { t } from "@/i18n"
 import { shrinkPicture } from "@/lib/picture"
 import { navigate } from "@/lib/router"
 
@@ -97,7 +98,7 @@ export const useStore = () => useSyncExternalStore(subscribe, () => state)
 const asApiError = (e: unknown) => {
   if (e instanceof ApiError) return e
   console.error(e)
-  return new ApiError(0, "unknown", NO_ANSWER)
+  return new ApiError(0, "unknown", noAnswer())
 }
 /** The web sign-in ended (expired, or signed out elsewhere): back to the sign-in page, which returns here after. */
 function expired(e: unknown) {
@@ -366,7 +367,7 @@ export const chooseRecipient = (conversationId: number, shortId?: string) => set
 /** What one message can carry (API-015): 20 files, 100 MB together. */
 const MAX_FILES = 20
 const MAX_FILES_BYTES = 104_857_600
-const QUOTA_USED = "Today's 1 GB upload limit is used up. It resets at midnight Beijing time."
+const quotaUsed = () => t("Today's 1 GB upload limit is used up. It resets at midnight Beijing time.")
 
 /** The day's upload use from the last upload. A refused upload can come back without its answer, so this decides first. */
 let quota: Uploaded["quota"] | undefined
@@ -386,11 +387,11 @@ export function attach(key: ThreadKey, picked: File[]) {
   for (const file of picked) {
     const error =
       n >= MAX_FILES
-        ? `Over ${MAX_FILES} files. A message can carry ${MAX_FILES}.`
+        ? t("Over {n} files. A message can carry {n}.", { n: MAX_FILES })
         : file.size > MAX_FILES_BYTES
-          ? "Over 100 MB. Files in one message can add up to 100 MB."
+          ? t("Over 100 MB. Files in one message can add up to 100 MB.")
           : total + file.size > MAX_FILES_BYTES
-            ? "Over the 100 MB the files in one message can add up to."
+            ? t("Over the 100 MB the files in one message can add up to.")
             : undefined
     list.push({ key: crypto.randomUUID(), file, error })
     if (!error) (n++, (total += file.size))
@@ -412,12 +413,12 @@ async function uploadAll(key: ThreadKey) {
 }
 const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("")
 async function uploadOne(a: Attachment): Promise<Partial<Attachment>> {
-  if (quota && Date.parse(quota.resets_at) > Date.now() && quota.used + a.file.size > quota.limit) return { error: QUOTA_USED }
+  if (quota && Date.parse(quota.resets_at) > Date.now() && quota.used + a.file.size > quota.limit) return { error: quotaUsed() }
   let sha256: string
   try {
     sha256 = hex(await crypto.subtle.digest("SHA-256", await a.file.arrayBuffer()))
   } catch {
-    return { error: `Imbo couldn't read ${a.file.name}.` }
+    return { error: t("Imbo couldn't read {name}.", { name: a.file.name }) }
   }
   try {
     const r = await api.upload(a.file, sha256)
@@ -426,7 +427,7 @@ async function uploadOne(a: Attachment): Promise<Partial<Attachment>> {
   } catch (e) {
     expired(e)
     const err = asApiError(e)
-    return { error: err.type === "/errors/upload-quota-exceeded" ? QUOTA_USED : err.message }
+    return { error: err.type === "/errors/upload-quota-exceeded" ? quotaUsed() : err.message }
   }
 }
 
@@ -448,7 +449,7 @@ async function act<T>(f: () => Promise<T>): Promise<T> {
 }
 
 export const PICTURE_TYPES = ["image/jpeg", "image/png"]
-const UNREADABLE = "Imbo can't read that image. Pick a JPEG or PNG."
+const unreadable = () => t("Imbo can't read that image. Pick a JPEG or PNG.")
 
 /** A file the browser can't read as a JPEG or PNG fails here like the server would. */
 async function readPicture(file: Blob) {
@@ -456,7 +457,7 @@ async function readPicture(file: Blob) {
     if (!PICTURE_TYPES.includes(file.type)) throw new Error(file.type)
     return await shrinkPicture(file)
   } catch {
-    throw new ApiError(422, "/errors/image-invalid", UNREADABLE)
+    throw new ApiError(422, "/errors/image-invalid", unreadable())
   }
 }
 /** API-045. Throws ApiError. */
@@ -543,17 +544,17 @@ export const declineRequest = (r: Request) => answer(r, () => api.decline(r.id))
 function inviteRefusal(e: ApiError, name: string) {
   switch (e.type) {
     case "/errors/already-member":
-      return `${name} is already in this group.`
+      return t("{name} is already in this group.", { name })
     case "/errors/request-pending":
-      return `${name} already has an invitation to this group.`
+      return t("{name} already has an invitation to this group.", { name })
     case "/errors/removed-from-group":
-      return `${name} was removed from this group; only the owner can invite them back.`
+      return t("{name} was removed from this group; only the owner can invite them back.", { name })
     case "/errors/blocked":
-      return `${name} doesn't accept your invitations.`
+      return t("{name} doesn't accept your invitations.", { name })
     case "/errors/unblock-first":
-      return `You blocked ${name}. Unblock them to invite them.`
+      return t("You blocked {name}. Unblock them to invite them.", { name })
     case "/errors/recipient-inactive":
-      return `${name}'s account is inactive.`
+      return t("{name}'s account is inactive.", { name })
   }
   return `${name}: ${e.message}`
 }
@@ -864,5 +865,5 @@ export const addressOf = (s: State, c: Conversation) => {
 export function recipientOf(s: State, m: Message) {
   if (!m.to) return undefined
   const owner = isMe(s, m.from.account_id) ? m.conversation.peer?.name : s.account?.name
-  return { owner: owner ?? "", title: m.to.tool === "terminal" ? "Terminal" : m.to.title }
+  return { owner: owner ?? "", title: m.to.tool === "terminal" ? t("Terminal") : m.to.title }
 }

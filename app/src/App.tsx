@@ -4,6 +4,8 @@ import { AuthFlow } from "@/pages/Auth"
 import { Inbox, type Tab } from "@/pages/inbox/Shell"
 import { Admin, type AdminTab } from "@/pages/admin/Admin"
 import { demo, useStore } from "@/data/store"
+import { useDrawerOpen } from "@/components/ui/dialog"
+import { useLanguage } from "@/i18n"
 import { navigate, usePath } from "@/lib/router"
 
 const TABS: Tab[] = ["chats", "sessions", "contacts", "account"]
@@ -33,9 +35,9 @@ function Route() {
   const path = usePath()
   const { account, isNew } = useStore()
   const [, first = "", item, sub] = path.split("/")
-  const tab = TABS.find((t) => t === first)
+  const tab = TABS.find((x) => x === first)
   const admin = first === "admin"
-  const adminTab = !item ? "reports" : ADMIN_TABS.find((t) => t === item)
+  const adminTab = !item ? "reports" : ADMIN_TABS.find((x) => x === item)
   const auth = first === "login" || first === "register"
   const to =
     account === undefined
@@ -65,9 +67,15 @@ function Route() {
 
 export function App() {
   const isWide = useSyncExternalStore(onResize, () => wide.matches)
+  // Picking a language on the Account page draws every page again in it, on the same address.
+  const { lang } = useLanguage()
+  // On a phone the notices sit at the top; with a drawer open they go under its top bar (12 px gap, 56 px bar) so
+  // they don't cover Cancel, Close or the main button.
+  const drawerOpen = useDrawerOpen()
+  const under = !isWide && drawerOpen ? { top: 76 } : undefined
   return (
     <>
-      <Route />
+      <Route key={lang} />
       {DemoPanel && (
         <Suspense fallback={null}>
           <DemoPanel />
@@ -75,6 +83,8 @@ export function App() {
       )}
       <Toaster
         position={isWide ? "bottom-center" : "top-center"}
+        offset={under}
+        mobileOffset={under}
         toastOptions={{
           unstyled: true,
           classNames: {

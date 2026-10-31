@@ -1,6 +1,7 @@
 import { z } from "zod"
 import * as c from "./contract"
-import { ApiError, NO_ANSWER, type DataLayer, type Page } from "./layer"
+import { t } from "@/i18n"
+import { ApiError, noAnswer, type DataLayer, type Page } from "./layer"
 
 // The server's browser API. In dev the paths stay relative and Vite proxies /v1 to imbo-server (vite.config.ts); the
 // built page on app.imbo.dev calls api.imbo.dev, which allows that one origin with cookies. Every body is parsed with
@@ -19,7 +20,7 @@ async function call<T extends z.ZodType>(schema: T, method: string, path: string
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     })
   } catch {
-    throw new ApiError(0, "network", NO_ANSWER)
+    throw new ApiError(0, "network", noAnswer())
   }
   let json: unknown
   if (r.status !== 204)
@@ -27,17 +28,17 @@ async function call<T extends z.ZodType>(schema: T, method: string, path: string
       json = await r.json()
     } catch {
       // A body cut off on the way (the page navigated, the connection dropped) is no answer, not a wrong one.
-      if (r.ok) throw new ApiError(0, "network", NO_ANSWER)
+      if (r.ok) throw new ApiError(0, "network", noAnswer())
     }
   if (!r.ok) {
     const p = c.problem.safeParse(json)
     const retry = Number(r.headers.get("retry-after")) || undefined
-    throw new ApiError(r.status, p.success ? p.data.type : "unknown", (p.success && (p.data.detail ?? p.data.title)) || NO_ANSWER, retry)
+    throw new ApiError(r.status, p.success ? p.data.type : "unknown", (p.success && (p.data.detail ?? p.data.title)) || noAnswer(), retry)
   }
   const parsed = schema.safeParse(json)
   if (!parsed.success) {
     if (import.meta.env.DEV) console.error(`${method} ${path} doesn't match src/data/contract.ts:\n${z.prettifyError(parsed.error)}`)
-    throw new ApiError(r.status, "contract", "Imbo answered in a form this page doesn't understand. Reload to get the latest version.")
+    throw new ApiError(r.status, "contract", t("Imbo answered in a form this page doesn't understand. Reload to get the latest version."))
   }
   return parsed.data
 }

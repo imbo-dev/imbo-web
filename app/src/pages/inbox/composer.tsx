@@ -26,6 +26,7 @@ import {
   type State,
   type ThreadKey,
 } from "@/data/store"
+import { t } from "@/i18n"
 import { ago, fileSize, toolName } from "@/lib/format"
 
 // The text box at the bottom of an open chat or session (FLOW-WEB-CHAT S3, FLOW-WEB-SEND S3): text and files, sent as me
@@ -80,10 +81,10 @@ function FileChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
       <span className="min-w-0">
         <span className="block truncate text-caption text-foreground">{a.file.name}</span>
         <span className={cn("block text-caption", a.error ? "text-pretty text-destructive" : "truncate text-muted-foreground")}>
-          {a.error ?? (a.ref ? fileSize(a.file.size) : "Uploading…")}
+          {a.error ?? (a.ref ? fileSize(a.file.size) : t("Uploading…"))}
         </span>
       </span>
-      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${a.file.name}`} className="flex-none text-muted-foreground" onClick={onRemove}>
+      <Button variant="ghost" size="icon-sm" aria-label={t("Remove {name}", { name: a.file.name })} className="flex-none text-muted-foreground" onClick={onRemove}>
         <X size={14} aria-hidden="true" />
       </Button>
     </li>
@@ -142,7 +143,7 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
         </p>
       )}
       {files.length > 0 && (
-        <ul aria-label="Attached files" className="flex flex-wrap gap-2">
+        <ul aria-label={t("Attached files")} className="flex flex-wrap gap-2">
           {files.map((a) => (
             <FileChip
               key={a.key}
@@ -173,7 +174,7 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
             if (picked.length) attach(threadKey, picked)
           }}
         />
-        <Button type="button" variant="ghost" size="icon" aria-label="Attach files" className="mb-1 flex-none text-muted-foreground" onClick={() => picker.current?.click()}>
+        <Button type="button" variant="ghost" size="icon" aria-label={t("Attach files")} className="mb-1 flex-none text-muted-foreground" onClick={() => picker.current?.click()}>
           <Paperclip size={16} aria-hidden="true" />
         </Button>
         <div ref={shell} className="composer-shell state-layer focus-ring is-field min-w-0 flex-1 rounded-md border border-input bg-muted">
@@ -184,25 +185,25 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
             onChange={(e) => update(e.target.value)}
             onKeyDown={onKeyDown}
             onCompositionEnd={(e) => (composedAt.current = e.timeStamp)}
-            placeholder={`Message ${label}`}
-            aria-label={`Message ${label}`}
+            placeholder={t("Message {name}", { name: label })}
+            aria-label={t("Message {name}", { name: label })}
             aria-invalid={tooLong || undefined}
             aria-describedby={tooLong ? errorId : undefined}
             className="composer block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
           />
         </div>
-        <Button type="submit" size="icon" aria-label="Send" aria-disabled={blank || tooLong || refused || held} className="mb-1">
+        <Button type="submit" size="icon" aria-label={t("Send")} aria-disabled={blank || tooLong || refused || held} className="mb-1">
           <ArrowUp size={16} aria-hidden="true" />
         </Button>
       </form>
       {held && (
         <p role="status" className="text-caption text-muted-foreground">
-          Sending when the files finish uploading…
+          {t("Sending when the files finish uploading…")}
         </p>
       )}
       {tooLong && (
         <p id={errorId} role="alert" className="text-caption text-destructive">
-          Messages can be up to 32,000 characters. This one has {length.toLocaleString("en-US")}.
+          {t("Messages can be up to 32,000 characters. This one has {n}.", { n: length.toLocaleString("en-US") })}
         </p>
       )}
     </div>
@@ -233,24 +234,26 @@ export function RecipientPicker({ s, c }: { s: State; c: Conversation }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="max-w-44 px-2 text-foreground" aria-label={`Sending to ${chosen ? `${name}'s session ${chosen.title}` : `${name}'s terminal inbox`}. Change`}>
+        <Button variant="ghost" className="max-w-44 px-2 text-foreground" aria-label={
+            chosen ? t("Sending to {name}'s session {session}. Change", { name, session: chosen.title }) : t("Sending to {name}'s terminal inbox. Change", { name })
+          }>
           {chosen ? <Bot size={16} aria-hidden="true" /> : <Inbox size={16} aria-hidden="true" />}
-          <span className="truncate max-sm:hidden">{chosen ? chosen.title : "Inbox"}</span>
+          <span className="truncate max-sm:hidden">{chosen ? chosen.title : t("Inbox")}</span>
           <ChevronDown size={14} aria-hidden="true" className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="text-body-strong">Send to</span>
-          <span className="text-caption text-muted-foreground">You send as yourself, from your terminal inbox. Replies show up here.</span>
+          <span className="text-body-strong">{t("Send to")}</span>
+          <span className="text-caption text-muted-foreground">{t("You send as yourself, from your terminal inbox. Replies show up here.")}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={chosen?.short_id ?? INBOX} onValueChange={(v) => chooseRecipient(c.id, v === INBOX ? undefined : v)}>
           <DropdownMenuRadioItem value={INBOX}>
             <Inbox size={16} aria-hidden="true" />
             <span className="min-w-0">
-              <span className="block truncate">{name}'s inbox</span>
-              <span className="block text-caption text-muted-foreground">{name} reads it in a terminal</span>
+              <span className="block truncate">{t("{name}'s inbox", { name })}</span>
+              <span className="block text-caption text-muted-foreground">{t("{name} reads it in a terminal", { name })}</span>
             </span>
           </DropdownMenuRadioItem>
           {sessions.map((x) => (
@@ -259,7 +262,7 @@ export function RecipientPicker({ s, c }: { s: State; c: Conversation }) {
               <span className="min-w-0">
                 <span className="block truncate">{x.title}</span>
                 <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
-                  <span>{x.online ? "Online" : x.last_online_at ? `Seen ${ago(x.last_online_at)}` : "Offline"}</span>
+                  <span>{x.online ? t("Online") : x.last_online_at ? t("Seen {when}", { when: ago(x.last_online_at) }) : t("Offline")}</span>
                   <Sep />
                   <span className="truncate">{toolName(x.tool)}</span>
                 </span>
@@ -267,7 +270,7 @@ export function RecipientPicker({ s, c }: { s: State; c: Conversation }) {
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-        {!sessions.length && <p className="px-2 py-1.5 text-caption text-muted-foreground">None of {name}'s sessions were online in the last 7 days.</p>}
+        {!sessions.length && <p className="px-2 py-1.5 text-caption text-muted-foreground">{t("None of {name}'s sessions were online in the last 7 days.", { name })}</p>}
       </DropdownMenuContent>
     </DropdownMenu>
   )

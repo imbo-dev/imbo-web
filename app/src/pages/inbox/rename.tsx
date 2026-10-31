@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { messageOf } from "@/data/layer"
+import { t } from "@/i18n"
 
 // Renaming in place (my name, a session, a group): the name turns into a text box with Save and Cancel, and a line
 // under it says who sees the new name, or why it wasn't saved. Escape cancels.
@@ -80,10 +81,10 @@ export function RenameButtons({ r, size, form }: { r: Rename; size?: "sm"; form?
     <>
       <Button type="submit" form={form} size={size} aria-disabled={r.busy} className="flex-none">
         <Check size={size ? 14 : 16} aria-hidden="true" />
-        {r.busy ? "Saving…" : "Save"}
+        {r.busy ? t("Saving…") : t("Save")}
       </Button>
       <Button type="button" variant="ghost" size={size} className="flex-none text-foreground" onClick={r.cancel}>
-        Cancel
+        {t("Cancel")}
       </Button>
     </>
   )

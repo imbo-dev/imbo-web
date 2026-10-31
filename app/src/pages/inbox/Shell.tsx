@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AppStage } from "@/components/Stage"
 import { Wordmark } from "@/components/Wordmark"
-import { Avatar, CopyId } from "@/components/bits"
+import { Avatar } from "@/components/bits"
+import { t } from "@/i18n"
 import { messageOf } from "@/data/layer"
 import { dataOf, pendingTotal, refreshList, signOut, unreadTotal, useStore, type State } from "@/data/store"
 import { daysUntil, longDate } from "@/lib/format"
@@ -24,7 +25,7 @@ export function AccountMenu({ s }: { s: State }) {
   const a = s.account!
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="state-layer focus-ring flex-none rounded-full" aria-label="Account menu">
+      <DropdownMenuTrigger className="state-layer focus-ring flex-none rounded-full" aria-label={t("Account menu")}>
         <Avatar kind="person" label={a.name} src={a.avatar_url} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -35,11 +36,11 @@ export function AccountMenu({ s }: { s: State }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={goAccount}>
           <UserRound size={16} aria-hidden="true" />
-          Account and plan
+          {t("Account and plan")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => signOut().catch((e) => toast.error(messageOf(e)))}>
           <LogOut size={16} aria-hidden="true" />
-          Sign out
+          {t("Sign out")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -56,16 +57,16 @@ function PlanStatus({ s }: { s: State }) {
   const sub = b.subscription
   const [text, action] =
     b.access.state === "trial"
-      ? [<>Trial: <span className="tabular-nums">{daysUntil(b.trial_ends_at!)}</span> days left</>, "Subscribe"]
+      ? [<span className="tabular-nums">{t("Trial: {n} days left", { n: daysUntil(b.trial_ends_at!) })}</span>, t("Subscribe")]
       : b.access.state === "paid" && sub?.status === "past_due"
-        ? [<span className="text-(--semantic-color-feedback-warning)">Payment failed</span>, "Details"]
+        ? [<span className="text-(--semantic-color-feedback-warning)">{t("Payment failed")}</span>, t("Details")]
         : b.access.state === "paid"
           ? [
               sub?.status === "active"
                 ? undefined
                 : sub?.status === "scheduled_cancel" || sub?.status === "canceled"
-                  ? `Ends ${longDate(sub.paid_until)}`
-                  : `Paid until ${longDate(b.access.until!)}`,
+                  ? t("Ends {date}", { date: longDate(sub.paid_until) })
+                  : t("Paid until {date}", { date: longDate(b.access.until!) }),
               undefined,
             ]
           : [undefined, undefined]
@@ -89,38 +90,35 @@ function EndedStrip({ s }: { s: State }) {
     <div role="status" className="flex flex-none items-center gap-3 border-b-(length:--semantic-layout-hairline) border-border bg-muted px-4 py-2">
       <TriangleAlert size={16} aria-hidden="true" className="flex-none text-(--semantic-color-feedback-warning)" />
       <p className="min-w-0 flex-1 text-caption text-foreground">
-        Inactive since {longDate(b.access.until!)}: your sessions can't send messages until you subscribe.
+        {t("Inactive since {date}: your sessions can't send messages until you subscribe.", { date: longDate(b.access.until!) })}
       </p>
       <Button size="sm" onClick={goAccount}>
-        Subscribe
+        {t("Subscribe")}
       </Button>
     </div>
   )
 }
 
-const TABS = [
-  { id: "chats", label: "Chats" },
-  { id: "sessions", label: "Sessions" },
-  { id: "contacts", label: "Contacts" },
-] as const
+const TABS = ["chats", "sessions", "contacts"] as const
+const tabLabel = { chats: () => t("Chats"), sessions: () => t("Sessions"), contacts: () => t("Contacts") }
 
 function Tabs({ s, tab }: { s: State; tab: Tab }) {
   const pending = pendingTotal(s)
   const unread = unreadTotal(s)
   return (
-    <nav aria-label="Sections" className="flex flex-none border-b-(length:--semantic-layout-hairline) border-border px-2">
-      {TABS.map((t) => (
+    <nav aria-label={t("Sections")} className="flex flex-none border-b-(length:--semantic-layout-hairline) border-border px-2">
+      {TABS.map((id) => (
         <a
-          key={t.id}
-          href={`/${t.id}`}
+          key={id}
+          href={`/${id}`}
           onClick={onLinkClick}
-          aria-current={tab === t.id ? "page" : undefined}
+          aria-current={tab === id ? "page" : undefined}
           className="state-layer focus-ring relative flex h-10 flex-1 items-center justify-center gap-1.5 text-label whitespace-nowrap text-muted-foreground aria-[current=page]:text-foreground aria-[current=page]:after:hidden"
         >
-          {t.label}
-          {t.id === "chats" && pending > 0 && <PendingBadge n={pending} small />}
-          {t.id === "sessions" && unread > 0 && <PendingBadge n={unread} small sr={unread === 1 ? "new reply" : "new replies"} />}
-          {tab === t.id && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-(--primitive-dimension-ring-width) rounded-full bg-primary" />}
+          {tabLabel[id]()}
+          {id === "chats" && pending > 0 && <PendingBadge n={pending} small />}
+          {id === "sessions" && unread > 0 && <PendingBadge n={unread} small sr={unread === 1 ? t("new reply") : t("new replies")} />}
+          {tab === id && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-(--primitive-dimension-ring-width) rounded-full bg-primary" />}
         </a>
       ))}
     </nav>
@@ -144,7 +142,7 @@ export function Inbox({ tab, item, missing, chat }: { tab: Tab; item?: string; m
   return (
     <AppStage>
       <header className="flex h-12 flex-none items-center gap-3 border-b-(length:--semantic-layout-hairline) border-border pr-3 pl-4">
-        <a href="/chats" onClick={onLinkClick} className="focus-ring flex-none rounded-sm" aria-label="Imbo, chats">
+        <a href="/chats" onClick={onLinkClick} className="focus-ring flex-none rounded-sm" aria-label={t("Imbo, chats")}>
           <Wordmark />
         </a>
         <span className="flex min-w-0 flex-1 justify-end">
@@ -155,10 +153,6 @@ export function Inbox({ tab, item, missing, chat }: { tab: Tab; item?: string; m
       <EndedStrip s={s} />
       <div className="grid min-h-0 flex-1 sm:grid-cols-[17.5rem_minmax(0,1fr)]">
         <aside className={cn("flex min-h-0 flex-col sm:border-r-(length:--semantic-layout-hairline) sm:border-border", detail && "max-sm:hidden")}>
-          <div className="flex flex-none items-center gap-2 px-4 py-2">
-            <span className="text-caption text-muted-foreground">Your ID</span>
-            <CopyId id={String(s.account.id)} />
-          </div>
           <Tabs s={s} tab={tab} />
           <div className="nav-scroll min-h-0 flex-1">
             {listTab === "chats" && <ChatList s={s} open={item} />}
@@ -168,16 +162,16 @@ export function Inbox({ tab, item, missing, chat }: { tab: Tab; item?: string; m
         </aside>
         <main className={cn("flex min-h-0 min-w-0 flex-col", !detail && "max-sm:hidden")}>
           {missing ? (
-            <NotFound back={<BackLink to="/chats" label="Back to chats" />} what="page" />
+            <NotFound back={<BackLink to="/chats" label={t("Back to chats")} />} title={t("This page isn't here")} />
           ) : tab === "account" && item === "blocks" ? (
-            <BlocksPane back={<BackLink to="/account" label="Back to account" />} />
+            <BlocksPane back={<BackLink to="/account" label={t("Back to account")} />} />
           ) : tab === "account" ? (
             <AccountPane s={s} />
           ) : !item && list?.length === 0 ? (
             <GetStarted />
           ) : !item ? (
             <NothingOpen>
-              {tab === "chats" ? "Pick a chat to read it." : tab === "sessions" ? "Pick a session to see what it sent and received." : "Pick a contact to see their sessions."}
+              {tab === "chats" ? t("Pick a chat to read it.") : tab === "sessions" ? t("Pick a session to see what it sent and received.") : t("Pick a contact to see their sessions.")}
             </NothingOpen>
           ) : tab === "chats" ? (
             <ChatPane key={item} s={s} id={item} />

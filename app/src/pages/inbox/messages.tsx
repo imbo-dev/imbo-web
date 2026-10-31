@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react"
 import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "lucide-react"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Avatar, SessionName, Sep, Tag, agentAvatar } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
 import type { FileRef, Message } from "@/data/contract"
@@ -22,11 +23,14 @@ import {
   type Thread,
   type ThreadKey,
 } from "@/data/store"
+import { t } from "@/i18n"
 import { clock, dayLabel, fileSize, langOf, sameDay } from "@/lib/format"
 import { useFollow } from "@/lib/useFollow"
 
-// Messages as rows, not bubbles (brand/examples product sample): every message is a session talking, so the row
-// leads with who sent it — "Mia orders-api" — and, where it matters, which session it went to.
+// Messages as bubbles, as in the App. What I sent in person is on the right in the primary color, my picture after it;
+// everything else, my sessions' messages included, is on the left after its sender's picture: a session's product mark,
+// a terminal's icon. Above each bubble a heading says who sent it — "Mia orders-api" — and, where it matters, which
+// session it went to; under it, how its delivery is going.
 
 function Attachments({ files }: { files: FileRef[] }) {
   return (
@@ -43,16 +47,16 @@ function Attachments({ files }: { files: FileRef[] }) {
                 {expired && (
                   <>
                     <Sep />
-                    Files are kept 7 days
+                    {t("Files are kept 7 days")}
                   </>
                 )}
               </span>
             </span>
             {expired ? (
-              <Tag>Expired</Tag>
+              <Tag>{t("Expired")}</Tag>
             ) : (
               <Button asChild variant="ghost" size="icon">
-                <a href={fileUrl(f)} download={f.name} aria-label={`Download ${f.name}`}>
+                <a href={fileUrl(f)} download={f.name} aria-label={t("Download {name}", { name: f.name })}>
                   <Download size={16} aria-hidden="true" />
                 </a>
               </Button>
@@ -63,6 +67,33 @@ function Attachments({ files }: { files: FileRef[] }) {
     </ul>
   )
 }
+
+/** Sent by me in person, so on the right: from this page, the App or a terminal. My sessions' messages aren't. */
+export const mine = (s: State, m: Message) => isMe(s, m.from.account_id) && !m.from.agent
+
+/** The message's text, in the primary color on my side; 3rem short of the far side, so a long one still reads as one side's. */
+function Bubble({ body, right }: { body: string; right: boolean }) {
+  return (
+    <div className={cn("mt-1 max-w-[min(calc(100%_-_3rem),42rem)] rounded-lg px-3.5 py-2.5", right ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-accent text-foreground")}>
+      <p lang={langOf(body)} className="text-body whitespace-pre-wrap wrap-anywhere">
+        {body}
+      </p>
+    </div>
+  )
+}
+
+/** A message's row: the sender's picture before it on the left, mine after it on the right. */
+function Row({ right, picture, children }: { right: boolean; picture: ReactNode; children: ReactNode }) {
+  return (
+    <article className="flex gap-3">
+      {!right && picture}
+      <div className={cn("flex min-w-0 flex-1 flex-col", right ? "items-end" : "items-start")}>{children}</div>
+      {right && picture}
+    </article>
+  )
+}
+
+const Me = ({ s }: { s: State }) => <Avatar kind="person" label={s.account?.name} src={s.account?.avatar_url} />
 
 /** One line under a message, in the caption size: its delivery state or why it wasn't sent. */
 function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error"; children: ReactNode }) {
@@ -77,44 +108,38 @@ function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error";
 /** API-036 `state` of what I sent one of my sessions (FLOW-WEB-SEND S8); a state this page doesn't know shows nothing. */
 function Delivery({ s, m }: { s: State; m: Message }) {
   if (!m.state || !m.to) return null
-  if (m.state === "delivered") return <StatusLine icon={<CheckCheck size={14} aria-hidden="true" />}>Delivered</StatusLine>
-  if (m.state === "canceled") return <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />}>Not delivered</StatusLine>
+  if (m.state === "delivered") return <StatusLine icon={<CheckCheck size={14} aria-hidden="true" />}>{t("Delivered")}</StatusLine>
+  if (m.state === "canceled") return <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />}>{t("Not delivered")}</StatusLine>
   if (m.state !== "pending" && m.state !== "pushed") return null
   const online = dataOf(s.agents)?.find((a) => a.id === m.to?.id)?.online
-  return <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{online ? "Sending…" : `Waiting for ${m.to.title} to come online`}</StatusLine>
+  return <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{online ? t("Sending…") : t("Waiting for {name} to come online", { name: m.to.title })}</StatusLine>
 }
 
 /** In a group the session leads ("orders-api #Mia"); what I sent from my own terminal there is "You". */
 function Sender({ owner, title, group, you }: { owner: string; title: string; group: boolean; you: boolean }) {
-  if (group && you) return <span className="truncate text-body-strong">You</span>
+  if (group && you) return <span className="truncate text-body-strong">{t("You")}</span>
   return <SessionName owner={owner} title={title} strong group={group} />
 }
 
 /** A message sent with `imbo send` has no `from.agent`: it came from the sender's terminal. Group messages have no `to`. */
 export function MessageRow({ s, m }: { s: State; m: Message }) {
   const to = recipientOf(s, m)
+  const right = mine(s, m)
   return (
-    <article className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-      <Avatar kind={agentAvatar(m.from.agent?.tool)} />
-      <div className="min-w-0">
-        <header className="flex min-w-0 items-baseline gap-2">
-          <SenderName s={s} from={m.from} group={m.conversation.group}>
-            <Sender owner={m.from.name} title={m.from.agent?.title ?? "Terminal"} group={!!m.conversation.group} you={!m.from.agent && isMe(s, m.from.account_id)} />
-          </SenderName>
-          {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
-          <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
-            {clock(m.created_at)}
-          </time>
-        </header>
-        {m.body && (
-          <p lang={langOf(m.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
-            {m.body}
-          </p>
-        )}
-        {m.files.length > 0 && <Attachments files={m.files} />}
-        <Delivery s={s} m={m} />
-      </div>
-    </article>
+    <Row right={right} picture={right ? <Me s={s} /> : <Avatar kind={agentAvatar(m.from.agent?.tool)} tool={m.from.agent?.tool} />}>
+      <header className="flex max-w-full min-w-0 items-baseline gap-2">
+        <SenderName s={s} from={m.from} group={m.conversation.group}>
+          <Sender owner={m.from.name} title={m.from.agent?.title ?? t("Terminal")} group={!!m.conversation.group} you={right} />
+        </SenderName>
+        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{t("to {owner} {title}", { owner: to.owner, title: to.title })}</span>}
+        <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
+          {clock(m.created_at)}
+        </time>
+      </header>
+      {m.body && <Bubble body={m.body} right={right} />}
+      {m.files.length > 0 && <Attachments files={m.files} />}
+      <Delivery s={s} m={m} />
+    </Row>
   )
 }
 
@@ -125,27 +150,27 @@ const retryable = (e: ApiError) => e.status === 0 || e.status === 429 || e.statu
 function refusal(e: ApiError, group: boolean, who: string) {
   switch (e.type) {
     case "/errors/body-invalid":
-      return "Messages are 1 to 32,000 characters."
+      return t("Messages are 1 to 32,000 characters.")
     case "/errors/rate-limited":
-      return e.retryAfter ? `Sending too fast. Try again in ${e.retryAfter} s.` : "Sending too fast. Wait a moment, then try again."
+      return e.retryAfter ? t("Sending too fast. Try again in {n} s.", { n: e.retryAfter }) : t("Sending too fast. Wait a moment, then try again.")
     case "/errors/subscription-required":
-      return "Subscribe to send and receive again."
+      return t("Subscribe to send and receive again.")
     case "/errors/not-contact":
-      return `${who} is no longer your contact.`
+      return t("{name} is no longer your contact.", { name: who })
     case "/errors/not-member":
-      return "You're no longer in this group."
+      return t("You're no longer in this group.")
     case "/errors/recipient-not-found":
-      return group ? "This group was dissolved." : e.message
+      return group ? t("This group was dissolved.") : e.message
     case "/errors/session-not-found":
-      return `That session is gone. Send it to ${who}'s inbox instead.`
+      return t("That session is gone. Send it to {name}'s inbox instead.", { name: who })
     case "/errors/recipient-inactive":
-      return group ? "No one else in this group can receive messages right now." : `${who}'s account is inactive, so they can't receive messages.`
+      return group ? t("No one else in this group can receive messages right now.") : t("{name}'s account is inactive, so they can't receive messages.", { name: who })
     case "/errors/blocked":
-      return `${who} doesn't accept your messages.`
+      return t("{name} doesn't accept your messages.", { name: who })
     case "/errors/unblock-first":
-      return `You blocked ${who}. Unblock ${who} to send messages.`
+      return t("You blocked {name}. Unblock {name} to send messages.", { name: who })
   }
-  return e.status === 0 ? "Check your connection, then try again." : e.message
+  return e.status === 0 ? t("Check your connection, then try again.") : e.message
 }
 
 /** Who an outgoing message is addressed to: my own session, the group (nobody named), or a contact's inbox or session. */
@@ -154,7 +179,7 @@ function addressee(s: State, key: ThreadKey, to: string) {
   if (to.startsWith("#")) return undefined
   const [account, short] = to.split("/")
   const p = contactOf(s, Number(account))
-  return { owner: p?.name ?? account, title: short ? (p?.sessions.find((x) => x.short_id === short)?.title ?? short) : "Terminal" }
+  return { owner: p?.name ?? account, title: short ? (p?.sessions.find((x) => x.short_id === short)?.title ?? short) : t("Terminal") }
 }
 
 /** A message on its way, or refused: shown under the thread until the server's copy takes its place. */
@@ -162,50 +187,43 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
   const to = addressee(s, id, o.to)
   const e = o.status === "failed" ? o.error : undefined
   return (
-    <article className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-      <Avatar kind="terminal" />
-      <div className="min-w-0">
-        <header className="flex min-w-0 items-baseline gap-2">
-          <Sender owner={s.account?.name ?? ""} title="Terminal" group={o.to.startsWith("#")} you />
-          {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">to {to.owner} {to.title}</span>}
-        </header>
-        {o.body && (
-          <p lang={langOf(o.body)} className="text-body whitespace-pre-wrap wrap-anywhere text-foreground">
-            {o.body}
-          </p>
-        )}
-        {o.files.length > 0 && <Attachments files={o.files} />}
-        {!e ? (
-          <StatusLine icon={<Clock size={14} aria-hidden="true" />}>Sending…</StatusLine>
-        ) : (
-          <div role="alert">
-            <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />} tone="error">
-              <span>Not sent. {refusal(e, o.to.startsWith("#"), to?.owner ?? "")}</span>
-            </StatusLine>
-            <div className="mt-1 -ml-2 flex flex-wrap gap-1">
-              {retryable(e) && (
-                <Button variant="ghost" size="sm" onClick={() => resend(id, o.cid)}>
-                  Try again
-                </Button>
-              )}
-              {e.type === "/errors/session-not-found" && (
-                <Button variant="ghost" size="sm" onClick={() => resendTo(id, o.cid, o.to.split("/")[0])}>
-                  Send to inbox
-                </Button>
-              )}
-              {e.type === "/errors/unblock-first" && (
-                <Button variant="ghost" size="sm" onClick={() => unblockNow({ id: Number(o.to.split("/")[0]), name: to?.owner ?? "" })}>
-                  Unblock
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => discard(id, o.cid)}>
-                Discard
+    <Row right picture={<Me s={s} />}>
+      <header className="flex max-w-full min-w-0 items-baseline gap-2">
+        <Sender owner={s.account?.name ?? ""} title={t("Terminal")} group={o.to.startsWith("#")} you />
+        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{t("to {owner} {title}", { owner: to.owner, title: to.title })}</span>}
+      </header>
+      {o.body && <Bubble body={o.body} right />}
+      {o.files.length > 0 && <Attachments files={o.files} />}
+      {!e ? (
+        <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{t("Sending…")}</StatusLine>
+      ) : (
+        <div role="alert" className="flex flex-col items-end">
+          <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />} tone="error">
+            <span>{t("Not sent. {reason}", { reason: refusal(e, o.to.startsWith("#"), to?.owner ?? "") })}</span>
+          </StatusLine>
+          <div className="mt-1 -mr-2 flex flex-wrap justify-end gap-1">
+            {retryable(e) && (
+              <Button variant="ghost" size="sm" onClick={() => resend(id, o.cid)}>
+                {t("Try again")}
               </Button>
-            </div>
+            )}
+            {e.type === "/errors/session-not-found" && (
+              <Button variant="ghost" size="sm" onClick={() => resendTo(id, o.cid, o.to.split("/")[0])}>
+                {t("Send to inbox")}
+              </Button>
+            )}
+            {e.type === "/errors/unblock-first" && (
+              <Button variant="ghost" size="sm" onClick={() => unblockNow({ id: Number(o.to.split("/")[0]), name: to?.owner ?? "" })}>
+                {t("Unblock")}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => discard(id, o.cid)}>
+              {t("Discard")}
+            </Button>
           </div>
-        )}
-      </div>
-    </article>
+        </div>
+      )}
+    </Row>
   )
 }
 
@@ -220,24 +238,46 @@ function DayDivider({ at }: { at: string }) {
 }
 
 /** The thread opens on its newest 50 messages; older pages load on request, above what's shown. */
-function Earlier({ id, t }: { id: ThreadKey; t: Thread }) {
-  if (!t.hasMore) return null
+function Earlier({ id, thread }: { id: ThreadKey; thread: Thread }) {
+  if (!thread.hasMore) return null
   return (
     <div className="flex flex-col items-center gap-1">
-      <Button variant="ghost" size="sm" aria-disabled={t.older === "loading"} onClick={() => loadOlder(id)}>
-        {t.older === "loading" ? "Loading…" : "Show earlier messages"}
+      <Button variant="ghost" size="sm" aria-disabled={thread.older === "loading"} onClick={() => loadOlder(id)}>
+        {thread.older === "loading" ? t("Loading…") : t("Show earlier messages")}
       </Button>
-      {t.older === "error" && (
+      {thread.older === "error" && (
         <p role="alert" className="text-caption text-destructive">
-          Couldn't load them. Try again.
+          {t("Couldn't load them. Try again.")}
         </p>
       )}
     </div>
   )
 }
 
+/** Picking messages to share as an image (views.tsx ChatPane): which are picked, and what picking one does. */
+export type Picking = { picked: ReadonlySet<number>; toggle: (m: Message) => void }
+
+/** A message while picking: a click anywhere on it picks it or lets it go, and its own links and buttons rest. */
+function PickRow({ s, m, pick }: { s: State; m: Message; pick: Picking }) {
+  const on = pick.picked.has(m.id)
+  return (
+    <div onClick={() => pick.toggle(m)} className={cn("state-layer -mx-2 -my-1.5 grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-md px-2 py-1.5", on && "bg-card")}>
+      <Checkbox
+        checked={on}
+        onCheckedChange={() => pick.toggle(m)}
+        onClick={(e) => e.stopPropagation()}
+        aria-label={`${m.from.name} ${m.from.agent?.title ?? t("Terminal")} ${clock(m.created_at)}`}
+        className="mt-1.5 size-5 rounded-full"
+      />
+      <div inert>
+        <MessageRow s={s} m={m} />
+      </div>
+    </div>
+  )
+}
+
 /** Scrolling message list that stays on the newest message while you're at the bottom, with a day divider per day. */
-export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey; thread: Thread; label: string }) {
+export function MessageList({ s, id, thread, label, pick }: { s: State; id: ThreadKey; thread: Thread; label: string; pick?: Picking }) {
   const { messages } = thread
   const outbox = s.outbox[id] ?? []
   // Sending something follows the thread to the bottom again.
@@ -246,11 +286,11 @@ export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey;
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={ref} tabIndex={0} aria-label={label} className="scroll-pane focus-ring min-h-0 flex-1">
         <div className="flex flex-col gap-4 p-4">
-          <Earlier id={id} t={thread} />
+          <Earlier id={id} thread={thread} />
           {messages.map((m, i) => (
             <Fragment key={m.id}>
               {(i === 0 || !sameDay(messages[i - 1].created_at, m.created_at)) && <DayDivider at={m.created_at} />}
-              <MessageRow s={s} m={m} />
+              {pick ? <PickRow s={s} m={m} pick={pick} /> : <MessageRow s={s} m={m} />}
             </Fragment>
           ))}
           {outbox.map((o) => (
@@ -262,7 +302,7 @@ export function MessageList({ s, id, thread, label }: { s: State; id: ThreadKey;
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
           <Button variant="secondary" size="sm" onClick={jump} className="shadow-raised">
             <ArrowDown size={14} aria-hidden="true" />
-            Jump to latest
+            {t("Jump to latest")}
           </Button>
         </div>
       )}

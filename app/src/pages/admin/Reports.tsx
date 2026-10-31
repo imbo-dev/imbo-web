@@ -106,7 +106,7 @@ export function Reports({ recount }: { recount: () => void }) {
           {list.status === "loading" ? (
             <ListSkeleton rows={4} />
           ) : list.status === "error" ? (
-            <ErrorState what="reports" error={list.error} onRetry={() => load()} />
+            <ErrorState title="Couldn't load reports" error={list.error} onRetry={() => load()} />
           ) : !list.data.reports.length ? (
             <EmptyState icon={<Flag size={24} />} title={status === "open" ? "No open reports" : "No reports yet"}>
               {status === "open" && <p>New reports show up here, and their email links open them.</p>}
@@ -348,7 +348,7 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
               <p>Check the number in the link.</p>
             </EmptyState>
           ) : (
-            <ErrorState what="this report" error={r.error} onRetry={() => load()} />
+            <ErrorState title="Couldn't load this report" error={r.error} onRetry={() => load()} />
           )}
         </div>
       </>

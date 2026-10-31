@@ -8,6 +8,7 @@ import { PixelSwap } from "@/components/PixelSwap"
 import { AuthStage } from "@/components/Stage"
 import { Wordmark } from "@/components/Wordmark"
 import { Command, CopyId } from "@/components/bits"
+import { t } from "@/i18n"
 import { ApiError, messageOf } from "@/data/layer"
 import { dataOf, requestCode, useStore, verify } from "@/data/store"
 import { emailSchema, nameSchema, problem } from "@/data/schema"
@@ -61,7 +62,7 @@ export function AuthFlow({ page }: { page: Page }) {
 }
 
 const Home = () => (
-  <a href="https://imbo.dev/" className="focus-ring mb-8 block w-fit rounded-sm" aria-label="Imbo home">
+  <a href="https://imbo.dev/" className="focus-ring mb-8 block w-fit rounded-sm" aria-label={t("Imbo home")}>
     <Wordmark />
   </a>
 )
@@ -129,12 +130,12 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resen
   return (
     <>
       {mode === "login" ? (
-        <Heading title="Sign in to Imbo">We'll email you a 6-digit code.</Heading>
+        <Heading title={t("Sign in to Imbo")}>{t("We'll email you a 6-digit code.")}</Heading>
       ) : (
-        <Heading title="Create your account">Free for 30 days, no card needed. We'll email you a 6-digit code.</Heading>
+        <Heading title={t("Create your account")}>{t("Free for 30 days, no card needed. We'll email you a 6-digit code.")}</Heading>
       )}
       <form noValidate onSubmit={submit} className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-email`}>Email</Label>
+        <Label htmlFor={`${id}-email`}>{t("Email")}</Label>
         <Input
           ref={input}
           id={`${id}-email`}
@@ -153,23 +154,31 @@ function EmailStep({ mode, onSent }: { mode: Mode; onSent: (email: string, resen
         />
         <FieldError id={`${id}-error`}>{error}</FieldError>
         <Button type="submit" size="lg" aria-disabled={sending} className="mt-2 w-full">
-          {sending ? "Sending code…" : "Continue"}
+          {sending ? t("Sending code…") : t("Continue")}
         </Button>
       </form>
       <p className="mt-6 text-body text-muted-foreground">
-        {mode === "login" ? "New to Imbo? " : "Already have an account? "}
+        {mode === "login" ? t("New to Imbo?") : t("Already have an account?")}{" "}
         <a href={mode === "login" ? "/register" : "/login"} onClick={onLinkClick} className="focus-ring rounded-sm text-foreground underline underline-offset-4">
-          {mode === "login" ? "Create an account" : "Sign in"}
+          {mode === "login" ? t("Create an account") : t("Sign in")}
         </a>
       </p>
-      {mode === "register" && (
-        <p className="mt-3 text-caption text-(--semantic-color-text-tertiary)">
-          By continuing you agree to the{" "}
-          <a href="https://imbo.dev/terms" className="focus-ring rounded-sm underline underline-offset-4">Terms</a> and{" "}
-          <a href="https://imbo.dev/privacy" className="focus-ring rounded-sm underline underline-offset-4">Privacy Policy</a>.
-        </p>
-      )}
+      {mode === "register" && <Agreement />}
     </>
+  )
+}
+
+function Agreement() {
+  const [before, rest] = t("By continuing you agree to the {terms} and {privacy}.").split("{terms}")
+  const [between, after] = rest.split("{privacy}")
+  return (
+    <p className="mt-3 text-caption text-(--semantic-color-text-tertiary)">
+      {before}
+      <a href="https://imbo.dev/terms" className="focus-ring rounded-sm underline underline-offset-4">{t("Terms")}</a>
+      {between}
+      <a href="https://imbo.dev/privacy" className="focus-ring rounded-sm underline underline-offset-4">{t("Privacy Policy")}</a>
+      {after}
+    </p>
   )
 }
 
@@ -191,6 +200,7 @@ function CodeStep({
   const [sending, setSending] = useState(false)
   const [resent, setResent] = useState(false)
   const cooldown = useSecondsUntil(resendAt)
+  const [sentTo, expires] = t("We sent a code to {email}. It expires in 10 minutes.").split("{email}")
 
   const check = async (value: string) => {
     if (checking) return
@@ -228,13 +238,15 @@ function CodeStep({
     <>
       <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 mb-4">
         <ArrowLeft size={14} aria-hidden="true" />
-        Use a different email
+        {t("Use a different email")}
       </Button>
-      <Heading title="Check your email">
-        We sent a code to <span className="text-foreground wrap-anywhere">{step.email}</span>. It expires in 10 minutes.
+      <Heading title={t("Check your email")}>
+        {sentTo}
+        <span className="text-foreground wrap-anywhere">{step.email}</span>
+        {expires}
       </Heading>
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-code`}>Code</Label>
+        <Label htmlFor={`${id}-code`}>{t("Code")}</Label>
         <InputOTP
           id={`${id}-code`}
           maxLength={6}
@@ -259,11 +271,11 @@ function CodeStep({
         </InputOTP>
         <FieldError id={`${id}-error`}>{error}</FieldError>
         <p aria-live="polite" className="min-h-5 text-caption text-muted-foreground">
-          {checking ? "Checking…" : resent ? "We sent a new code." : ""}
+          {checking ? t("Checking…") : resent ? t("We sent a new code.") : ""}
         </p>
       </div>
       <Button variant="outline" aria-disabled={cooldown > 0 || sending} onClick={resend} className="mt-2 w-full tabular-nums">
-        {sending ? "Sending code…" : cooldown > 0 ? `Send a new code in ${cooldown} s` : "Send a new code"}
+        {sending ? t("Sending code…") : cooldown > 0 ? t("Send a new code in {n} s", { n: cooldown }) : t("Send a new code")}
       </Button>
     </>
   )
@@ -298,9 +310,9 @@ function NameStep({ step, onCodeError }: { step: Extract<Step, { kind: "name" }>
 
   return (
     <>
-      <Heading title="Pick a name">People see it next to your session titles. It doesn't have to be unique.</Heading>
+      <Heading title={t("Pick a name")}>{t("People see it next to your session titles. It doesn't have to be unique.")}</Heading>
       <form noValidate onSubmit={submit} className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-name`}>Name</Label>
+        <Label htmlFor={`${id}-name`}>{t("Name")}</Label>
         <Input
           ref={input}
           id={`${id}-name`}
@@ -317,7 +329,7 @@ function NameStep({ step, onCodeError }: { step: Extract<Step, { kind: "name" }>
         />
         <FieldError id={`${id}-error`}>{error}</FieldError>
         <Button type="submit" size="lg" aria-disabled={saving} className="mt-2 w-full">
-          {saving ? "Creating account…" : "Create account"}
+          {saving ? t("Creating account…") : t("Create account")}
         </Button>
       </form>
     </>
@@ -331,24 +343,24 @@ function Welcome() {
   if (!account) return null
   return (
     <>
-      <Heading title={`You're in, ${account.name}.`}>
-        {b?.enabled && b.access.state === "trial" && b.access.until && `Your ${daysUntil(b.access.until)}-day free trial has started.`}
+      <Heading title={t("You're in, {name}.", { name: account.name })}>
+        {b?.enabled && b.access.state === "trial" && b.access.until && t("Your {n}-day free trial has started.", { n: daysUntil(b.access.until) })}
       </Heading>
       <div className="flex flex-col gap-6">
         <section className="flex flex-col gap-1">
-          <h2 className="text-label text-foreground">Your account ID</h2>
+          <h2 className="text-label text-foreground">{t("Your account ID")}</h2>
           <div className="-ml-1.5">
             <CopyId id={String(account.id)} />
           </div>
-          <p className="text-caption text-muted-foreground">People add you as a contact with this ID.</p>
+          <p className="text-caption text-muted-foreground">{t("People add you as a contact with this ID.")}</p>
         </section>
         <section className="flex flex-col gap-2">
-          <h2 className="text-label text-foreground">Connect your agents</h2>
-          <p className="text-body text-muted-foreground">Run this in a terminal on each computer, then sign in with the same email.</p>
+          <h2 className="text-label text-foreground">{t("Connect your agents")}</h2>
+          <p className="text-body text-muted-foreground">{t("Run this in a terminal on each computer, then sign in with the same email.")}</p>
           <Command text="curl -fsSL https://imbo.dev/install | sh" />
         </section>
         <Button size="lg" className="w-full" onClick={() => navigate("/chats", { replace: true })}>
-          Open Imbo
+          {t("Open Imbo")}
         </Button>
       </div>
     </>

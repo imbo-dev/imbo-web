@@ -1,3 +1,4 @@
+import { t } from "@/i18n"
 import type {
   Accepted,
   Account,
@@ -144,6 +145,6 @@ export class ApiError extends Error {
   }
 }
 
-export const NO_ANSWER = "Imbo didn't answer. Check your connection and try again."
+export const noAnswer = () => t("Imbo didn't answer. Check your connection and try again.")
 /** What to tell the person: the server's own wording (problem+json `detail`), or the no-answer line. */
-export const messageOf = (e: unknown) => (e instanceof ApiError ? e.message : NO_ANSWER)
+export const messageOf = (e: unknown) => (e instanceof ApiError ? e.message : noAnswer())
