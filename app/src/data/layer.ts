@@ -11,6 +11,7 @@ import type {
   Block,
   Contact,
   ContactAsked,
+  ContactShare,
   Conversation,
   Device,
   FileRef,
@@ -24,6 +25,7 @@ import type {
   Request,
   Resolved,
   Sent,
+  ShareLevel,
   Stats,
   Uploaded,
   WebLogin,
@@ -84,6 +86,10 @@ export type DataLayer = {
   askContact(to: { account_id: number } | { email: string }, note?: string): Promise<ContactAsked>
   /** API-013 */
   removeContact(accountId: number): Promise<void>
+  /** API-081: which of my sessions this contact can see. */
+  contactShare(accountId: number): Promise<ContactShare>
+  /** API-082: replaces the whole setting; the lists count only for `chosen`. */
+  setContactShare(accountId: number, share: ShareLevel, devices: string[], sessions: string[]): Promise<ContactShare>
   /** API-010, API-011 */
   accept(requestId: number): Promise<Accepted>
   decline(requestId: number): Promise<void>

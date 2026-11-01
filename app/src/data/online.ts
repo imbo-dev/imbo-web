@@ -117,6 +117,8 @@ export const online = {
   sentRequests: async () => (await get(c.requests, "/v1/requests?direction=out")).requests,
   askContact: (to, note) => call(c.contactAsked, "POST", "/v1/contacts/requests", { ...to, note: note || undefined }),
   removeContact: (id) => call(none, "DELETE", `/v1/contacts/${id}`),
+  contactShare: (id) => get(c.contactShare, `/v1/contacts/${id}/share`),
+  setContactShare: (id, share, devices, sessions) => call(c.contactShare, "PUT", `/v1/contacts/${id}/share`, share === "chosen" ? { share, devices, sessions } : { share }),
   accept: (id) => call(c.accepted, "POST", `/v1/requests/${id}/accept`, {}),
   decline: async (id) => void (await call(c.declined, "POST", `/v1/requests/${id}/decline`)),
   billing: () => get(c.billing, "/v1/billing"),

@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, AgentRef, Block, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Block, ContactShare, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -16,6 +16,7 @@ export type Sending = "ok" | "refused" | "blocked"
 export type Picture = "ok" | "too-large" | "unreadable" | "limit"
 /** Whether canceling a banned account's Waffo subscription works (API-066, API-070). */
 export type Cancel = "ok" | "fails"
+export type ShareSave = "ok" | "fails"
 /** What the next file upload meets: taken, or today's 1 GB already used (API-026). */
 export type Upload = "ok" | "quota"
 export type Controls = {
@@ -29,6 +30,8 @@ export type Controls = {
   picture: Picture
   cancel: Cancel
   upload: Upload
+  /** Whether saving what a contact can see (API-082) goes through. */
+  share: ShareSave
   live: Message[]
   pendingExtra: Record<number, number>
 }
@@ -43,6 +46,7 @@ export let controls: Controls = {
   picture: "ok",
   cancel: "ok",
   upload: "ok",
+  share: "ok",
   live: [],
   pendingExtra: {},
 }
@@ -212,6 +216,22 @@ let outgoing: Request[] = []
 /** Session titles Dana gave (API-073). */
 const titles: Record<string, string> = {}
 let myDevices: Device[] = [...f.devices]
+/** What each contact can see of Dana's sessions (API-081, API-082). */
+const shares = structuredClone(f.shares)
+const mySessions = () => [...f.myAgents, f.oldAgent]
+function shareOf(id: number): ContactShare {
+  const x = shares[id] ?? { share: "chosen", devices: [], sessions: [] }
+  return {
+    share: x.share,
+    devices: myDevices.filter((d) => x.devices.includes(d.id)).map((d) => ({ id: d.id, name: d.name })),
+    sessions: mySessions()
+      .filter((a) => x.sessions.includes(a.id))
+      .map((a) => ({ ...f.ref(a), title: titles[a.id] ?? a.title, device_id: a.device_id, online: a.online })),
+  }
+}
+const contactOf = (id: number) => {
+  if (!f.contacts.some((c) => c.id === id)) throw new ApiError(403, "/errors/not-contact", `${id} is not your contact.`)
+}
 
 const codeTries: Record<string, number> = {}
 const codeSentAt: Record<string, number> = {}
@@ -458,6 +478,29 @@ export const mock = {
     const request: Request = { id: 800 + outgoing.length, kind: "contact", from: { id: a.id, name: a.name }, to: who, status: "pending", created_at: new Date().toISOString() }
     outgoing = [request, ...outgoing]
     return { request }
+  },
+  async contactShare(id) {
+    signedIn()
+    await wait(300)
+    if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
+    contactOf(id)
+    return shareOf(id)
+  },
+  /** Same rules as the server: my own computers that are still signed in, my own sessions, 200 at most. */
+  async setContactShare(id, share, devices, sessions) {
+    signedIn()
+    await wait(500)
+    if (controls.share === "fails") throw new ApiError(0, "network", noAnswer())
+    contactOf(id)
+    const d = [...new Set(devices)]
+    const a = [...new Set(sessions)]
+    if (share === "chosen") {
+      if (d.length + a.length > 200) throw new ApiError(400, "/errors/invalid-request", "Pick 200 computers and sessions at most.")
+      if (d.some((x) => !myDevices.some((y) => y.id === x))) throw new ApiError(400, "/errors/invalid-request", "One of those computers isn't yours or is signed out.")
+      if (a.some((x) => !mySessions().some((y) => y.id === x))) throw new ApiError(400, "/errors/invalid-request", "One of those sessions isn't yours.")
+    }
+    shares[id] = share === "chosen" ? { share, devices: d, sessions: a } : { share, devices: [], sessions: [] }
+    return shareOf(id)
   },
   /** Both lose each other; the chat stays. */
   async removeContact(id) {

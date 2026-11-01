@@ -42,6 +42,7 @@ import { daysUntil, langOf, longDate, shortWhen, toolName } from "@/lib/format"
 import { navigate, onLinkClick } from "@/lib/router"
 import { Composer, RecipientPicker, SendingClosed } from "./composer"
 import { ComputersField, DeleteAccount, NameField } from "./account"
+import { ShareSection } from "./contact-share"
 import { ChangeEmail } from "./email"
 import { openAddContact } from "./contacts"
 import { openGroupDetails, openNewGroup } from "./groups"
@@ -547,7 +548,7 @@ function RenamingSession({ x, back, onDone }: { x: MyAgent; back: ReactNode; onD
       </PaneHeader>
       <div className="flex flex-none flex-col gap-2 border-b-(length:--semantic-layout-hairline) border-border px-4 py-2">
         <RenameHint r={r}>
-          {t("The new name replaces the title from {tool} everywhere in Imbo, for you and your contacts. Leave it empty to go back to that title.", { tool: toolName(x.tool) })}
+          {t("The new name replaces the title from {tool} everywhere in Imbo. You see it, and so do the contacts and groups that can see this session. Leave it empty to go back to that title.", { tool: toolName(x.tool) })}
         </RenameHint>
         <span className="flex gap-2 sm:hidden">
           <RenameButtons r={r} form={formId} />
@@ -794,35 +795,38 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
           </div>
         </div>
       </PaneHeader>
-      <section aria-labelledby="contact-sessions" className="scroll-pane min-h-0 flex-1 p-4">
+      <div className="scroll-pane min-h-0 flex-1 p-4">
         {blocked && <BlockedNote who={p} />}
-        <h2 id="contact-sessions" className="mb-2 text-label text-muted-foreground">
-          {t("Sessions")}
-        </h2>
-        {!p.active && <p className="mb-3 text-caption text-muted-foreground">{t("{name}'s account is inactive, so their sessions can't send messages.", { name: p.name })}</p>}
-        {p.sessions.length ? (
-          <ul className="flex flex-col">
-            {p.sessions.map((x) => (
-              <li key={x.short_id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t-(length:--semantic-layout-hairline) border-border py-3">
-                <Avatar kind="agent" tool={x.tool} />
-                <span className="min-w-0">
-                  <span className="block truncate text-body">{x.title}</span>
-                  <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
-                    <span className="truncate">{toolName(x.tool)}</span>
-                    <Sep />
-                    <span className="font-(family-name:--semantic-typography-code-font-family)">{x.short_id}</span>
+        <section aria-labelledby="contact-sessions">
+          <h2 id="contact-sessions" className="mb-2 text-label text-muted-foreground">
+            {t("Sessions")}
+          </h2>
+          {!p.active && <p className="mb-3 text-caption text-muted-foreground">{t("{name}'s account is inactive, so their sessions can't send messages.", { name: p.name })}</p>}
+          {p.sessions.length ? (
+            <ul className="flex flex-col">
+              {p.sessions.map((x) => (
+                <li key={x.short_id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t-(length:--semantic-layout-hairline) border-border py-3">
+                  <Avatar kind="agent" tool={x.tool} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-body">{x.title}</span>
+                    <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+                      <span className="truncate">{toolName(x.tool)}</span>
+                      <Sep />
+                      <span className="font-(family-name:--semantic-typography-code-font-family)">{x.short_id}</span>
+                    </span>
                   </span>
-                </span>
-                <Presence s={x} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-body text-(--semantic-color-text-tertiary)">
-            {t("{name} has no sessions online or seen in the last 7 days. Messages go to {name}'s inbox.", { name: p.name })}
-          </p>
-        )}
-      </section>
+                  <Presence s={x} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-body text-(--semantic-color-text-tertiary)">
+              {t("{name} has no sessions online or seen in the last 7 days. Messages go to {name}'s inbox.", { name: p.name })}
+            </p>
+          )}
+        </section>
+        <ShareSection s={s} p={p} />
+      </div>
     </>
   )
 }

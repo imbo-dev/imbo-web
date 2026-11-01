@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Area, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Request, Uploaded } from "./contract"
+import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, Device, FileRef, Group, Message, MyAgent, Request, ShareLevel, Uploaded } from "./contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { t } from "@/i18n"
@@ -49,6 +49,8 @@ export type State = {
   devices: Load<Device[]>
   /** The groups I'm in, with their members (API-019): the group header and the profile card read them. */
   groups: Load<Group[]>
+  /** Per contact, which of my sessions they can see (API-081); fetched when their page opens. */
+  shares: Partial<Record<number, Load<ContactShare>>>
   /** Contact requests and group invitations waiting for me (API-009). */
   requests: Request[]
   /** Contact requests I sent that are still waiting (API-009 `direction=out`). */
@@ -77,6 +79,7 @@ const fresh = (account: Account | null | undefined, isNew = false): State => ({
   blocks: LOADING,
   devices: LOADING,
   groups: LOADING,
+  shares: {},
   requests: [],
   outgoing: [],
   threads: {},
@@ -162,6 +165,23 @@ async function loadSent() {
 }
 
 export const retry = (key: ListKey) => load(key)
+
+/** API-081 for one contact; `quiet` keeps what's shown while it fetches, and through a failure. */
+async function loadShare(accountId: number, quiet = false) {
+  const n = turn(`share:${accountId}`)
+  const shown = state.shares[accountId]?.status === "ready"
+  if (!quiet || !shown) set({ shares: { ...state.shares, [accountId]: LOADING } })
+  try {
+    const data = await api.contactShare(accountId)
+    if (seq[`share:${accountId}`] === n) set({ shares: { ...state.shares, [accountId]: ready(data) } })
+  } catch (e) {
+    if (seq[`share:${accountId}`] !== n || expired(e)) return
+    if (!quiet || !shown) set({ shares: { ...state.shares, [accountId]: { status: "error", error: asApiError(e) } } })
+  }
+}
+/** A contact's page opening: what they can see, fetched again each time. */
+export const openShare = (accountId: number) => loadShare(accountId, true)
+export const retryShare = (accountId: number) => loadShare(accountId)
 /** Opening the Sessions or Contacts tab brings presence up to date; opening a group's members or its chat, who's in it. */
 export function refreshList(key: "agents" | "contacts" | "blocks" | "devices" | "groups") {
   load(key, true)
@@ -667,6 +687,13 @@ export async function removeContact(accountId: number) {
   load("contacts", true)
   load("conversations", true)
 }
+/** API-082: replaces what this contact can see; the page shows the server's answer. Throws ApiError. */
+export async function setShare(accountId: number, share: ShareLevel, devices: string[] = [], sessions: string[] = []) {
+  turn(`share:${accountId}`)
+  const data = await act(() => api.setContactShare(accountId, share, devices, sessions))
+  set({ shares: { ...state.shares, [accountId]: ready(data) } })
+  return data
+}
 /** API-005: the page shows the new name at once. Throws ApiError. */
 export async function renameMe(name: string) {
   const a = await act(() => api.renameMe(name))
@@ -726,7 +753,14 @@ export const admin: DataLayer["admin"] = {
 function refetch(area: Area) {
   if (area === "all") return void (["conversations", "agents", "contacts", "requests", "groups"] as const).forEach(refetch)
   if (area === "requests") return void (loadRequests(), loadSent())
-  load(area, true)
+  const loaded = load(area, true)
+  // What a contact can see changed here or in another tab, or one of my sessions messaged them (RULE-019). Not for someone
+  // no longer a contact: the server refuses.
+  if (area === "contacts")
+    void loaded.then(() => {
+      const contacts = dataOf(state.contacts)
+      for (const id of Object.keys(state.shares).map(Number)) if (!contacts || contacts.some((p) => p.id === id)) loadShare(id, true)
+    })
   if (area === "conversations" && openKey && !openKey.startsWith("n:")) newer(openKey)
 }
 // Areas fetched in the last second, and whether they changed again since.

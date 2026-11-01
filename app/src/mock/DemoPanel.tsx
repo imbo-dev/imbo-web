@@ -4,7 +4,7 @@ import { Popover, ToggleGroup } from "radix-ui"
 import { Button } from "@/components/ui/button"
 import { begin, refresh, refreshList, reload, retry, useStore } from "@/data/store"
 import type { BillingPreset } from "./data"
-import { controls, receive, releaseOwner, setControls, setReleaseOwner, skipSignIn, subscribe, type Cancel, type Controls, type Picture, type Sending, type Status, type Upload } from "./layer"
+import { controls, receive, releaseOwner, setControls, setReleaseOwner, skipSignIn, subscribe, type Cancel, type Controls, type Picture, type Sending, type ShareSave, type Status, type Upload } from "./layer"
 
 // Demo-only controls, outside the app window: switch the plan and billing mode (API-032), the data state, whether sends
 // go through or the peer blocked Dana, what the next picture and file upload meet, who owns release-team, whether a ban
@@ -103,6 +103,7 @@ export function DemoPanel() {
                 onChange={(picture) => setControls({ picture })}
               />
               <Choice<Upload> label="Next file upload" value={c.upload} options={["ok", "quota"]} onChange={(upload) => setControls({ upload })} />
+              <Choice<ShareSave> label="Saving who sees sessions" value={c.share} options={["ok", "fails"]} onChange={(share) => setControls({ share })} />
               <Choice
                 label="release-team owner"
                 value={releaseOwner()}

@@ -111,7 +111,7 @@ function nameProblem(name: string) {
   if (/[\u0000-\u001f\u007f]/.test(name)) return t("A group name can't contain control characters.")
 }
 
-const flip = <K,>(set: Set<K>, k: K) => {
+export const flip = <K,>(set: Set<K>, k: K) => {
   const next = new Set(set)
   if (!next.delete(k)) next.add(k)
   return next
@@ -127,11 +127,11 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-function Note({ children }: { children: ReactNode }) {
+export function Note({ children }: { children: ReactNode }) {
   return <p className="px-2 text-caption text-muted-foreground">{children}</p>
 }
 
-function DialogError({ children }: { children?: ReactNode }) {
+export function DialogError({ children }: { children?: ReactNode }) {
   if (!children) return null
   return (
     <p role="alert" className="flex items-start gap-2 text-caption text-destructive">
@@ -141,12 +141,15 @@ function DialogError({ children }: { children?: ReactNode }) {
   )
 }
 
-/** A row that is all label for its checkbox, so a click anywhere on it ticks the box. `appear`: fades in, as rows Load more adds. */
-function Pick({ checked, onChange, appear, children }: { checked: boolean; onChange: () => void; appear?: boolean; children: ReactNode }) {
+/**
+ * A row that is all label for its checkbox, so a click anywhere on it ticks the box. `appear`: fades in, as rows Load more
+ * adds. `disabled`: ticked by something else and can't be changed here.
+ */
+export function Pick({ checked, onChange, appear, disabled, children }: { checked: boolean; onChange: () => void; appear?: boolean; disabled?: boolean; children: ReactNode }) {
   return (
     <li className={cn(appear && "pick-in")}>
-      <label className="state-layer grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 rounded-md px-2 py-1.5">
-        <Checkbox checked={checked} onCheckedChange={onChange} />
+      <label className={cn("grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 rounded-md px-2 py-1.5", disabled ? "opacity-60" : "state-layer cursor-pointer")}>
+        <Checkbox checked={checked} onCheckedChange={onChange} disabled={disabled} />
         {children}
       </label>
     </li>
@@ -158,9 +161,24 @@ const PAGE = 20
 /**
  * My sessions (API-014: online first, then by when they were last online), the first 20 and then 20 more each time Load
  * more is pressed (RULE-016); the first `keep` always show. One picked in the group that API-014 no longer lists (not
- * seen for 7 days) shows by name.
+ * seen for 7 days) shows by name. `covered`: all ticked by their computer, so none can be changed. `bare`: listed under
+ * their computer, so the computer's name is left out.
  */
-function SessionPicks({ list, chosen, onChange, keep = 0 }: { list: (MyAgent | AgentRef)[]; chosen: Set<string>; onChange: (next: Set<string>) => void; keep?: number }) {
+export function SessionPicks({
+  list,
+  chosen,
+  onChange,
+  keep = 0,
+  covered,
+  bare,
+}: {
+  list: (MyAgent | AgentRef)[]
+  chosen: Set<string>
+  onChange: (next: Set<string>) => void
+  keep?: number
+  covered?: boolean
+  bare?: boolean
+}) {
   const first = Math.max(PAGE, keep)
   const [limit, setLimit] = useState(first)
   const ul = useRef<HTMLUListElement>(null)
@@ -174,7 +192,7 @@ function SessionPicks({ list, chosen, onChange, keep = 0 }: { list: (MyAgent | A
     <>
       <ul ref={ul} className="flex flex-col">
         {list.slice(0, limit).map((a, i) => (
-          <Pick key={a.id} checked={chosen.has(a.id)} onChange={() => onChange(flip(chosen, a.id))} appear={i >= first}>
+          <Pick key={a.id} checked={covered || chosen.has(a.id)} onChange={() => onChange(flip(chosen, a.id))} appear={i >= first} disabled={covered}>
             <Avatar kind="agent" tool={a.tool} />
             <span className="min-w-0">
               <span className="block truncate text-body text-foreground">{a.title}</span>
@@ -186,7 +204,7 @@ function SessionPicks({ list, chosen, onChange, keep = 0 }: { list: (MyAgent | A
                   </>
                 )}
                 <span className="truncate">{toolName(a.tool)}</span>
-                {"online" in a && a.device_name && (
+                {"online" in a && a.device_name && !bare && (
                   <>
                     <Sep />
                     <span className="truncate">{a.device_name}</span>
@@ -334,7 +352,7 @@ function NewGroupDialog({ s }: { s: State }) {
 }
 
 /** `failed` says what didn't load; `message` is why. */
-function Retry({ failed, message, onRetry }: { failed: string; message: string; onRetry: () => void }) {
+export function Retry({ failed, message, onRetry }: { failed: string; message: string; onRetry: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 px-2">
       <p className="min-w-0 text-caption text-muted-foreground">

@@ -1,7 +1,7 @@
 // Demo data in the server's response shapes (src/data/contract.ts). Account IDs are 8 digits, short IDs the last 6
 // characters of a session ID, group IDs 7 digits (shown as "#" + ID), files kept 7 days.
 
-import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, Stats } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, ShareLevel, Stats } from "@/data/contract"
 
 const DAY = 86_400_000
 const now = Date.now()
@@ -127,6 +127,31 @@ export const byEmail: Record<string, { id: number; name: string }> = {
 }
 /** Accounts Dana can add by ID besides those: Kai is blocked by her, Rex blocked her. */
 export const byId = [...Object.values(byEmail), kai, rex]
+
+/** A session Dana picked for Mia that hasn't been online for 12 days, so API-014 no longer lists it; API-081 still does. */
+export const oldAgent: MyAgent = {
+  id: "a-notes",
+  short_id: "41c6aa",
+  session_id: "s-41c6aa",
+  title: "release-notes",
+  tool: "claude-code",
+  online: false,
+  device_id: "d3",
+  device_name: "old-laptop",
+  last_online_at: iso(now - 12 * DAY),
+  unread: 0,
+  wakeable: false,
+}
+/**
+ * API-081 when the demo starts: Mia sees dana-mbp (and every session on it) plus orders-migration and release-notes;
+ * Leo was a contact before the setting existed, so sees all; Ivy sees none. A contact added during the demo has no entry
+ * and sees none picked, as a new contact does.
+ */
+export const shares: Record<number, { share: ShareLevel; devices: string[]; sessions: string[] }> = {
+  [mia.id]: { share: "chosen", devices: ["d1"], sessions: ["a-migration", "a-notes"] },
+  [leo.id]: { share: "all", devices: [], sessions: [] },
+  [ivy.id]: { share: "none", devices: [], sessions: [] },
+}
 
 /** API-006: the computers Dana ran imbo login on. */
 export const devices: Device[] = [

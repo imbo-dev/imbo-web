@@ -64,6 +64,18 @@ export const contact = z.object({
   blocked: z.boolean().default(false),
 })
 
+/**
+ * API-081, API-082: which of my sessions a contact can see. `all`: every one; `none`: none, so they can only message my
+ * inbox; `chosen`: the sessions picked plus every session on the computers picked, new ones too. Both lists are empty
+ * unless `chosen`; `sessions` holds every picked one, however long ago it was last online.
+ */
+export const shareLevel = z.enum(["all", "chosen", "none"])
+export const contactShare = z.object({
+  share: shareLevel,
+  devices: z.array(z.object({ id: z.string(), name: z.string() })),
+  sessions: z.array(agentRef.extend({ device_id: z.string().nullable(), online: z.boolean() })),
+})
+
 /** API-026 `file`; downloads (API-027) return 404 after `expires_at`. */
 export const file = z.object({ id: z.string(), name: z.string(), size: z.number(), sha256: z.string(), expires_at: time })
 
@@ -304,6 +316,8 @@ export type AgentRef = z.infer<typeof agentRef>
 export type Area = z.infer<typeof changed>["area"]
 export type MyAgent = z.infer<typeof myAgent>
 export type Contact = z.infer<typeof contact>
+export type ContactShare = z.infer<typeof contactShare>
+export type ShareLevel = z.infer<typeof shareLevel>
 export type FileRef = z.infer<typeof file>
 export type Message = z.infer<typeof message>
 export type Via = NonNullable<z.infer<typeof sender>["via"]>

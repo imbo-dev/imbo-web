@@ -412,7 +412,7 @@ try {
     await alice.getByLabel('Session name').waitFor();
     const hint = await alice.getByText(/The new name replaces the title from/).innerText();
     await shot(alice, 'tc386-1');
-    ok('TC-386 #1 name box with who sees it', hint.includes('everywhere in Imbo, for you and your contacts. Leave it empty to go back to that title.'), hint);
+    ok('TC-386 #1 name box with who sees it', hint.includes('everywhere in Imbo. You see it, and so do the contacts and groups that can see this session. Leave it empty to go back to that title.'), hint);
   });
   await step('TC-386 #2', async () => {
     await alice.getByLabel('Session name').fill('x'.repeat(201));
