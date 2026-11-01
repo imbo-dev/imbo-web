@@ -3,7 +3,7 @@ import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "l
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Avatar, SessionName, Sep, Tag, senderAvatar } from "@/components/bits"
+import { agentAvatar, Avatar, SessionName, Sep, Tag } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
 import type { FileRef, Message, Via } from "@/data/contract"
 import type { ApiError } from "@/data/layer"
@@ -16,6 +16,7 @@ import {
   groupOf,
   isMe,
   loadOlder,
+  photoOf,
   recipientOf,
   resend,
   resendTo,
@@ -30,7 +31,7 @@ import { useFollow } from "@/lib/useFollow"
 
 // Messages as bubbles, as in the App. What I sent in person is on the right in the primary color, my picture after it;
 // everything else, my sessions' messages included, is on the left after its sender's picture: a session's product mark,
-// or where it was sent in person from. Above each bubble a heading says who sent it — "Mia orders-api", "Mia · App" —
+// or the picture of whoever sent it in person, from whichever terminal, App or web page. Above each bubble a heading says who sent it — "Mia orders-api", "Mia · App" —
 // and, where it matters, which session or inbox it went to; under it, how its delivery is going.
 
 function Attachments({ files }: { files: FileRef[] }) {
@@ -109,6 +110,14 @@ function Row({ right, picture, children }: { right: boolean; picture: ReactNode;
 
 const Me = ({ s }: { s: State }) => <Avatar kind="person" label={s.account?.name} src={s.account?.avatar_url} />
 
+/** A session's mark; sent in person, the sender's own picture, wherever they sent it from. */
+export const SenderAvatar = ({ s, from, size }: { s: State; from: Message["from"]; size?: "sm" }) =>
+  from.agent ? (
+    <Avatar kind={agentAvatar(from.agent.tool)} tool={from.agent.tool} size={size} />
+  ) : (
+    <Avatar kind="person" label={from.name} src={photoOf(s, from.account_id)} size={size} />
+  )
+
 /** One line under a message, in the caption size: its delivery state or why it wasn't sent. */
 function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error"; children: ReactNode }) {
   return (
@@ -160,7 +169,7 @@ export function MessageRow({ s, m }: { s: State; m: Message }) {
   const to = recipientOf(s, m)
   const right = mine(s, m)
   return (
-    <Row right={right} picture={right ? <Me s={s} /> : <Avatar kind={senderAvatar(m.from)} tool={m.from.agent?.tool} />}>
+    <Row right={right} picture={right ? <Me s={s} /> : <SenderAvatar s={s} from={m.from} />}>
       <header className="flex max-w-full min-w-0 items-baseline gap-2">
         <SenderName s={s} from={m.from} group={m.conversation.group}>
           <Sender owner={m.from.name} session={m.from.agent?.title} via={m.from.via} group={!!m.conversation.group} you={right} />

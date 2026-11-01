@@ -171,8 +171,8 @@ try {
     const checkout = find(wide, 'T437 my checkout');
     const rest = wide.filter((m) => m !== mine);
     ok(
-      "TC-437 #1 bob's chat: my terminal's on the right with my picture after it; bob's and my checkout's on the left after the terminal icon and the Claude Code mark; nothing else of mine on the right",
-      placed(mine, 'right', ME) && placed(bobs, 'left', 'square-terminal') && placed(checkout, 'left', 'mark claude-code') && rest.every((m) => m.side === 'left'),
+      "TC-437 #1 bob's chat: my terminal's on the right with my picture after it; bob's and my checkout's on the left after bob's picture and the Claude Code mark; nothing else of mine on the right",
+      placed(mine, 'right', ME) && placed(bobs, 'left', 'letter B') && placed(checkout, 'left', 'mark claude-code') && rest.every((m) => m.side === 'left'),
       [mine, bobs, checkout].map(say).join(' | ') + ` | ${wide.length} messages, ${wide.filter((m) => m.side === 'right').length} on the right`
     );
   });
@@ -249,7 +249,7 @@ try {
     const right = list.filter((m) => m.side === 'right').map((m) => m.body);
     ok(
       "TC-437 #5 390 px wide: the same sides and pictures; every bubble at least 48 px from the far side, a long one exactly 48",
-      placed(find(list, 'T437 my terminal'), 'right', ME) && placed(find(list, 'T437 from the web'), 'right', ME) && placed(find(list, "T437 bob's terminal"), 'left', 'square-terminal') &&
+      placed(find(list, 'T437 my terminal'), 'right', ME) && placed(find(list, 'T437 from the web'), 'right', ME) && placed(find(list, "T437 bob's terminal"), 'left', 'letter B') &&
         placed(find(list, 'T437 my checkout'), 'left', 'mark claude-code') && right.length === 2 && Math.min(...gaps) === 48,
       `right: ${right.join(', ')}; far-side gaps ${gaps.join(', ')}`
     );

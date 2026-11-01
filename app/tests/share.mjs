@@ -167,7 +167,7 @@ try {
           const kids = [...row.children];
           const col = kids.find((e) => e.tagName === 'DIV');
           // The sender's picture, before the message or after it: a photo, a first letter, a session's product mark, or a
-          // session's or terminal's icon.
+          // session's icon.
           const pic = kids.find((e) => e !== col);
           const icon = pic?.dataset.tool ? `mark ${pic.dataset.tool}` : pic?.querySelector('svg')?.getAttribute('class')?.match(/lucide-(bot|square-terminal)\b/)?.[1];
           const [label, ...more] = col.children;
@@ -319,9 +319,9 @@ try {
     const t = clock(BOB_DAY);
     const mine = me.body === T430 && me.right === 52 && me.left > 52 && me.avatar === 'right' && me.pic === 'letter A' && me.gap === 8 && /^alice terminal \d\d:\d\d$/.test(me.label);
     const sessions = [a1, a2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'mark claude-code' && /^alice checkout \d\d:\d\d$/.test(i.label));
-    const theirs = [b1, b2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'square-terminal' && /^bob terminal \d\d:\d\d$/.test(i.label));
+    const theirs = [b1, b2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'letter B' && /^bob terminal \d\d:\d\d$/.test(i.label));
     ok(
-      'TC-430 #3 alice\'s own on the right with her picture after it; her checkout\'s on the left after the Claude Code mark, bob\'s after the terminal icon; no icon before a name; account names, never You',
+      'TC-430 #3 alice\'s own on the right with her picture after it; her checkout\'s on the left after the Claude Code mark, bob\'s after his picture; no icon before a name; account names, never You',
       mine && sessions && theirs && bobCard.items.every((i) => !i.tool) && a1.label.endsWith(t) && !/\bYou\b/.test(bobCard.text) && b2.body === '午饭后我把 v2.3 部署到生产，你那边还有要改的吗？',
       bobCard.items.map((i) => `${i.label} L${i.left} R${i.right} ${i.avatar}:${i.pic}`).join(' | ')
     );
@@ -373,8 +373,8 @@ try {
       `${JSON.stringify(c.count)} ${c.items.map((i) => i.divider).join(' | ')}`
     );
     ok(
-      'TC-431 #3 bob and carol on the left after the terminal icon, alice on the right as alice with her picture after it',
-      [b, k].every((i) => i.avatar === 'left' && i.pic === 'square-terminal' && i.left === 52) && a.avatar === 'right' && a.pic === 'letter A' && a.gap === 8 && a.right === 52 &&
+      'TC-431 #3 bob and carol on the left after their own pictures, alice on the right as alice with her picture after it',
+      b.pic === 'letter B' && k.pic === 'letter C' && [b, k].every((i) => i.avatar === 'left' && i.left === 52) && a.avatar === 'right' && a.pic === 'letter A' && a.gap === 8 && a.right === 52 &&
         /^bob terminal/.test(b.label) && /^carol terminal/.test(k.label) && /^alice terminal/.test(a.label) && !/\bYou\b/.test(c.text),
       c.items.map((i) => `${i.label} L${i.left} R${i.right} ${i.avatar}:${i.pic}`).join(' | ')
     );

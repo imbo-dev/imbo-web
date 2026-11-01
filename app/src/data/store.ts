@@ -893,6 +893,13 @@ export const conversationWith = (s: State, accountId: number) =>
 
 export const contactOf = (s: State, accountId: number) => dataOf(s.contacts)?.find((p) => p.id === accountId)
 export const groupOf = (s: State, groupId: number) => dataOf(s.groups)?.find((g) => g.id === groupId)
+/** An account's picture, from wherever this page last saw it: me, a contact, a direct chat's peer or a group member. */
+export const photoOf = (s: State, accountId: number) =>
+  isMe(s, accountId)
+    ? s.account?.avatar_url
+    : (contactOf(s, accountId)?.avatar_url ??
+      dataOf(s.conversations)?.find((c) => c.peer?.id === accountId)?.peer?.avatar_url ??
+      dataOf(s.groups)?.flatMap((g) => g.members).find((m) => m.id === accountId)?.avatar_url)
 /** The peer's session a direct chat sends to, while it's still one of theirs; otherwise their terminal inbox. */
 export const chosenSession = (s: State, c: Conversation) => {
   const short = s.sendTo[c.id]

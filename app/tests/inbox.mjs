@@ -283,8 +283,8 @@ try {
       await shot(page, 'tc454-2');
       const okay = (h, src, pic) => h.text.startsWith(`bob ${src} to alice's inbox`) && h.sep && h.pic === pic;
       ok(
-        "TC-454 #2 bob | terminal, bob | App, bob | Web with the terminal, phone and browser icons, all to alice's inbox; the one to checkout says to alice checkout",
-        okay(term, 'terminal', 'square-terminal') && okay(app, 'App', 'smartphone') && okay(web, 'Web', 'globe') && /^bob terminal to alice checkout/.test(checkout.text),
+        "TC-454 #2 bob | terminal, bob | App, bob | Web, all with bob's picture, all to alice's inbox; the one to checkout says to alice checkout",
+        okay(term, 'terminal', 'letter B') && okay(app, 'App', 'letter B') && okay(web, 'Web', 'letter B') && /^bob terminal to alice checkout/.test(checkout.text),
         [term, app, web, checkout].map(say).join(' | ')
       );
     });
@@ -305,7 +305,7 @@ try {
       const bob = await heading(page, 'Deploy window starts');
       const carol = await heading(page, 'Billing webhooks');
       await shot(page, 'tc454-4');
-      ok('TC-454 #4 group: App #bob with the phone icon; Terminal #bob; Terminal #carol', /^App #bob/.test(app.text) && app.pic === 'smartphone' && /^Terminal #bob/.test(bob.text) && /^Terminal #carol/.test(carol.text), [app, bob, carol].map(say).join(' | '));
+      ok("TC-454 #4 group: App #bob, Terminal #bob, Terminal #carol, each with its sender's picture", /^App #bob/.test(app.text) && app.pic === 'letter B' && /^Terminal #bob/.test(bob.text) && bob.pic === 'letter B' && /^Terminal #carol/.test(carol.text) && carol.pic === 'letter C', [app, bob, carol].map(say).join(' | '));
     });
     await step('TC-454 #5', async () => {
       await openChat(page, 'bob', false);
@@ -319,13 +319,14 @@ try {
           const label = name.closest('p').firstElementChild;
           const row = name.closest('p').parentElement.parentElement;
           const sep = [...label.querySelectorAll('span[aria-hidden="true"]')].some((e) => Math.round(e.getBoundingClientRect().height) === 10);
-          const svg = row.querySelector(':scope > span svg')?.getAttribute('class')?.match(/lucide-([a-z-]+)/)?.[1];
-          return `${label.innerText.replace(/\s+/g, ' ').trim()}${sep ? ' [hairline]' : ''} ${svg}`;
+          const pic = row.querySelector(':scope > span, :scope > img');
+          const shown = pic?.tagName === 'IMG' ? 'photo' : pic?.querySelector('svg')?.getAttribute('class')?.match(/lucide-([a-z-]+)/)?.[1] ?? `letter ${pic?.textContent}`;
+          return `${label.innerText.replace(/\s+/g, ' ').trim()}${sep ? ' [hairline]' : ''} ${shown}`;
         })
       );
       await shot(page, 'tc454-5');
-      const want = [/^bob terminal \[hairline\] square-terminal$/, /^bob App \[hairline\] smartphone$/, /^bob Web \[hairline\] globe$/];
-      ok('TC-454 #5 the picture: bob | terminal, bob | App, bob | Web with the terminal, phone and browser icons', items.length === 3 && want.every((re, i) => re.test(items[i])), items.join(' | '));
+      const want = [/^bob terminal \[hairline\] letter B$/, /^bob App \[hairline\] letter B$/, /^bob Web \[hairline\] letter B$/];
+      ok("TC-454 #5 the picture: bob | terminal, bob | App, bob | Web, all with bob's picture", items.length === 3 && want.every((re, i) => re.test(items[i])), items.join(' | '));
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Cancel' }).click();
     });

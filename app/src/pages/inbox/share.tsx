@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Copy, Download, FileText, Share2, X } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar, Sep, senderAvatar } from "@/components/bits"
+import { Avatar, Sep } from "@/components/bits"
 import { Button } from "@/components/ui/button"
 import { DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { Wordmark } from "@/components/Wordmark"
@@ -11,7 +11,7 @@ import { conversationTitle, type State } from "@/data/store"
 import { t } from "@/i18n"
 import { cn } from "@/lib/cn"
 import { clock, fullDate, langOf, sameDay } from "@/lib/format"
-import { mine, sourceOf } from "./messages"
+import { mine, SenderAvatar, sourceOf } from "./messages"
 
 // Picked messages drawn as one picture to share, the same picture as the App's: the chat's picture and name, the
 // messages as bubbles — what the sharer sent in person on the right with their picture after it, everything else, their
@@ -33,7 +33,7 @@ function Item({ s, m }: { s: State; m: Message }) {
   const cut = chars.length > MAX_CHARS
   return (
     <div className={cn("flex items-end gap-2 py-1.5", right ? "justify-end pl-8" : "pr-8")}>
-      {!right && <Avatar kind={senderAvatar(m.from)} tool={m.from.agent?.tool} size="sm" />}
+      {!right && <SenderAvatar s={s} from={m.from} size="sm" />}
       <div className={cn("flex min-w-0 flex-col gap-1", right ? "items-end" : "items-start")}>
         <p className="flex max-w-full items-baseline gap-1.5 text-caption text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1.5">
