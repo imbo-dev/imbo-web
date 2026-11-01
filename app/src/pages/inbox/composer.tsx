@@ -118,6 +118,44 @@ function mentionAt(text: string, caret: number) {
   return m ? { start: caret - m[1].length - 1, query: m[1] } : undefined
 }
 
+/**
+ * Where the box has an @name: an @ where the list opens (as in mentionAt), then a row's name or what picking it writes,
+ * in any case; the longest wins, and a name ending in a letter or digit can't run on into another one, - or _ (RULE-015).
+ */
+function namedAt(text: string, all: Mention[]) {
+  const names = [...new Set(all.flatMap((x) => [x.name, x.insert]).map((n) => n.toLowerCase()))].filter(Boolean)
+  const spans: [number, number][] = []
+  for (const m of text.matchAll(/(?:^|[^\w.+-])@/g)) {
+    const from = m.index + m[0].length
+    let best = 0
+    for (const n of names) {
+      if (text.slice(from, from + n.length).toLowerCase() !== n) continue
+      if (/[A-Za-z0-9]$/.test(n) && /^[A-Za-z0-9_-]/.test(text.slice(from + n.length))) continue
+      best = Math.max(best, n.length)
+    }
+    if (best) spans.push([from - 1, from + best])
+  }
+  return spans
+}
+
+/**
+ * A deletion that reaches into an @name takes all of it (REQ-107), so no half name is left to read as text; the space
+ * after the name goes on its own. `next` is `prev` with one run of characters gone; undefined when nothing changes.
+ */
+function deleteWhole(prev: string, next: string, all: Mention[]) {
+  if (next.length >= prev.length) return undefined
+  let head = 0
+  while (head < next.length && prev[head] === next[head]) head++
+  let tail = 0
+  while (tail < next.length - head && prev[prev.length - 1 - tail] === next[next.length - 1 - tail]) tail++
+  if (head + tail !== next.length) return undefined
+  let [from, to] = [head, prev.length - tail]
+  for (const [s, e] of namedAt(prev, all)) {
+    if (s < to && e > from) [from, to] = [Math.min(from, s), Math.max(to, e)]
+  }
+  return from === head && to === prev.length - tail ? undefined : { text: prev.slice(0, from) + prev.slice(to), cursor: from }
+}
+
 /** `to`: the API-015 address in a chat; a session pane sends to its own session. `label` names who it goes to. */
 export function Composer({ s, threadKey, to, label, note, group }: { s: State; threadKey: ThreadKey; to: string; label: string; note?: string; group?: Group }) {
   const [text, setText] = useState(() => draftOf(threadKey))
@@ -264,6 +302,13 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
               rows={1}
               value={text}
               onChange={(e) => {
+                const whole = mentions.length ? deleteWhole(text, e.target.value, mentions) : undefined
+                if (whole) {
+                  placeAt.current = whole.cursor
+                  update(whole.text)
+                  if (!mentionAt(whole.text, whole.cursor)) setClosedAt(undefined)
+                  return
+                }
                 update(e.target.value)
                 track(e.target)
                 if (!mentionAt(e.target.value, e.target.selectionStart)) setClosedAt(undefined)

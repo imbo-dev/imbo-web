@@ -1,5 +1,5 @@
-// TC-460 (docs/TEST.md): typing @ in a group chat lists the other members and the sessions that get the group's messages,
-// filters them, and puts in a name, against the local test server. Setup is the TC's 前置 (§3「群里 @ 人与 @ 列表」); the
+// TC-460 and TC-471 (docs/TEST.md): typing @ in a group chat lists the other members and the sessions that get the group's messages,
+// filters them, puts in a name and takes it out whole, against the local test server. Setup is the TC's 前置 (§3「群里 @ 人与 @ 列表」); the
 // page must be http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step, then any console errors the steps don't
 // expect; carol's second session is removed when done. Codes are read from $L/server.log and never printed.
 // usage: node web/app/tests/mention.mjs <screenshot dir>
@@ -158,6 +158,53 @@ try {
       inbox >= 0 && head > inbox && lines[head + 1]?.includes('T460') && (await box.inputValue()) === '',
       `${lines[inbox] ?? 'no Inbox line'} | ${(lines[head] ?? 'no alice · Web @ release-team line').trim()} | ${(lines[head + 1] ?? '').trim()}`
     );
+  });
+  // TC-471: Backspace that reaches into an @name takes all of it, in the same window, after TC-460 #7.
+  const reads = async (want) => {
+    await wait(200);
+    const v = await box.inputValue();
+    return [v === want, JSON.stringify(v)];
+  };
+  await step('TC-471 #1', async () => {
+    await restart('@car');
+    await box.press('Enter');
+    const [same, v] = await reads('@carol ');
+    ok('TC-471 #1 @car + Enter: @carol and a space, the list closes', same && !(await shown()), v);
+  });
+  await step('TC-471 #2', async () => {
+    await box.press('Backspace');
+    ok('TC-471 #2 Backspace: the space after the name goes first', ...(await reads('@carol')));
+  });
+  await step('TC-471 #3', async () => {
+    await box.press('Backspace');
+    ok('TC-471 #3 Backspace again: all of @carol goes at once', ...(await reads('')));
+  });
+  await step('TC-471 #4', async () => {
+    await restart('看 @carol 和 @billing 吧');
+    for (let n = 0; n < 6; n++) await box.press('ArrowLeft');
+    await box.press('Backspace');
+    const [same, v] = await reads('看 @carol 和  吧');
+    const open = await shown();
+    await box.pressSequentially('x');
+    const [after, w] = await reads('看 @carol 和 x 吧');
+    ok('TC-471 #4 Backspace inside @billing: all of it goes, the list closes, the caret is where it was', same && !open && after, `${v} then ${w}`);
+  });
+  await step('TC-471 #5', async () => {
+    await restart('@CAROL');
+    await box.press('Backspace');
+    ok('TC-471 #5 @CAROL typed by hand: goes whole too', ...(await reads('')));
+  });
+  await step('TC-471 #6', async () => {
+    await restart('@car');
+    await box.press('Backspace');
+    ok("TC-471 #6 @car isn't a name: one letter at a time", ...(await reads('@ca')));
+  });
+  await step('TC-471 #7', async () => {
+    await restart('@carol 好');
+    for (let n = 0; n < 4; n++) await box.press('Shift+ArrowLeft');
+    await box.press('Backspace');
+    ok('TC-471 #7 a selection over part of the name takes the whole name', ...(await reads('')));
+    await box.fill('');
   });
   await step('TC-460 #8', async () => {
     await openChat(page, 'bob');
