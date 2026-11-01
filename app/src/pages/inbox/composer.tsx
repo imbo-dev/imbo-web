@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
 import { ArrowUp, Bot, ChevronDown, CircleAlert, FileText, Inbox, Paperclip, Pause, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -156,6 +156,30 @@ function deleteWhole(prev: string, next: string, all: Mention[]) {
   return from === head && to === prev.length - tail ? undefined : { text: prev.slice(0, from) + prev.slice(to), cursor: from }
 }
 
+/**
+ * Behind the box, its text laid out the same way, see-through but for a highlight under each @name (REQ-107); a
+ * textarea can't style part of its text. It scrolls with the box; a closing line break gets a space so both scroll as far.
+ */
+function Named({ text, spans, ref }: { text: string; spans: [number, number][]; ref: RefObject<HTMLDivElement | null> }) {
+  const parts: ReactNode[] = []
+  let at = 0
+  for (const [s, e] of spans) {
+    parts.push(
+      text.slice(at, s),
+      <mark key={s} className="rounded-sm bg-accent text-transparent">
+        {text.slice(s, e)}
+      </mark>
+    )
+    at = e
+  }
+  parts.push(text.slice(at) + (text.endsWith("\n") ? " " : ""))
+  return (
+    <div ref={ref} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden px-3 py-2 text-body break-words whitespace-pre-wrap text-transparent">
+      {parts}
+    </div>
+  )
+}
+
 /** `to`: the API-015 address in a chat; a session pane sends to its own session. `label` names who it goes to. */
 export function Composer({ s, threadKey, to, label, note, group }: { s: State; threadKey: ThreadKey; to: string; label: string; note?: string; group?: Group }) {
   const [text, setText] = useState(() => draftOf(threadKey))
@@ -183,6 +207,11 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
   const at = typing ? `${typing.start}:${typing.query}` : ""
   const active = nav.at === at && nav.i < shown.length ? nav.i : 0
   const placeAt = useRef<number>(undefined)
+  const spans = useMemo(() => (mentions.length ? namedAt(text, mentions) : []), [text, mentions])
+  const named = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (named.current && area.current) named.current.scrollTop = area.current.scrollTop
+  })
   // Groups load at sign-in; opening a group's chat brings its members and their sessions up to date for @.
   const groupId = group?.id
   useEffect(() => {
@@ -297,6 +326,7 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
         <div className="relative min-w-0 flex-1">
           {shown.length > 0 && <MentionList id={listId} rows={shown} active={active} onPick={pick} onHover={(i) => setNav({ at, i })} />}
           <div ref={shell} className="composer-shell state-layer focus-ring is-field rounded-md border border-input bg-muted">
+            {spans.length > 0 && <Named text={text} spans={spans} ref={named} />}
             <textarea
               ref={area}
               rows={1}
@@ -314,6 +344,7 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
                 if (!mentionAt(e.target.value, e.target.selectionStart)) setClosedAt(undefined)
               }}
               onSelect={(e) => track(e.currentTarget)}
+              onScroll={(e) => named.current && (named.current.scrollTop = e.currentTarget.scrollTop)}
               onFocus={(e) => track(e.currentTarget)}
               onBlur={() => setCaret(undefined)}
               onKeyDown={onKeyDown}
@@ -332,7 +363,7 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
               aria-autocomplete={group ? "list" : undefined}
               aria-controls={shown.length ? listId : undefined}
               aria-activedescendant={shown.length ? `${listId}-${active}` : undefined}
-              className="composer block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
+              className="composer relative block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
             />
           </div>
         </div>

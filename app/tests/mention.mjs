@@ -1,5 +1,5 @@
-// TC-460 and TC-471 (docs/TEST.md): typing @ in a group chat lists the other members and the sessions that get the group's messages,
-// filters them, puts in a name and takes it out whole, against the local test server. Setup is the TC's 前置 (§3「群里 @ 人与 @ 列表」); the
+// TC-460, TC-471 and TC-476 (docs/TEST.md): typing @ in a group chat lists the other members and the sessions that get the group's
+// messages, filters them, puts in a name, highlights it and takes it out whole, against the local test server. Setup is the TC's 前置 (§3「群里 @ 人与 @ 列表」); the
 // page must be http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step, then any console errors the steps don't
 // expect; carol's second session is removed when done. Codes are read from $L/server.log and never printed.
 // usage: node web/app/tests/mention.mjs <screenshot dir>
@@ -204,6 +204,36 @@ try {
     for (let n = 0; n < 4; n++) await box.press('Shift+ArrowLeft');
     await box.press('Backspace');
     ok('TC-471 #7 a selection over part of the name takes the whole name', ...(await reads('')));
+    await box.fill('');
+  });
+  // TC-476: the layer behind the box marks each @name; it must lay out and scroll as the box does.
+  const marks = () =>
+    box.evaluate((ta) => {
+      const layer = ta.previousElementSibling?.matches('[aria-hidden]') ? ta.previousElementSibling : undefined;
+      const r = ta.getBoundingClientRect();
+      return {
+        texts: layer ? [...layer.querySelectorAll('mark')].map((m) => m.textContent) : [],
+        // Each mark: whether it shows within the box.
+        inside: layer ? [...layer.querySelectorAll('mark')].map((m) => { const b = m.getBoundingClientRect(); return b.top >= r.top && b.bottom <= r.bottom; }) : [],
+        tall: layer ? [layer.scrollHeight, ta.scrollHeight] : [],
+        scrolled: layer ? [layer.scrollTop, ta.scrollTop] : [],
+        colors: layer ? [getComputedStyle(layer.querySelector('mark')).backgroundColor, getComputedStyle(ta.parentElement).backgroundColor] : [],
+      };
+    });
+  await step('TC-476 #1', async () => {
+    await restart('看 @carol 和 @zz 吧');
+    await wait(200);
+    const m = await marks();
+    await shot(page, 'tc476-1');
+    ok('TC-476 #1 only @carol is marked, the layer lays out as the box does', m.texts.join('|') === '@carol' && m.tall[0] === m.tall[1] && m.colors[0] !== m.colors[1], JSON.stringify(m));
+  });
+  await step('TC-476 #2', async () => {
+    for (let n = 0; n < 8; n++) await box.press('Shift+Enter');
+    await box.pressSequentially('@billing');
+    await wait(300);
+    const m = await marks();
+    await shot(page, 'tc476-2');
+    ok('TC-476 #2 nine lines down: the box scrolls, @billing is still marked under it', m.texts.join('|') === '@carol|@billing' && m.scrolled[1] > 0 && m.scrolled[0] === m.scrolled[1] && m.inside.join() === 'false,true', JSON.stringify(m));
     await box.fill('');
   });
   await step('TC-460 #8', async () => {
