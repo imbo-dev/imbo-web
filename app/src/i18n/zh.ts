@@ -92,6 +92,7 @@ export const zh = {
   "Details": "详情",
   "Ends {date}": "{date} 结束",
   "Paid until {date}": "已付到 {date}",
+  "Gifted until {date}": "赠送到 {date}",
   "Inactive since {date}: your sessions can't send messages until you subscribe.": "{date} 起已停用：订阅前，你的会话不能发消息。",
   "Chats": "对话",
   "Sessions": "会话",

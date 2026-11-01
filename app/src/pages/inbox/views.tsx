@@ -991,6 +991,14 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
       )
     case "paid":
       if (!sub) return <p>{t("Paid until {date}", { date: longDate(b.access.until!) })}</p>
+      // A gift (ADR-060) has nothing to manage, and buying stays open.
+      if (sub.provider === "gift")
+        return (
+          <>
+            <p>{t("Gifted until {date}", { date: longDate(sub.paid_until) })}</p>
+            {!confirming && <Subscribe />}
+          </>
+        )
       if (sub.status === "past_due")
         return (
           <>
