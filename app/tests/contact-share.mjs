@@ -265,7 +265,11 @@ try {
         body: JSON.stringify({ email: 'alice@imbo.test', code, device_name: 't496-old', platform: 'macos', client_version: '0.2.17' }),
       });
       if (r.status !== 200) throw new Error(`auth/verify ${r.status}`);
+      // The drawer shows the computers it had while it fetches them again: read it once that answer is in.
+      const fetched = page.waitForResponse((r) => new URL(r.url()).pathname === '/v1/devices');
       await s.getByRole('button', { name: 'Change…' }).click();
+      await fetched;
+      await wait(200);
       await row(d, 'checkout').waitFor();
       const computers = (await d.locator('li', { hasText: 'Every session on it' }).allInnerTexts()).map((x) => x.split('\n')[0].trim());
       const text = (await d.innerText()).replace(/\s+/g, ' ');
@@ -277,7 +281,11 @@ try {
       await d.waitFor({ state: 'detached' });
       const old = (await api('alice', 'GET', '/v1/devices'))[1].devices.find((x) => x.name === 't496-old');
       const [st] = await api('alice', 'DELETE', `/v1/devices/${old.id}`);
+      // The drawer shows the computers it had while it fetches them again: read it once that answer is in.
+      const fetched = page.waitForResponse((r) => new URL(r.url()).pathname === '/v1/devices');
       await s.getByRole('button', { name: 'Change…' }).click();
+      await fetched;
+      await wait(200);
       await row(d, 'checkout').waitFor();
       const computers = (await d.locator('li', { hasText: 'Every session on it' }).allInnerTexts()).map((x) => x.split('\n')[0].trim());
       ok('TC-496 #8 t496-old signed out: the drawer lists seed only', st < 300 && same(computers, ['seed']), `DELETE ${st}; ${computers.join(' | ')}`);
