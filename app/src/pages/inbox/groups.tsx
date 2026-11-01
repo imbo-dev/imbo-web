@@ -573,7 +573,7 @@ function GroupConfirm({
           consequences={[
             [<BellOff size={16} />, t("{name}'s sessions stop getting this group's messages.", { name: v.m.name })],
             [<Undo2 size={16} />, t("Messages to {name} from this group that haven't been delivered yet are taken back.", { name: v.m.name })],
-            [<UserRound size={16} />, t("{name} sees a notice in their terminal inbox. You can invite them again later.", { name: v.m.name })],
+            [<UserRound size={16} />, t("{name} sees a notice in their inbox. You can invite them again later.", { name: v.m.name })],
           ]}
           action={{ label: t("Remove {name}", { name: v.m.name }), busyLabel: t("Removing…"), icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
           onConfirm={() =>

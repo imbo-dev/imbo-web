@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, Block, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Block, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -186,7 +186,7 @@ function groupOf(id: number) {
   if (!g) throw new ApiError(404, "/errors/not-found", `No group ${id}.`)
   return g
 }
-const asMember = (a: Account) => ({ id: a.id, name: a.name, avatar_url: a.avatar_url, active: true })
+const asMember = (a: Account, sessions: AgentRef[] = []) => ({ id: a.id, name: a.name, avatar_url: a.avatar_url, active: true, sessions })
 /** Only the owner may change a group (`/errors/not-owner`). */
 function ownGroup(a: Account, id: number) {
   const g = groupOf(id)
@@ -329,7 +329,7 @@ export const mock = {
     const session = short ? f.contactSessions[to] : undefined
     if (short && !session) throw new ApiError(404, "/errors/session-not-found", `${peer!.name} has no session ${short}.`)
     const conversation = chat.group ? { kind: "group" as const, id: chat.id, group: chat.group } : { kind: "direct" as const, id: chat.id, peer: chat.peer }
-    const m = f.msg({ id: nextId(), conversation, from: f.from(a), ...(!group && { to: session ?? f.terminalOf(peer!.id) }), created_at: new Date().toISOString(), body, files: filesOf(files) })
+    const m = f.msg({ id: nextId(), conversation, from: { ...f.from(a), via: "web" }, ...(!group && { to: session ?? f.terminalOf(peer!.id) }), created_at: new Date().toISOString(), body, files: filesOf(files) })
     append(m)
     if (group)
       later(3000, () => append(f.msg({ id: nextId(), conversation, from: f.from(f.groupAnswer.person, f.groupAnswer.agent), created_at: new Date().toISOString(), body: f.groupAnswer.body }), chat.id))
@@ -349,7 +349,7 @@ export const mock = {
     const a = await sending(body, files)
     const agent = f.myAgents.find((x) => x.id === id)
     if (!agent) throw new ApiError(404, "/errors/not-found", "No such session.")
-    const m = f.msg({ id: nextId(), conversation: f.selfChat, from: f.from(a), to: f.ref(agent), created_at: new Date().toISOString(), body, files: filesOf(files) })
+    const m = f.msg({ id: nextId(), conversation: f.selfChat, from: { ...f.from(a), via: "web" }, to: f.ref(agent), created_at: new Date().toISOString(), body, files: filesOf(files) })
     const online = agent.online || !!woken[id]?.online
     const opens = !online && agent.wakeable
     states[m.id] = online ? "pushed" : "pending"
@@ -414,6 +414,19 @@ export const mock = {
     unread[id] = left
     return marked
   },
+  /** No server to hear from: the demo panel refreshes after what it changes. */
+  events: () => () => {},
+  /** Everything the chat sent Dana's inbox counts as read, however far `upTo` goes. */
+  async markConversationRead(id) {
+    signedIn()
+    await wait(200)
+    const c = f.conversations.find((x) => x.id === id)
+    if (!c) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
+    const marked = c.pending + (controls.pendingExtra[id] ?? 0)
+    c.pending = 0
+    setControls({ pendingExtra: { ...controls.pendingExtra, [id]: 0 } })
+    return marked
+  },
   requests: () => data(() => myRequests.filter((r) => r.status === "pending"), []),
   sentRequests: () => data(() => outgoing.filter((r) => r.status === "pending"), []),
   /**
@@ -461,7 +474,7 @@ export const mock = {
     const r = waiting(id)
     settle(id, "accepted")
     if (r.group) {
-      f.groups.push({ ...r.group, owner: r.from, members: [{ ...r.from, active: true }, asMember(a)], my_sessions: [] })
+      f.groups.push({ ...r.group, owner: r.from, members: [{ ...r.from, active: true, sessions: [] }, asMember(a)], my_sessions: [] })
       f.conversations.push({ id: nextChatId(), kind: "group", group: r.group, pending: 0 })
       return { group: r.group }
     }
@@ -508,7 +521,8 @@ export const mock = {
     if (n.includes("/") || n.startsWith("#") || /\p{Cc}/u.test(n))
       throw new ApiError(400, "/errors/invalid-request", "Group name cannot contain a slash, start with # or contain control characters.")
     const ref = { id: nextGroupId++, name: n }
-    const g: Group = { ...ref, owner: { id: a.id, name: a.name }, members: [asMember(a)], my_sessions: f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref) }
+    const mine = f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref)
+    const g: Group = { ...ref, owner: { id: a.id, name: a.name }, members: [asMember(a, mine)], my_sessions: mine }
     f.groups.push(g)
     f.conversations.push({ id: nextChatId(), kind: "group", group: ref, pending: 0 })
     return g
@@ -582,7 +596,7 @@ export const mock = {
     await wait(400)
     const g = groupOf(groupId)
     const mine = f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref)
-    f.groups[f.groups.indexOf(g)] = { ...g, my_sessions: mine }
+    f.groups[f.groups.indexOf(g)] = { ...g, members: g.members.map((m) => (m.id === f.account.id ? { ...m, sessions: mine } : m)), my_sessions: mine }
     return mine
   },
   /** Same rules as the server: not my email now, not another account's (mia@example.com), one code a minute. */
@@ -807,11 +821,9 @@ function banAccount(id: number) {
   return x.subscription?.status !== "active"
 }
 
-/** What a poll would bring in: a message to an offline session, so it also waits for delivery. */
+/** What a poll would bring in: a message to an offline session, so it waits for it to come online (API-031 `state`). */
 export function receive() {
-  const m = f.incomingMessage(controls.live.length)
-  const c = m.conversation.id
-  setControls({ live: [...controls.live, m], pendingExtra: { ...controls.pendingExtra, [c]: (controls.pendingExtra[c] ?? 0) + 1 } })
+  setControls({ live: [...controls.live, f.incomingMessage(controls.live.length)] })
 }
 
 /** The Demo panel's shortcut past sign-in, as Dana or as the admin. */

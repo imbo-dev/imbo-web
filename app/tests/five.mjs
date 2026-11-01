@@ -48,6 +48,13 @@ offline.forEach((t, i) => as('alice', `dev fake-session ${sid(i + 31)} --title $
 offline.forEach((t, i) => as('alice', `dev fake-session ${sid(i + 31)} --title ${t} --remove`));
 
 let current = 'login';
+// When alice's windows (one sign-in) called the server. It takes at most 600 calls a minute per web sign-in; this script
+// makes about that many in its first minute, which a person doesn't, so the last steps wait for that minute to pass
+// instead of loading pages into the limit.
+const aliceHits = [];
+const underLimit = async () => {
+  while (aliceHits.filter((t) => t > Date.now() - 60_000).length > 450) await wait(1000);
+};
 const consoleErrors = [];
 const expected = {
   'login alice': /status of 401 /,
@@ -67,6 +74,7 @@ const step = async (id, fn) => {
 
 try {
   const watch = (page, who) => {
+    if (who.startsWith('alice')) page.on('request', (r) => r.url().includes('/v1/') && aliceHits.push(Date.now())).on('websocket', () => aliceHits.push(Date.now()));
     page.on('console', (m) => m.type() === 'error' && consoleErrors.push([current, `${who}: ${m.text()}`]));
     page.on('pageerror', (e) => consoleErrors.push([current, `${who} pageerror: ${e.message}`]));
   };
@@ -274,8 +282,10 @@ try {
   // TC-422: New group lists 20 sessions, online first, then 20 more each time
   const rows = (d) => d.locator('section').filter({ has: d.page().getByRole('heading', { name: /^Your sessions/ }) }).locator('li');
   const titles = (d) => rows(d).evaluateAll((ls) => ls.map((l) => l.querySelector('span span')?.textContent ?? ''));
-  // API-014's order, read when the picker is open: a seeded session can go offline while the script runs.
+  // API-014's order, read when the picker is open: a seeded session can go offline while the script runs, and then
+  // checkout may come last, so step 3 takes the last one that isn't checkout.
   let order = [];
+  let last;
   await step('TC-422 #1', async () => {
     await alice.goto(base + '/chats');
     await alice.getByRole('button', { name: 'New group' }).click();
@@ -291,6 +301,7 @@ try {
     const firstOff = states.indexOf(false);
     const [, now] = await api('alice', 'GET', '/v1/agents');
     order = now.agents.map((a) => a.title);
+    last = order.filter((x) => x !== 'checkout').at(-1);
     const up = now.agents.filter((a) => a.online).length;
     ok('TC-422 #1 20 sessions, online first, in API-014 order; Load more, 6 left',
       t.length === 20 && JSON.stringify(t) === JSON.stringify(order.slice(0, 20)) && up >= 14 && firstOff === up && states.slice(firstOff).every((s) => !s) && order.length === 26 && /^Load more\s+6 left$/.test(label.trim()),
@@ -309,7 +320,7 @@ try {
   await step('TC-422 #3', async () => {
     const d = dialog(alice);
     await d.getByLabel('Group name').fill('t422');
-    await rows(d).filter({ hasText: order[25] }).click();
+    await rows(d).filter({ hasText: last }).click();
     await rows(d).filter({ hasText: 'checkout' }).click();
     await d.getByRole('button', { name: 'Create group' }).click();
     await d.waitFor({ state: 'detached' });
@@ -328,11 +339,11 @@ try {
     await rows(d).first().waitFor();
     const t = await titles(d);
     const checked = await rows(d).evaluateAll((ls) => ls.map((l) => l.querySelector('[role=checkbox]')?.getAttribute('aria-checked')));
-    const rest = order.filter((x) => x !== 'checkout' && x !== order[25]);
+    const rest = order.filter((x) => x !== 'checkout' && x !== last);
     const label = await d.getByRole('button', { name: /^Load more sessions/ }).innerText();
     await shot(alice, 'tc423-1');
     ok('TC-423 #1 the two in the group first and ticked, then the rest in order, 20 shown, Load more, 6 left',
-      new Set(t.slice(0, 2)).size === 2 && t.slice(0, 2).every((x) => ['checkout', order[25]].includes(x)) && checked.slice(0, 2).every((c) => c === 'true') && checked.slice(2).every((c) => c === 'false') &&
+      new Set(t.slice(0, 2)).size === 2 && t.slice(0, 2).every((x) => ['checkout', last].includes(x)) && checked.slice(0, 2).every((c) => c === 'true') && checked.slice(2).every((c) => c === 'false') &&
         JSON.stringify(t.slice(2)) === JSON.stringify(rest.slice(0, 18)) && t.length === 20 && /6 left/.test(label),
       `${t.slice(0, 3).join(', ')}…, ${t.length} shown, "${label}"`);
   });
@@ -578,6 +589,7 @@ try {
     await d.waitFor({ state: 'detached' });
   });
   await step('TC-426 #6', async () => {
+    await underLimit();
     const p = await sameUser(alice, 'alice-zh-phone', { width: 390, height: 844 }, 'en-US');
     await p.goto(base + '/chats');
     await p.evaluate(() => localStorage.setItem('imbo.language', 'zh'));
@@ -599,6 +611,7 @@ try {
     ok('TC-426 #6 390 wide in Chinese: nothing runs past the window', !Object.keys(wide).length, JSON.stringify(wide));
   });
   await step('TC-426 #7', async () => {
+    await underLimit();
     await alice.goto(base + '/account');
     // From the keyboard: the arrow key moves to 跟随系统, Space picks it, and focus stays on it after the page redraws.
     await alice.getByRole('radio', { name: '简体中文' }).focus();
@@ -613,6 +626,7 @@ try {
       lang[0] === 'en' && lang[1] === 'system' && lang[2] === '/account' && f === 'Follow system', `${JSON.stringify(lang)} focus ${f}`);
   });
   await step('TC-426 #8', async () => {
+    await underLimit();
     const p = await sameUser(alice, 'alice-zh', { width: 1280, height: 800 }, 'zh-CN');
     await p.goto(base + '/account');
     await p.getByRole('heading', { name: '账号', exact: true }).first().waitFor();

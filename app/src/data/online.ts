@@ -73,6 +73,46 @@ export const online = {
     }),
   renameAgent: async (id, title) => (await call(c.agentRenamed, "PUT", `/v1/agents/${encodeURIComponent(id)}/title`, { title })).agent,
   markRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/agents/${encodeURIComponent(id)}/read`, { up_to })).marked,
+  markConversationRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/conversations/${id}/read`, { up_to })).marked,
+  events: (changed) => {
+    // Same host as every other call: through the dev server's proxy, or api.imbo.dev, which gets the session cookie too.
+    const url = `${API ? API.replace(/^http/, "ws") : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`}/v1/events`
+    const waits = [1, 2, 5, 10, 30]
+    let ws: WebSocket | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let tries = 0
+    let over = false
+    const open = () => {
+      ws = new WebSocket(url)
+      ws.onopen = () => {
+        // What changed while it was down was never told.
+        if (tries) changed("all")
+        tries = 0
+      }
+      ws.onmessage = (e) => {
+        let frame: unknown
+        try {
+          frame = JSON.parse(e.data)
+        } catch {
+          return
+        }
+        const p = c.changed.safeParse(frame)
+        if (p.success) changed(p.data.area)
+      }
+      ws.onclose = (e) => {
+        if (over) return
+        // 4401: the sign-in ended. Fetching again finds that out and signs this page out, which closes this for good.
+        if (e.code === 4401) return changed("all")
+        timer = setTimeout(open, waits[Math.min(tries++, waits.length - 1)] * 1000)
+      }
+    }
+    open()
+    return () => {
+      over = true
+      clearTimeout(timer)
+      ws?.close()
+    }
+  },
   requests: async () => (await get(c.requests, "/v1/requests")).requests,
   sentRequests: async () => (await get(c.requests, "/v1/requests?direction=out")).requests,
   askContact: (to, note) => call(c.contactAsked, "POST", "/v1/contacts/requests", { ...to, note: note || undefined }),

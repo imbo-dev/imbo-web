@@ -165,11 +165,11 @@ try {
     const btn = await page.getByRole('button', { name: /^Sending to/ }).innerText();
     ok('TC-162 #1 direct chat defaults to the inbox', ph === "Message bob's inbox" && btn.trim() === 'Inbox', `${ph} / ${btn}`);
   });
-  await step("TC-162 #2 sent to bob's terminal", async () => {
+  await step("TC-162 #2 sent to bob's inbox", async () => {
     await send('T162 lunch is fine');
-    await rows('T162 lunch is fine').getByText('to bob Terminal').waitFor({ timeout: 6000 });
+    await rows('T162 lunch is fine').getByText("to bob's inbox").waitFor({ timeout: 6000 });
     await page.waitForFunction(() => !document.body.innerText.includes('Sending…'), null, { timeout: 6000 });
-    ok("TC-162 #2 sent to bob's terminal", (await rows('T162 lunch is fine').count()) === 1);
+    ok("TC-162 #2 sent to bob's inbox", (await rows('T162 lunch is fine').count()) === 1);
   });
   await step('TC-162 #3 bob reads it in his terminal', async () => {
     const inbox = as('bob', 'inbox');

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Request, Uploaded } from "./contract"
+import type { Accepted, Account, Area, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Request, Uploaded } from "./contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { t } from "@/i18n"
@@ -162,7 +162,7 @@ async function loadSent() {
 }
 
 export const retry = (key: ListKey) => load(key)
-/** Opening the Sessions or Contacts tab brings presence up to date; opening a group's members, who's in it. */
+/** Opening the Sessions or Contacts tab brings presence up to date; opening a group's members or its chat, who's in it. */
 export function refreshList(key: "agents" | "contacts" | "blocks" | "devices" | "groups") {
   load(key, true)
   if (key === "contacts") loadRequests(), loadSent()
@@ -244,29 +244,37 @@ async function fetchNewer(key: ThreadKey) {
   if (added.some((m) => !m.from_me)) markShown(key, true)
 }
 
-const readUpTo: Record<string, number> = {}
+const readUpTo = new Map<ThreadKey, number>()
 /**
- * An open session pane counts what it shows as read, which takes the session's replies out of `imbo inbox`; not while
- * the tab is in the background (FLOW-WEB-SEND S9). `arrived`: new messages just came in, so the unread count in the
- * session list is not up to date yet.
+ * An open chat or session pane counts what it shows as read; not while the tab is in the background. In a session pane
+ * that takes the session's replies out of `imbo inbox` (FLOW-WEB-SEND S9); in a chat, what it sent my inbox, which takes
+ * the chat's red dot away (API-078, FLOW-WEB-CHAT S1). `arrived`: new messages just came in, so the count in the list is
+ * not up to date yet.
  */
 async function markShown(key: ThreadKey, arrived = false) {
   const t = state.threads[key]
-  if (!key.startsWith("a:") || key !== openKey || document.hidden || t?.status !== "ready") return
+  if (key.startsWith("n:") || key !== openKey || document.hidden || t?.status !== "ready") return
+  const chat = key.startsWith("c:")
   const id = key.slice(2)
   const last = t.data.messages.at(-1)?.id
-  const unread = dataOf(state.agents)?.find((a) => a.id === id)?.unread ?? 0
-  const before = readUpTo[id] ?? 0
+  const unread = (chat ? conversationOf(state, Number(id))?.pending : dataOf(state.agents)?.find((a) => a.id === id)?.unread) ?? 0
+  const before = readUpTo.get(key) ?? 0
   if (last === undefined || last <= before || (!unread && !arrived)) return
-  readUpTo[id] = last
+  readUpTo.set(key, last)
   try {
-    await api.markRead(id, last)
-    const agents = dataOf(state.agents)
-    if (agents) set({ agents: ready(agents.map((a) => (a.id === id ? { ...a, unread: 0 } : a))) })
+    if (chat) {
+      await api.markConversationRead(Number(id), last)
+      const chats = dataOf(state.conversations)
+      if (chats) set({ conversations: ready(chats.map((c) => (c.id === Number(id) ? { ...c, pending: 0 } : c))) })
+    } else {
+      await api.markRead(id, last)
+      const agents = dataOf(state.agents)
+      if (agents) set({ agents: ready(agents.map((a) => (a.id === id ? { ...a, unread: 0 } : a))) })
+    }
     // An answer already on its way may still carry the old count; this one replaces it.
-    load("agents", true)
+    changed(chat ? "conversations" : "agents")
   } catch (e) {
-    if (!expired(e)) readUpTo[id] = before
+    if (!expired(e)) readUpTo.set(key, before)
   }
 }
 
@@ -712,16 +720,45 @@ export const admin: DataLayer["admin"] = {
   stats: () => act(() => api.admin.stats()),
 }
 
-// ── Polling ──────────────────────────────────────────────────────────────────
+// ── Keeping up ───────────────────────────────────────────────────────────────
 
+/** Fetches an area again: conversations take the open chat or session pane's messages along; groups, any open details. */
+function refetch(area: Area) {
+  if (area === "all") return void (["conversations", "agents", "contacts", "requests", "groups"] as const).forEach(refetch)
+  if (area === "requests") return void (loadRequests(), loadSent())
+  load(area, true)
+  if (area === "conversations" && openKey && !openKey.startsWith("n:")) newer(openKey)
+}
+// Areas fetched in the last second, and whether they changed again since.
+const settling = new Map<Area, boolean>()
+// Areas that changed while the tab was in the background, fetched once it's back.
+const missed = new Set<Area>()
+/**
+ * Something in an area changed (API-079, or a poll asks): fetch it again at once, then at most once a second; changes
+ * within that second make one more fetch after it. A tab in the background only notes the area.
+ */
+function changed(area: Area) {
+  if (!state.account) return
+  if (document.hidden) return void missed.add(area)
+  if (settling.has(area)) return void settling.set(area, true)
+  settling.set(area, false)
+  refetch(area)
+  setTimeout(() => {
+    const again = settling.get(area)
+    settling.delete(area)
+    if (again) changed(area)
+  }, 1000)
+}
+
+// The server says what changed as it happens (FLOW-LIVE); the polls below stay as a fallback while it's not connected.
+let live: (() => void) | undefined
 let timer: ReturnType<typeof setInterval> | undefined
 let fastTimer: ReturnType<typeof setInterval> | undefined
 function tick() {
   if (document.hidden || !state.account) return
-  load("conversations", true)
+  changed("conversations")
   load("agents", true)
   loadRequests()
-  if (openKey?.startsWith("c:")) newer(openKey)
 }
 /**
  * An open session pane shows replies and delivery states within 3 s (FLOW-WEB-SEND S8), and whether sending is opening it
@@ -735,22 +772,29 @@ function fast() {
 }
 function startPolling() {
   stopPolling()
+  live = api.events(changed)
   timer = setInterval(tick, 10_000)
   fastTimer = setInterval(fast, 3_000)
 }
 function stopPolling() {
+  live?.()
   clearInterval(timer)
   clearInterval(fastTimer)
-  timer = fastTimer = undefined
+  live = timer = fastTimer = undefined
 }
-// Paused in a background tab; catches up as soon as it's visible again.
-document.addEventListener("visibilitychange", () => (tick(), fast()))
+// Paused in a background tab; catches up as soon as it's visible again, and counts what the open pane shows as read.
+document.addEventListener("visibilitychange", () => {
+  tick(), fast(), openKey && markShown(openKey)
+  // A fetch that's just started covers what changed before it.
+  if (!document.hidden) missed.forEach((area) => settling.has(area) || changed(area)), missed.clear()
+})
 
 // ── Session ──────────────────────────────────────────────────────────────────
 
 /** Signed in: load everything the tabs and the top bar show. */
 export function begin(account: Account, isNew = false) {
   drafts.clear()
+  readUpTo.clear()
   quota = undefined
   set(fresh(account, isNew))
   for (const key of Object.keys(fetchers) as ListKey[]) load(key)
@@ -861,9 +905,12 @@ export const addressOf = (s: State, c: Conversation) => {
   return x ? `${c.peer!.id}/${x.short_id}` : String(c.peer?.id)
 }
 
-/** Who a one-to-one message went to. `to` names the session but not its owner: the peer when I sent it, otherwise me. */
+/**
+ * Who a one-to-one message went to. `to` names the session but not its owner: the peer when I sent it, otherwise me.
+ * `inbox`: it went to the owner's inbox, not to a session.
+ */
 export function recipientOf(s: State, m: Message) {
   if (!m.to) return undefined
   const owner = isMe(s, m.from.account_id) ? m.conversation.peer?.name : s.account?.name
-  return { owner: owner ?? "", title: m.to.tool === "terminal" ? t("Terminal") : m.to.title }
+  return { owner: owner ?? "", title: m.to.title, inbox: m.to.tool === "terminal" }
 }

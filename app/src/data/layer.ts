@@ -5,6 +5,7 @@ import type {
   AdminAccount,
   AdminAccountsPage,
   AgentRef,
+  Area,
   Banned,
   Billing,
   Block,
@@ -68,6 +69,13 @@ export type DataLayer = {
   renameAgent(agentId: string, title: string): Promise<MyAgent>
   /** API-044: what this session sent my terminal inbox, up to message `upTo`, counts as read. */
   markRead(agentId: string, upTo: number): Promise<number>
+  /** API-078: what this chat sent my inbox, up to message `upTo`, counts as read; `imbo inbox` no longer lists it. */
+  markConversationRead(conversationId: number, upTo: number): Promise<number>
+  /**
+   * API-079: calls `changed` with each area the server says changed, and with `all` once a dropped connection is back.
+   * Returns what closes it for good.
+   */
+  events(changed: (area: Area) => void): () => void
   /** API-009: contact requests and group invitations waiting for me. */
   requests(): Promise<Request[]>
   /** API-009 `direction=out`: what I sent that is still waiting. */

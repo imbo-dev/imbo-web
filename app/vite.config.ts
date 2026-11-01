@@ -10,8 +10,9 @@ export default defineConfig({
     // imbo-server only takes sign-in requests from IMBO_WEB_ORIGIN, so the page always runs at http://localhost:5190.
     port: 5190,
     strictPort: true,
-    // Same origin for the API: the session cookie and the Origin check both just work. IMBO_API picks another server.
-    proxy: { "/v1": process.env.IMBO_API ?? "http://127.0.0.1:18080" },
+    // Same origin for the API: the session cookie and the Origin check both just work, for the live connection
+    // (/v1/events, a WebSocket) as well. IMBO_API picks another server.
+    proxy: { "/v1": { target: process.env.IMBO_API ?? "http://127.0.0.1:18080", ws: true } },
     // brand/ lives two levels up (Imbo/brand); let the dev server read it
     fs: { allow: [fileURLToPath(new URL("../..", import.meta.url))] },
   },

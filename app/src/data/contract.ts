@@ -67,16 +67,25 @@ export const contact = z.object({
 /** API-026 `file`; downloads (API-027) return 404 after `expires_at`. */
 export const file = z.object({ id: z.string(), name: z.string(), size: z.number(), sha256: z.string(), expires_at: time })
 
-/** No `agent` when sent with `imbo send` from a terminal. */
-export const sender = z.object({ account_id: accountId, name: z.string(), agent: agentRef.optional() })
+/**
+ * No `agent` when sent in person. `via`: where it was sent in person (ADR-056); left out on what a session sent and on
+ * messages older than it, which read as a terminal. One this page doesn't know reads as a terminal too.
+ */
+export const sender = z.object({
+  account_id: accountId,
+  name: z.string(),
+  agent: agentRef.optional(),
+  via: z.enum(["terminal", "app", "web"]).optional().catch(undefined),
+})
 
 /** The conversation a message belongs to: `group` for group messages, `peer` (the other account) for direct ones. */
 export const conversationRef = z.object({ kind: z.enum(["direct", "group"]), id: z.number(), group: groupRef.optional(), peer: accountRef.optional() })
 
 /**
  * API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal.
- * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what I sent one of my own sessions
- * (API-036, API-043): `pending`, `pushed`, `delivered` or `canceled`.
+ * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what went to one of my own sessions —
+ * what I sent it (API-036, API-043) or, in a chat, what reached it and isn't in it yet (API-031): `pending`, `pushed`,
+ * `delivered` or `canceled`.
  */
 export const message = z.object({
   id: z.number(),
@@ -94,7 +103,7 @@ export const message = z.object({
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
 export const messagesPage = z.object({ messages: z.array(message), has_more: z.boolean() })
 
-/** API-030 listConversations. `pending`: sent to me, not yet delivered to a session nor read in the terminal. */
+/** API-030 listConversations. `pending`: sent to my inbox and not read yet, here, in the App or in a terminal (REQ-104). */
 export const conversation = z.object({
   id: z.number(),
   kind: z.enum(["direct", "group"]),
@@ -134,11 +143,16 @@ export const sent = z.object({
 })
 /** API-043 sendToMyAgent: the stored message, with its `state`. */
 export const sentToAgent = z.object({ message })
-/** API-044 markAgentRead */
+/** API-044 markAgentRead, API-078 markConversationRead */
 export const marked = z.object({ marked: z.number() })
+/** API-079: a frame on the live connection, naming what changed; `all` after the server's own listener came back. */
+export const changed = z.object({ type: z.literal("changed"), area: z.enum(["conversations", "agents", "contacts", "requests", "groups", "all"]) })
 
-/** API-019 listGroups: a group's members, and which of my sessions get its messages. `active` as in API-012. */
-export const member = z.object({ id: accountId, name: z.string(), avatar_url: z.string().optional(), active: z.boolean().default(true) })
+/**
+ * API-019 listGroups: a group's members, and which of my sessions get its messages. `active` as in API-012. A member's
+ * `sessions`: the ones they picked for this group's messages, listed when typing @ (REQ-107); servers before 0.2.17 leave it out.
+ */
+export const member = z.object({ id: accountId, name: z.string(), avatar_url: z.string().optional(), active: z.boolean().default(true), sessions: z.array(agentRef).default([]) })
 export const group = z.object({
   id: z.number(),
   name: z.string(),
@@ -282,10 +296,12 @@ export const blocks = z.object({ blocks: z.array(block) })
 
 export type Account = z.infer<typeof account>
 export type AgentRef = z.infer<typeof agentRef>
+export type Area = z.infer<typeof changed>["area"]
 export type MyAgent = z.infer<typeof myAgent>
 export type Contact = z.infer<typeof contact>
 export type FileRef = z.infer<typeof file>
 export type Message = z.infer<typeof message>
+export type Via = NonNullable<z.infer<typeof sender>["via"]>
 export type Conversation = z.infer<typeof conversation>
 export type Billing = z.infer<typeof billing>
 export type MessagesPage = z.infer<typeof messagesPage>

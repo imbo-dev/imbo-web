@@ -3,9 +3,9 @@ import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "l
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Avatar, SessionName, Sep, Tag, agentAvatar } from "@/components/bits"
+import { Avatar, SessionName, Sep, Tag, senderAvatar } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
-import type { FileRef, Message } from "@/data/contract"
+import type { FileRef, Message, Via } from "@/data/contract"
 import type { ApiError } from "@/data/layer"
 import {
   contactOf,
@@ -13,6 +13,7 @@ import {
   discard,
   fileExpired,
   fileUrl,
+  groupOf,
   isMe,
   loadOlder,
   recipientOf,
@@ -29,8 +30,8 @@ import { useFollow } from "@/lib/useFollow"
 
 // Messages as bubbles, as in the App. What I sent in person is on the right in the primary color, my picture after it;
 // everything else, my sessions' messages included, is on the left after its sender's picture: a session's product mark,
-// a terminal's icon. Above each bubble a heading says who sent it — "Mia orders-api" — and, where it matters, which
-// session it went to; under it, how its delivery is going.
+// or where it was sent in person from. Above each bubble a heading says who sent it — "Mia orders-api", "Mia · App" —
+// and, where it matters, which session or inbox it went to; under it, how its delivery is going.
 
 function Attachments({ files }: { files: FileRef[] }) {
   return (
@@ -71,6 +72,19 @@ function Attachments({ files }: { files: FileRef[] }) {
 /** Sent by me in person, so on the right: from this page, the App or a terminal. My sessions' messages aren't. */
 export const mine = (s: State, m: Message) => isMe(s, m.from.account_id) && !m.from.agent
 
+/**
+ * Where a message sent in person came from (ADR-056), as it leads a group heading ("App #Mia") and after a name
+ * ("Mia | App", a hairline between). Messages from before `via` came from a terminal.
+ */
+export const leadOf = (via?: Via) => (via === "app" ? t("App") : via === "web" ? t("Web") : t("Terminal"))
+export const sourceOf = (via?: Via) => (via === "app" ? t("App") : via === "web" ? t("Web") : t("terminal"))
+/** What follows the sender's name: its session ("orders-api"), or where it was sent in person from ("App"). */
+export const afterName = (from: { agent?: { title: string }; via?: Via }) => from.agent?.title ?? sourceOf(from.via)
+
+/** Who a one-to-one message went to: "to Mia orders-api", or "to Mia's inbox". */
+const toText = (to: { owner: string; title: string; inbox: boolean }) =>
+  to.inbox ? t("to {owner}'s inbox", { owner: to.owner }) : t("to {owner} {title}", { owner: to.owner, title: to.title })
+
 /** The message's text, in the primary color on my side; 3rem short of the far side, so a long one still reads as one side's. */
 function Bubble({ body, right }: { body: string; right: boolean }) {
   return (
@@ -105,33 +119,53 @@ function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error";
   )
 }
 
-/** API-036 `state` of what I sent one of my sessions (FLOW-WEB-SEND S8); a state this page doesn't know shows nothing. */
+/**
+ * API-036 `state` of what I sent one of my sessions (FLOW-WEB-SEND S8); a state this page doesn't know shows nothing. In
+ * a chat, API-031 `state` is on what reached my sessions and isn't in them yet: it says so while they're offline
+ * (FLOW-WEB-CHAT S1).
+ */
 function Delivery({ s, m }: { s: State; m: Message }) {
-  if (!m.state || !m.to) return null
-  if (m.state === "delivered") return <StatusLine icon={<CheckCheck size={14} aria-hidden="true" />}>{t("Delivered")}</StatusLine>
-  if (m.state === "canceled") return <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />}>{t("Not delivered")}</StatusLine>
+  if (!m.state) return null
+  if (m.state === "delivered" && m.to) return <StatusLine icon={<CheckCheck size={14} aria-hidden="true" />}>{t("Delivered")}</StatusLine>
+  if (m.state === "canceled" && m.to) return <StatusLine icon={<CircleAlert size={14} aria-hidden="true" />}>{t("Not delivered")}</StatusLine>
   if (m.state !== "pending" && m.state !== "pushed") return null
-  const online = dataOf(s.agents)?.find((a) => a.id === m.to?.id)?.online
-  return <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{online ? t("Sending…") : t("Waiting for {name} to come online", { name: m.to.title })}</StatusLine>
+  const online = (id: string) => !!dataOf(s.agents)?.some((a) => a.id === id && a.online)
+  const line = (text: string) => <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{text}</StatusLine>
+  if (!m.to) {
+    const g = m.conversation.group && groupOf(s, m.conversation.group.id)
+    return g && g.my_sessions.some((x) => online(x.id)) ? null : line(t("Waiting for your sessions to come online"))
+  }
+  if (!online(m.to.id)) return line(t("Waiting for {name} to come online", { name: m.to.title }))
+  return mine(s, m) ? line(t("Sending…")) : null
 }
 
-/** In a group the session leads ("orders-api #Mia"); what I sent from my own terminal there is "You". */
-function Sender({ owner, title, group, you }: { owner: string; title: string; group: boolean; you: boolean }) {
+/**
+ * In a group the session or the source leads ("orders-api #Mia", "App #Mia"); what I sent in person there is "You".
+ * Elsewhere the name leads: "Mia orders-api", "Mia | App". `session` only when a session sent it.
+ */
+function Sender({ owner, session, via, group, you }: { owner: string; session?: string; via?: Via; group: boolean; you: boolean }) {
   if (group && you) return <span className="truncate text-body-strong">{t("You")}</span>
-  return <SessionName owner={owner} title={title} strong group={group} />
+  if (session !== undefined || group) return <SessionName owner={owner} title={session ?? leadOf(via)} strong group={group} />
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="truncate text-body-strong">{owner}</span>
+      <Sep />
+      <span className="flex-none text-muted-foreground">{sourceOf(via)}</span>
+    </span>
+  )
 }
 
-/** A message sent with `imbo send` has no `from.agent`: it came from the sender's terminal. Group messages have no `to`. */
+/** A message with no `from.agent` was sent in person, from `from.via`. Group messages have no `to`. */
 export function MessageRow({ s, m }: { s: State; m: Message }) {
   const to = recipientOf(s, m)
   const right = mine(s, m)
   return (
-    <Row right={right} picture={right ? <Me s={s} /> : <Avatar kind={agentAvatar(m.from.agent?.tool)} tool={m.from.agent?.tool} />}>
+    <Row right={right} picture={right ? <Me s={s} /> : <Avatar kind={senderAvatar(m.from)} tool={m.from.agent?.tool} />}>
       <header className="flex max-w-full min-w-0 items-baseline gap-2">
         <SenderName s={s} from={m.from} group={m.conversation.group}>
-          <Sender owner={m.from.name} title={m.from.agent?.title ?? t("Terminal")} group={!!m.conversation.group} you={right} />
+          <Sender owner={m.from.name} session={m.from.agent?.title} via={m.from.via} group={!!m.conversation.group} you={right} />
         </SenderName>
-        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{t("to {owner} {title}", { owner: to.owner, title: to.title })}</span>}
+        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{toText(to)}</span>}
         <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
           {clock(m.created_at)}
         </time>
@@ -175,11 +209,11 @@ function refusal(e: ApiError, group: boolean, who: string) {
 
 /** Who an outgoing message is addressed to: my own session, the group (nobody named), or a contact's inbox or session. */
 function addressee(s: State, key: ThreadKey, to: string) {
-  if (key.startsWith("a:")) return { owner: s.account?.name ?? "", title: dataOf(s.agents)?.find((a) => a.id === key.slice(2))?.title ?? "" }
+  if (key.startsWith("a:")) return { owner: s.account?.name ?? "", title: dataOf(s.agents)?.find((a) => a.id === key.slice(2))?.title ?? "", inbox: false }
   if (to.startsWith("#")) return undefined
   const [account, short] = to.split("/")
   const p = contactOf(s, Number(account))
-  return { owner: p?.name ?? account, title: short ? (p?.sessions.find((x) => x.short_id === short)?.title ?? short) : t("Terminal") }
+  return { owner: p?.name ?? account, title: short ? (p?.sessions.find((x) => x.short_id === short)?.title ?? short) : "", inbox: !short }
 }
 
 /** A message on its way, or refused: shown under the thread until the server's copy takes its place. */
@@ -189,8 +223,8 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
   return (
     <Row right picture={<Me s={s} />}>
       <header className="flex max-w-full min-w-0 items-baseline gap-2">
-        <Sender owner={s.account?.name ?? ""} title={t("Terminal")} group={o.to.startsWith("#")} you />
-        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{t("to {owner} {title}", { owner: to.owner, title: to.title })}</span>}
+        <Sender owner={s.account?.name ?? ""} via="web" group={o.to.startsWith("#")} you />
+        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{toText(to)}</span>}
       </header>
       {o.body && <Bubble body={o.body} right />}
       {o.files.length > 0 && <Attachments files={o.files} />}
@@ -266,7 +300,7 @@ function PickRow({ s, m, pick }: { s: State; m: Message; pick: Picking }) {
         checked={on}
         onCheckedChange={() => pick.toggle(m)}
         onClick={(e) => e.stopPropagation()}
-        aria-label={`${m.from.name} ${m.from.agent?.title ?? t("Terminal")} ${clock(m.created_at)}`}
+        aria-label={`${m.from.name} ${afterName(m.from)} ${clock(m.created_at)}`}
         className="mt-1.5 size-5 rounded-full"
       />
       <div inert>

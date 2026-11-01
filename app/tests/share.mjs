@@ -317,9 +317,9 @@ try {
   await step('TC-430 #3', async () => {
     const [a1, b1, a2, b2, me] = bobCard.items;
     const t = clock(BOB_DAY);
-    const mine = me.body === T430 && me.right === 52 && me.left > 52 && me.avatar === 'right' && me.pic === 'letter A' && me.gap === 8 && /^alice Terminal \d\d:\d\d$/.test(me.label);
+    const mine = me.body === T430 && me.right === 52 && me.left > 52 && me.avatar === 'right' && me.pic === 'letter A' && me.gap === 8 && /^alice terminal \d\d:\d\d$/.test(me.label);
     const sessions = [a1, a2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'mark claude-code' && /^alice checkout \d\d:\d\d$/.test(i.label));
-    const theirs = [b1, b2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'square-terminal' && /^bob Terminal \d\d:\d\d$/.test(i.label));
+    const theirs = [b1, b2].every((i) => i.left === 52 && i.avatar === 'left' && i.pic === 'square-terminal' && /^bob terminal \d\d:\d\d$/.test(i.label));
     ok(
       'TC-430 #3 alice\'s own on the right with her picture after it; her checkout\'s on the left after the Claude Code mark, bob\'s after the terminal icon; no icon before a name; account names, never You',
       mine && sessions && theirs && bobCard.items.every((i) => !i.tool) && a1.label.endsWith(t) && !/\bYou\b/.test(bobCard.text) && b2.body === '午饭后我把 v2.3 部署到生产，你那边还有要改的吗？',
@@ -375,7 +375,7 @@ try {
     ok(
       'TC-431 #3 bob and carol on the left after the terminal icon, alice on the right as alice with her picture after it',
       [b, k].every((i) => i.avatar === 'left' && i.pic === 'square-terminal' && i.left === 52) && a.avatar === 'right' && a.pic === 'letter A' && a.gap === 8 && a.right === 52 &&
-        /^bob Terminal/.test(b.label) && /^carol Terminal/.test(k.label) && /^alice Terminal/.test(a.label) && !/\bYou\b/.test(c.text),
+        /^bob terminal/.test(b.label) && /^carol terminal/.test(k.label) && /^alice terminal/.test(a.label) && !/\bYou\b/.test(c.text),
       c.items.map((i) => `${i.label} L${i.left} R${i.right} ${i.avatar}:${i.pic}`).join(' | ')
     );
     ok('TC-431 #4 the 2,100 characters cut at 2,000 with …, then 100 more characters not shown', a.body === LONG.slice(0, 2000) + '…' && a.note === '100 more characters not shown', `${a.body?.length} chars, ${a.note}`);

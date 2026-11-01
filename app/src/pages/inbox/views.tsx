@@ -19,6 +19,7 @@ import {
   conversationWith,
   dataOf,
   declineRequest,
+  groupOf,
   isBlocked,
   isMe,
   loadThread,
@@ -42,7 +43,7 @@ import { ComputersField, DeleteAccount, NameField } from "./account"
 import { ChangeEmail } from "./email"
 import { openAddContact } from "./contacts"
 import { openGroupDetails, openNewGroup } from "./groups"
-import { MessageList, Outbox, PaneHeader, type Picking } from "./messages"
+import { MessageList, Outbox, PaneHeader, leadOf, type Picking } from "./messages"
 import { RenameButtons, RenameHint, RenameInput, useRename, useReturnFocus } from "./rename"
 import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
 import { MAX_PICKED, ShareDialogContent } from "./share"
@@ -75,10 +76,10 @@ function ListRow({ href, current, children }: { href: string; current: boolean; 
 }
 
 /**
- * API-030 `pending`: sent to me, not yet picked up by a session nor read in a terminal. Looking here changes nothing.
- * Also API-014 `unread`, with `sr` saying what the number counts.
+ * API-030 `pending`: what a chat sent my inbox that isn't read yet; opening the chat reads it (API-078). Also API-014
+ * `unread`, with `sr` saying what the number counts.
  */
-export function PendingBadge({ n, small, labelled, sr = t("waiting for delivery") }: { n: number; small?: boolean; labelled?: boolean; sr?: string }) {
+export function PendingBadge({ n, small, sr = t("unread") }: { n: number; small?: boolean; sr?: string }) {
   return (
     <span
       className={cn(
@@ -87,7 +88,7 @@ export function PendingBadge({ n, small, labelled, sr = t("waiting for delivery"
       )}
     >
       {n}
-      {!labelled && <span className="sr-only"> {sr}</span>}
+      <span className="sr-only"> {sr}</span>
     </span>
   )
 }
@@ -153,7 +154,7 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
         {l.data.map((c) => {
           const title = conversationTitle(c)
           const last = c.last_message
-          const who = !last ? "" : isMe(s, last.from.account_id) ? t("You") : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? t("Terminal"))
+          const who = !last ? "" : isMe(s, last.from.account_id) ? t("You") : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? leadOf(last.from.via))
           return (
             <ListRow key={c.id} href={`/chats/${c.id}`} current={String(c.id) === open}>
               <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
@@ -266,12 +267,6 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
                 title
               )}
             </h1>
-            {c.pending > 0 && (
-              <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
-                <PendingBadge n={c.pending} small labelled />
-                <span className="truncate">{t("waiting for delivery")}</span>
-              </span>
-            )}
           </div>
           <p className="flex min-w-0 items-center gap-2 overflow-hidden text-caption whitespace-nowrap text-muted-foreground">
             {c.group ? (
@@ -368,7 +363,7 @@ function ChatComposer({ s, c, title }: { s: State; c: Conversation; title: strin
     )
   const paused = sendingPaused(s)
   if (paused) return <SendingClosed>{paused}</SendingClosed>
-  if (c.kind === "group") return <Composer key={key} s={s} threadKey={key} to={addressOf(s, c)} label={title} />
+  if (c.kind === "group") return <Composer key={key} s={s} threadKey={key} to={addressOf(s, c)} label={title} group={c.group && groupOf(s, c.group.id)} />
   const contacts = dataOf(s.contacts)
   const peer = contactOf(s, c.peer!.id)
   if (contacts && !peer) return <SendingClosed>{t("{name} is no longer your contact, so messages can't be sent here.", { name: title })}</SendingClosed>
@@ -822,7 +817,7 @@ export function ContactPane({ s, id }: { s: State; id: string }) {
           </ul>
         ) : (
           <p className="text-body text-(--semantic-color-text-tertiary)">
-            {t("{name} has no sessions online or seen in the last 7 days. Messages go to {name}'s terminal inbox.", { name: p.name })}
+            {t("{name} has no sessions online or seen in the last 7 days. Messages go to {name}'s inbox.", { name: p.name })}
           </p>
         )}
       </section>
@@ -873,7 +868,7 @@ export function NewChatPane({ s, id }: { s: State; id: string }) {
             <p>
               {x
                 ? t("Your first message goes to {name}'s session {session}. The chat shows up in Chats once it's sent.", { name: p.name, session: x.title })
-                : t("Your first message goes to {name}'s terminal inbox. The chat shows up in Chats once it's sent.", { name: p.name })}
+                : t("Your first message goes to {name}'s inbox. The chat shows up in Chats once it's sent.", { name: p.name })}
             </p>
           </EmptyState>
         </div>

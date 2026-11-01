@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Bot, Check, Copy, Hash, SquareTerminal } from "lucide-react"
+import { Bot, Check, Copy, Globe, Hash, Smartphone, SquareTerminal } from "lucide-react"
 import { pictureSrc } from "@/data/store"
 import { t } from "@/i18n"
 import { cn } from "@/lib/cn"
@@ -32,12 +32,12 @@ const MARKS: Record<string, string> = {
  * Round avatar on the selected surface (brand/examples/source/product.css .avatar), 24 to 64 px. A person or group
  * with a picture (`src`, the API's `avatar_url`) shows it cropped round; without one, or when it doesn't load, the
  * first letter of `label`. A session shows its product's mark (`tool`), or a bot for a tool this page doesn't know; a
- * terminal its icon.
+ * terminal, a phone or a browser its icon.
  */
-export function Avatar({ kind, label, size = "md", src, tool }: { kind: "agent" | "terminal" | "group" | "person"; label?: string; size?: keyof typeof AVATAR_SIZES; src?: string; tool?: string }) {
+export function Avatar({ kind, label, size = "md", src, tool }: { kind: "agent" | "terminal" | "phone" | "browser" | "group" | "person"; label?: string; size?: keyof typeof AVATAR_SIZES; src?: string; tool?: string }) {
   const url = pictureSrc(src)
   const [broken, setBroken] = useState<string>()
-  const Icon = kind === "agent" ? Bot : kind === "terminal" ? SquareTerminal : kind === "group" ? Hash : null
+  const Icon = { agent: Bot, terminal: SquareTerminal, phone: Smartphone, browser: Globe, group: Hash, person: null }[kind]
   const box = cn("inline-grid flex-none place-items-center overflow-hidden rounded-full bg-accent text-label text-foreground", AVATAR_SIZES[size])
   const svg = kind === "agent" && tool ? MARKS[tool] : undefined
   if (url && broken !== url && (kind === "person" || kind === "group"))
@@ -52,6 +52,13 @@ export function Avatar({ kind, label, size = "md", src, tool }: { kind: "agent" 
 
 /** A message with no `from.agent`, or one delivered to a terminal inbox, shows the terminal icon. */
 export const agentAvatar = (tool?: string) => (!tool || tool === "terminal" ? "terminal" : "agent")
+
+/**
+ * A message's sender as a picture: a session's mark; sent in person, where from (ADR-056) — a terminal, the App (a
+ * phone) or the web (a browser). Messages from before `via` came from a terminal.
+ */
+export const senderAvatar = (from: { agent?: { tool: string }; via?: string }) =>
+  from.agent ? agentAvatar(from.agent.tool) : from.via === "app" ? "phone" : from.via === "web" ? "browser" : "terminal"
 
 // Outlined caption tag (product.css .tag); `tone="ok"` is the success color with its icon, never color alone.
 export function Tag({ children, tone }: { children: React.ReactNode; tone?: "ok" | "warn" }) {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ArrowUp, Bot, ChevronDown, CircleAlert, FileText, Inbox, Paperclip, Pause, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,8 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sep } from "@/components/bits"
-import type { Conversation } from "@/data/contract"
+import { agentAvatar, Avatar, Sep } from "@/components/bits"
+import type { Conversation, Group } from "@/data/contract"
 import { cn } from "@/lib/cn"
 import {
   attach,
@@ -21,6 +21,7 @@ import {
   detach,
   draftOf,
   keepDraft,
+  refreshList,
   send,
   type Attachment,
   type State,
@@ -30,7 +31,8 @@ import { t } from "@/i18n"
 import { ago, fileSize, toolName } from "@/lib/format"
 
 // The text box at the bottom of an open chat or session (FLOW-WEB-CHAT S3, FLOW-WEB-SEND S3): text and files, sent as me
-// from my terminal inbox. Enter sends, Shift+Enter starts a new line.
+// from my inbox. Enter sends, Shift+Enter starts a new line. Files pasted into it are attached like picked ones. In a group,
+// typing @ lists who can be mentioned.
 
 const MAX_CHARS = 32_000
 const INBOX = "inbox"
@@ -91,8 +93,33 @@ function FileChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
   )
 }
 
+/** Someone @ can name in a group: what the row shows, and what picking it writes after the @. */
+type Mention = { key: string; name: string; insert: string } & ({ member: true; src?: string } | { member: false; tool: string; owner: string })
+
+/**
+ * Who @ lists in a group (REQ-107): the other active members, then the sessions every active member picked for it, mine
+ * too. A name that shows twice, in any case and even once as a member and once as a session, is written as the
+ * account ID or short ID instead, so the server can tell them apart (RULE-015).
+ */
+function mentionsOf(g: Group, me?: number) {
+  const active = g.members.filter((m) => m.active)
+  const all = [
+    ...active.filter((m) => m.id !== me).map((m) => ({ key: `m${m.id}`, name: m.name, id: String(m.id), member: true as const, src: m.avatar_url })),
+    ...active.flatMap((m) => m.sessions.map((x) => ({ key: `s${x.id}`, name: x.title, id: x.short_id, member: false as const, tool: x.tool, owner: m.name }))),
+  ]
+  const seen = new Map<string, number>()
+  for (const x of all) seen.set(x.name.toLowerCase(), (seen.get(x.name.toLowerCase()) ?? 0) + 1)
+  return all.map(({ id, ...x }): Mention => ({ ...x, insert: seen.get(x.name.toLowerCase())! > 1 ? id : x.name }))
+}
+
+/** The @ being typed just before the caret, if any: where it starts and what follows it. An @ inside a word (an email) isn't one. */
+function mentionAt(text: string, caret: number) {
+  const m = /(?:^|[^\w.+-])@([^\s@]*)$/.exec(text.slice(0, caret))
+  return m ? { start: caret - m[1].length - 1, query: m[1] } : undefined
+}
+
 /** `to`: the API-015 address in a chat; a session pane sends to its own session. `label` names who it goes to. */
-export function Composer({ s, threadKey, to, label, note }: { s: State; threadKey: ThreadKey; to: string; label: string; note?: string }) {
+export function Composer({ s, threadKey, to, label, note, group }: { s: State; threadKey: ThreadKey; to: string; label: string; note?: string; group?: Group }) {
   const [text, setText] = useState(() => draftOf(threadKey))
   const { shell, area } = useGrow(text)
   const composedAt = useRef(-Infinity)
@@ -107,10 +134,45 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
   const refused = files.some((a) => a.error)
   const uploading = files.some((a) => !a.ref && !a.error)
   const [held, setHeld] = useState(false)
+  // In a group, the @ just before the caret lists who to mention (REQ-107); Esc closes the list for that @ only.
+  const mentions = useMemo(() => (group ? mentionsOf(group, s.account?.id) : []), [group, s.account?.id])
+  const [caret, setCaret] = useState<number>()
+  const [closedAt, setClosedAt] = useState<number>()
+  const [nav, setNav] = useState({ at: "", i: 0 })
+  const listId = useId()
+  const typing = caret === undefined || !mentions.length ? undefined : mentionAt(text, caret)
+  const shown = typing && typing.start !== closedAt ? mentions.filter((x) => x.name.toLowerCase().includes(typing.query.toLowerCase())) : []
+  const at = typing ? `${typing.start}:${typing.query}` : ""
+  const active = nav.at === at && nav.i < shown.length ? nav.i : 0
+  const placeAt = useRef<number>(undefined)
+  // Groups load at sign-in; opening a group's chat brings its members and their sessions up to date for @.
+  const groupId = group?.id
+  useEffect(() => {
+    if (groupId) refreshList("groups")
+  }, [groupId])
+  useLayoutEffect(() => {
+    const p = placeAt.current
+    if (p === undefined) return
+    placeAt.current = undefined
+    area.current?.setSelectionRange(p, p)
+    setCaret(p)
+  }, [text])
+  useEffect(() => {
+    if (shown.length) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" })
+  }, [at, active, shown.length])
+  /** Where the caret is while the box has focus and nothing is selected. */
+  const track = (el: HTMLTextAreaElement) => setCaret(document.activeElement === el && el.selectionStart === el.selectionEnd ? el.selectionStart : undefined)
 
   const update = (v: string) => {
     setText(v)
     keepDraft(threadKey, v)
+  }
+  /** Writes the picked name over the @ and what's typed after it, then a space, and puts the caret after that. */
+  const pick = (x: Mention) => {
+    if (!typing || caret === undefined) return
+    const head = `${text.slice(0, typing.start)}@${x.insert} `
+    placeAt.current = head.length
+    update(head + text.slice(caret))
   }
   const submit = () => {
     if (blank || tooLong || refused) return setHeld(false)
@@ -123,14 +185,31 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
     if (held && !uploading) submit()
   }, [held, uploading])
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== "Enter" || e.shiftKey) return
-    // This Enter picks an input method candidate.
+    // This key goes to the input method; an Enter picks a candidate.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
-    if (isSafari && e.timeStamp - composedAt.current < 500) {
+    const enter = e.key === "Enter" && !e.shiftKey
+    if (enter && isSafari && e.timeStamp - composedAt.current < 500) {
       composedAt.current = -Infinity
       e.preventDefault()
       return
     }
+    // While the list is open, Enter and Tab put in the highlighted row instead of sending.
+    if (shown.length) {
+      const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0
+      if (step) {
+        e.preventDefault()
+        return setNav({ at, i: (active + step + shown.length) % shown.length })
+      }
+      if (enter || (e.key === "Tab" && !e.shiftKey)) {
+        e.preventDefault()
+        return pick(shown[active])
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        return setClosedAt(typing!.start)
+      }
+    }
+    if (!enter) return
     e.preventDefault()
     submit()
   }
@@ -177,20 +256,40 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
         <Button type="button" variant="ghost" size="icon" aria-label={t("Attach files")} className="mb-1 flex-none text-muted-foreground" onClick={() => picker.current?.click()}>
           <Paperclip size={16} aria-hidden="true" />
         </Button>
-        <div ref={shell} className="composer-shell state-layer focus-ring is-field min-w-0 flex-1 rounded-md border border-input bg-muted">
-          <textarea
-            ref={area}
-            rows={1}
-            value={text}
-            onChange={(e) => update(e.target.value)}
-            onKeyDown={onKeyDown}
-            onCompositionEnd={(e) => (composedAt.current = e.timeStamp)}
-            placeholder={t("Message {name}", { name: label })}
-            aria-label={t("Message {name}", { name: label })}
-            aria-invalid={tooLong || undefined}
-            aria-describedby={tooLong ? errorId : undefined}
-            className="composer block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
-          />
+        <div className="relative min-w-0 flex-1">
+          {shown.length > 0 && <MentionList id={listId} rows={shown} active={active} onPick={pick} onHover={(i) => setNav({ at, i })} />}
+          <div ref={shell} className="composer-shell state-layer focus-ring is-field rounded-md border border-input bg-muted">
+            <textarea
+              ref={area}
+              rows={1}
+              value={text}
+              onChange={(e) => {
+                update(e.target.value)
+                track(e.target)
+                if (!mentionAt(e.target.value, e.target.selectionStart)) setClosedAt(undefined)
+              }}
+              onSelect={(e) => track(e.currentTarget)}
+              onFocus={(e) => track(e.currentTarget)}
+              onBlur={() => setCaret(undefined)}
+              onKeyDown={onKeyDown}
+              onPaste={(e) => {
+                // Pasted files go with the message like picked ones (REQ-105); text pasted along with them is left out.
+                const pasted = [...e.clipboardData.files]
+                if (!pasted.length) return
+                e.preventDefault()
+                attach(threadKey, pasted)
+              }}
+              onCompositionEnd={(e) => (composedAt.current = e.timeStamp)}
+              placeholder={t("Message {name}", { name: label })}
+              aria-label={t("Message {name}", { name: label })}
+              aria-invalid={tooLong || undefined}
+              aria-describedby={tooLong ? errorId : undefined}
+              aria-autocomplete={group ? "list" : undefined}
+              aria-controls={shown.length ? listId : undefined}
+              aria-activedescendant={shown.length ? `${listId}-${active}` : undefined}
+              className="composer block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
+            />
+          </div>
         </div>
         <Button type="submit" size="icon" aria-label={t("Send")} aria-disabled={blank || tooLong || refused || held} className="mb-1">
           <ArrowUp size={16} aria-hidden="true" />
@@ -205,6 +304,61 @@ export function Composer({ s, threadKey, to, label, note }: { s: State; threadKe
         <p id={errorId} role="alert" className="text-caption text-destructive">
           {t("Messages can be up to 32,000 characters. This one has {n}.", { n: length.toLocaleString("en-US") })}
         </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What @ lists over the text box: members, then sessions, each part under its name. Focus stays in the box, which points
+ * at the highlighted row (aria-activedescendant); a click puts a row in.
+ */
+function MentionList({ id, rows, active, onPick, onHover }: { id: string; rows: Mention[]; active: number; onPick: (x: Mention) => void; onHover: (i: number) => void }) {
+  const parts = [
+    { label: t("Members"), rows: rows.filter((x) => x.member) },
+    { label: t("Sessions"), rows: rows.filter((x) => !x.member) },
+  ]
+  return (
+    <div
+      id={id}
+      role="listbox"
+      aria-label={t("Members and sessions to mention")}
+      onMouseDown={(e) => e.preventDefault()}
+      className="scroll-pane absolute bottom-full left-0 z-(--semantic-layout-z-index-dropdown) mb-2 max-h-72 w-full rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-overlay sm:w-80"
+    >
+      {parts.map(
+        (p, g) =>
+          p.rows.length > 0 && (
+            <div key={g} role="group" aria-labelledby={`${id}-g${g}`}>
+              <div id={`${id}-g${g}`} className="px-2 pt-1.5 pb-1 text-caption text-muted-foreground">
+                {p.label}
+              </div>
+              {p.rows.map((x) => {
+                const n = rows.indexOf(x)
+                return (
+                  <div
+                    key={x.key}
+                    id={`${id}-${n}`}
+                    role="option"
+                    aria-selected={n === active}
+                    data-highlighted={n === active ? "" : undefined}
+                    onPointerMove={() => n !== active && onHover(n)}
+                    onClick={() => onPick(x)}
+                    className="state-layer flex h-9 cursor-default items-center gap-2 rounded-md px-2 text-body select-none"
+                  >
+                    {x.member ? <Avatar kind="person" size="sm" label={x.name} src={x.src} /> : <Avatar kind={agentAvatar(x.tool)} size="sm" tool={x.tool} />}
+                    <span className="min-w-0 truncate">{x.name}</span>
+                    {!x.member && (
+                      <>
+                        <Sep />
+                        <span className="min-w-0 truncate text-caption text-muted-foreground">{x.owner}</span>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
       )}
     </div>
   )
@@ -235,7 +389,7 @@ export function RecipientPicker({ s, c }: { s: State; c: Conversation }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="max-w-44 px-2 text-foreground" aria-label={
-            chosen ? t("Sending to {name}'s session {session}. Change", { name, session: chosen.title }) : t("Sending to {name}'s terminal inbox. Change", { name })
+            chosen ? t("Sending to {name}'s session {session}. Change", { name, session: chosen.title }) : t("Sending to {name}'s inbox. Change", { name })
           }>
           {chosen ? <Bot size={16} aria-hidden="true" /> : <Inbox size={16} aria-hidden="true" />}
           <span className="truncate max-sm:hidden">{chosen ? chosen.title : t("Inbox")}</span>
@@ -245,7 +399,7 @@ export function RecipientPicker({ s, c }: { s: State; c: Conversation }) {
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
           <span className="text-body-strong">{t("Send to")}</span>
-          <span className="text-caption text-muted-foreground">{t("You send as yourself, from your terminal inbox. Replies show up here.")}</span>
+          <span className="text-caption text-muted-foreground">{t("You send as yourself, from your inbox. Replies show up here.")}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={chosen?.short_id ?? INBOX} onValueChange={(v) => chooseRecipient(c.id, v === INBOX ? undefined : v)}>
