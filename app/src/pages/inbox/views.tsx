@@ -8,9 +8,11 @@ import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
 import type { Billing, Conversation, Message, MyAgent, Request } from "@/data/contract"
 import { messageOf, type Plan } from "@/data/layer"
 import {
+  ALIPAY_PRICES,
   PRICES,
   acceptRequest,
   addressOf,
+  alipayPack,
   checkout,
   chosenSession,
   contactOf,
@@ -932,6 +934,34 @@ function Subscribe() {
   )
 }
 
+/** API-080: the month or the year is picked on the payment page, so one button goes there. */
+function BuyWithAlipay() {
+  const [opening, setOpening] = useState(false)
+  const go = async () => {
+    if (opening) return
+    setOpening(true)
+    try {
+      if (!(await alipayPack())) setOpening(false)
+    } catch (e) {
+      setOpening(false)
+      toast.error(messageOf(e))
+      retry("billing")
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div>
+        <Button variant="outline" aria-disabled={opening} onClick={go}>
+          {opening ? t("Opening Alipay…") : t("Buy with Alipay")}
+        </Button>
+      </div>
+      <p className="text-caption text-muted-foreground">
+        {t("{month} a month or {year} a year, paid with Alipay. It doesn't renew.", { month: ALIPAY_PRICES.monthly, year: ALIPAY_PRICES.yearly })}
+      </p>
+    </div>
+  )
+}
+
 /** Waffo's customer page opens in a new tab (API-034). */
 function ManageSubscription({ note }: { note: string }) {
   const [opening, setOpening] = useState(false)
@@ -987,6 +1017,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
           <p className="tabular-nums">{t("Free trial, {n} days left", { n: daysUntil(b.trial_ends_at!) })}</p>
           <p className="text-caption text-muted-foreground">{t("Subscribe now and your first payment is taken 30 days later.")}</p>
           {!confirming && <Subscribe />}
+          {!confirming && b.alipay && <BuyWithAlipay />}
         </>
       )
     case "paid":
@@ -997,7 +1028,16 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
           <>
             <p>{t("Gifted until {date}", { date: longDate(sub.paid_until) })}</p>
             {!confirming && <Subscribe />}
+            {!confirming && b.alipay && <BuyWithAlipay />}
           </>
+        )
+      // An Alipay time pack (ADR-061) is paid once; there is no card and nothing to manage.
+      if (sub.provider === "alipay")
+        return (
+          <p className="flex flex-wrap items-center gap-2">
+            <Tag>{t("Won't renew")}</Tag>
+            {t("Alipay time pack, ends {date}", { date: longDate(sub.paid_until) })}
+          </p>
         )
       if (sub.status === "past_due")
         return (
@@ -1049,6 +1089,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
           </p>
           <p className="text-caption text-muted-foreground">{t("Your sessions can't send messages until you subscribe. You can still read history and download files.")}</p>
           {!confirming && <Subscribe />}
+          {!confirming && b.alipay && <BuyWithAlipay />}
         </>
       )
   }

@@ -90,6 +90,8 @@ export type DataLayer = {
   billing(): Promise<Billing>
   checkout(plan: Plan): Promise<string>
   portal(): Promise<string>
+  /** API-080: where to pay for a time pack, or nothing when it's paid for already. */
+  alipayPack(): Promise<string | undefined>
   fileUrl(f: FileRef): string
   /** API-019: the groups I'm in, with their members. */
   groups(): Promise<Group[]>

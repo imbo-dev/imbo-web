@@ -844,6 +844,8 @@ export async function signOut() {
 // ── Billing ──────────────────────────────────────────────────────────────────
 
 export const PRICES = { monthly: "$2", yearly: "$20" } as const
+/** API-080: an Alipay time pack costs this; Watcha's page is where the month or the year is picked. */
+export const ALIPAY_PRICES = { monthly: "¥15", yearly: "¥150" } as const
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -875,6 +877,17 @@ export async function checkout(plan: Plan) {
   return false
 }
 export const portalUrl = () => api.portal()
+
+/**
+ * API-080. Resolves true when the page is leaving for the payment page; no address back means the pack was paid for
+ * already and the server has just recorded it, so the plan row only needs the new answer.
+ */
+export async function alipayPack() {
+  const url = await api.alipayPack()
+  if (url) return location.assign(url), true
+  set({ billing: ready(await api.billing()) })
+  return false
+}
 
 // ── Reading the state ────────────────────────────────────────────────────────
 

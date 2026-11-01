@@ -122,6 +122,7 @@ export const online = {
   billing: () => get(c.billing, "/v1/billing"),
   checkout: async (plan) => (await call(c.checkout, "POST", "/v1/billing/checkout", { plan })).checkout_url,
   portal: async () => (await call(c.portal, "POST", "/v1/billing/portal")).portal_url,
+  alipayPack: async () => (await call(c.alipayPack, "POST", "/v1/billing/alipay")).purchase_url,
   // The response carries Content-Disposition: attachment, so a plain link downloads it.
   fileUrl: (f) => `${API}/v1/files/${encodeURIComponent(f.id)}`,
   groups: async () => (await get(c.groups, "/v1/groups")).groups,

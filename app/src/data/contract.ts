@@ -117,8 +117,10 @@ export const conversation = z.object({
  * API-032 getBilling. `enabled: false`: the server has no Waffo (self-hosted), and `mode` is absent.
  * `access.state` decides what the account can do; `subscription.status` is the server's (`active`, `scheduled_cancel`,
  * `canceled`, `past_due`, or one this app doesn't know, shown as is) and only picks the wording.
- * `subscription.provider` is `waffo` or `apple`; servers before App Store subscriptions leave it out (Waffo).
+ * `subscription.provider` is `waffo`, `apple`, `alipay` (a time pack) or `gift`; servers before App Store
+ * subscriptions leave it out (Waffo).
  * `app_store` is only there when the server sells App Store subscriptions; the web app doesn't use it.
+ * `alipay`: this server sells Alipay time packs (API-080); servers before them leave it out.
  */
 export const billing = z.object({
   enabled: z.boolean(),
@@ -128,6 +130,7 @@ export const billing = z.object({
   subscription: z
     .object({ plan: z.string(), status: z.string(), paid_until: time, provider: z.string().optional() })
     .optional(),
+  alipay: z.boolean().optional(),
 })
 
 /** Error bodies are problem+json. `type` is the stable part (`/errors/code-invalid`); `detail` is written for people. */
@@ -286,6 +289,8 @@ export const agentRenamed = z.object({ agent: myAgent })
 /** API-033, API-034 */
 export const checkout = z.object({ checkout_url: z.string() })
 export const portal = z.object({ portal_url: z.string() })
+/** API-080. `purchase_url` is where to pay; it's absent when the pack was already paid for and is now recorded. */
+export const alipayPack = z.object({ status: z.string(), paid_until: time.optional(), purchase_url: z.string().optional() })
 
 // List responses wrap their items.
 export const conversations = z.object({ conversations: z.array(conversation) })
