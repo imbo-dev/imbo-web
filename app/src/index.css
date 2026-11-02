@@ -66,7 +66,7 @@ body {
 .composer::-webkit-scrollbar { display: none; }
 .composer-shell { overflow: visible; transition: height var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
 .composer-shell[data-dir="shrink"] { transition-duration: var(--semantic-motion-duration-base); }
-/* Rows that Load more adds to a session list fade in (pages/inbox/groups.tsx). */
+/* Rows that Load more adds to a session list fade in (pages/inbox/groups.tsx, views.tsx). */
 .pick-in { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
 /* The line over the box fades in when it changes, as when sending starts opening an offline session (FLOW-WAKE). */
 .composer-note { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }

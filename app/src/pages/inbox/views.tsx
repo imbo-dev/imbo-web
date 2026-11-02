@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, Clock, ExternalLink, FlaskConical, ListChecks, MessageSquare, Pencil, Share, ShieldCheck, UserPlus, Users } from "lucide-react"
+import { ArrowLeft, Bot, ChevronDown, Clock, ExternalLink, FlaskConical, ListChecks, MessageSquare, Pencil, Share, ShieldCheck, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
@@ -64,14 +64,20 @@ export function BackLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-/** A row in the left column; the open item is marked with the selected surface (brand: selection is not a state layer). */
-function ListRow({ href, current, children }: { href: string; current: boolean; children: ReactNode }) {
+/**
+ * A row in the left column; the open item is marked with the selected surface (brand: selection is not a state layer).
+ * `appear`: fades in, as rows Load more adds.
+ */
+function ListRow({ href, current, appear, children }: { href: string; current: boolean; appear?: boolean; children: ReactNode }) {
   return (
     <a
       href={href}
       onClick={onLinkClick}
       aria-current={current ? "page" : undefined}
-      className="state-layer focus-ring grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-foreground aria-[current=page]:bg-accent"
+      className={cn(
+        "state-layer focus-ring grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-foreground aria-[current=page]:bg-accent",
+        appear && "pick-in"
+      )}
     >
       {children}
     </a>
@@ -452,8 +458,17 @@ function ToolLine({ x }: { x: MyAgent }) {
   )
 }
 
+const PAGE = 20
+const MOST = 200
+
+/**
+ * PAGE-WEB-SESSIONS: the 20 most recent first, 20 more each time Load more is pressed, at most 200: one account had 4,140
+ * sessions.
+ */
 export function SessionList({ s, open }: { s: State; open?: string }) {
   const l = s.agents
+  const [limit, setLimit] = useState(PAGE)
+  const nav = useRef<HTMLElement>(null)
   if (l.status === "loading") return <ListSkeleton rows={4} />
   if (l.status === "error") return <ErrorState title={t("Couldn't load sessions")} error={l.error} onRetry={() => retry("agents")} />
   if (!l.data.length)
@@ -465,23 +480,44 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
         </div>
       </EmptyState>
     )
+  const rest = Math.min(l.data.length, MOST) - limit
+  // Focus moves to the first row just shown, so the keyboard carries on down the list.
+  const more = () => {
+    setLimit(limit + PAGE)
+    requestAnimationFrame(() => nav.current?.querySelectorAll<HTMLElement>("a")[limit]?.focus())
+  }
   return (
-    <nav aria-label={t("My sessions")} className="flex flex-col gap-0.5 p-2">
-      {l.data.map((x) => (
-        <ListRow key={x.id} href={`/sessions/${x.id}`} current={x.id === open}>
-          <Avatar kind="agent" tool={x.tool} />
-          <span className="min-w-0">
-            <span className="block truncate text-body">{x.title}</span>
-            <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
-              <Presence s={x} plain />
-              <Sep />
-              <span className="truncate">{toolName(x.tool)}</span>
+    <>
+      <nav ref={nav} aria-label={t("My sessions")} className="flex flex-col gap-0.5 p-2">
+        {l.data.slice(0, limit).map((x, i) => (
+          <ListRow key={x.id} href={`/sessions/${x.id}`} current={x.id === open} appear={i >= PAGE}>
+            <Avatar kind="agent" tool={x.tool} />
+            <span className="min-w-0">
+              <span className="block truncate text-body">{x.title}</span>
+              <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+                <Presence s={x} plain />
+                <Sep />
+                <span className="truncate">{toolName(x.tool)}</span>
+              </span>
             </span>
-          </span>
-          {x.unread > 0 && <PendingBadge n={x.unread} sr={x.unread === 1 ? t("new reply") : t("new replies")} />}
-        </ListRow>
-      ))}
-    </nav>
+            {x.unread > 0 && <PendingBadge n={x.unread} sr={x.unread === 1 ? t("new reply") : t("new replies")} />}
+          </ListRow>
+        ))}
+      </nav>
+      {rest > 0 ? (
+        <div className="px-2 pb-2">
+          <Button variant="outline" size="sm" onClick={more} aria-label={t("Load more sessions, {n} left", { n: rest })}>
+            <ChevronDown size={14} aria-hidden="true" />
+            <span className="flex gap-2">
+              {t("Load more")}
+              <span className="text-muted-foreground">{t("{n} left", { n: rest })}</span>
+            </span>
+          </Button>
+        </div>
+      ) : (
+        l.data.length > MOST && <p className="pick-in px-4 pb-4 text-caption text-muted-foreground">{t("Only your {n} most recent sessions are listed.", { n: MOST })}</p>
+      )}
+    </>
   )
 }
 

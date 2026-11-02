@@ -221,6 +221,7 @@ export const zh = {
   "Load more sessions, {n} left": "加载更多会话，还有 {n} 个",
   "Load more": "加载更多",
   "{n} left": "还有 {n} 个",
+  "Only your {n} most recent sessions are listed.": "只列出最近的 {n} 个会话。",
   "ID {id}": "ID {id}",
   "{group} created.": "{group} 已创建。",
   "{group} created. Invitations sent.": "{group} 已创建，邀请已发出。",
