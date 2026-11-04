@@ -515,7 +515,7 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
           </Button>
         </div>
       ) : (
-        l.data.length > MOST && <p className="pick-in px-4 pb-4 text-caption text-muted-foreground">{t("Only your {n} most recent sessions are listed.", { n: MOST })}</p>
+        l.data.length >= MOST && <p className="pick-in px-4 pb-4 text-caption text-muted-foreground">{t("Only your {n} most recent sessions are listed.", { n: MOST })}</p>
       )}
     </>
   )
