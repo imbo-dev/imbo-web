@@ -5,6 +5,7 @@ import type {
   AdminAccount,
   AdminAccountsPage,
   AgentRef,
+  AlipayCheck,
   Area,
   Banned,
   Billing,
@@ -96,8 +97,10 @@ export type DataLayer = {
   billing(): Promise<Billing>
   checkout(plan: Plan): Promise<string>
   portal(): Promise<string>
-  /** API-080: where to pay for a time pack, or nothing when it's paid for already. */
-  alipayPack(): Promise<string | undefined>
+  /** API-080: Alipay's cashier page for this time pack. */
+  alipayPack(plan: Plan): Promise<string>
+  /** API-084: the order Alipay sent the buyer back with. */
+  alipayCheck(outTradeNo: string): Promise<AlipayCheck>
   fileUrl(f: FileRef): string
   /** API-019: the groups I'm in, with their members. */
   groups(): Promise<Group[]>

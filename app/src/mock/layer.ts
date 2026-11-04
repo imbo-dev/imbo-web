@@ -553,10 +553,14 @@ export const mock = {
       throw new ApiError(404, "/errors/not-found", "You have no subscription to manage yet.")
     return "https://pancake.waffo.ai/"
   },
-  /** No Watcha in the demo, so this server sells no time packs and the account page offers none. */
-  async alipayPack(): Promise<string | undefined> {
+  /** No Alipay in the demo, so this server sells no time packs and the account page offers none. */
+  async alipayPack() {
     signedIn()
-    throw new ApiError(404, "/errors/not-found", "This server does not sell time packs.")
+    throw new ApiError(404, "/errors/not-found", "This server does not sell time packs here.")
+  },
+  async alipayCheck() {
+    signedIn()
+    throw new ApiError(404, "/errors/not-found", "This server does not sell time packs here.")
   },
   fileUrl: (file) => `data:text/plain;charset=utf-8,${encodeURIComponent(`Demo file: ${file.name}\n`)}`,
   groups: () => data(() => f.groups, []),

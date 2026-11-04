@@ -31,6 +31,7 @@ import {
   renameAgent,
   retry,
   signOut,
+  watchAlipay,
   watchCheckout,
   type Load,
   type State,
@@ -974,30 +975,31 @@ function Subscribe() {
   )
 }
 
-/** API-080: the month or the year is picked on the payment page, so one button goes there. */
+/** API-080: a month or a year, each paid once. Both buttons stay unavailable from the click until Alipay opens or the server refuses. */
 function BuyWithAlipay() {
-  const [opening, setOpening] = useState(false)
-  const go = async () => {
+  const [opening, setOpening] = useState<Plan>()
+  const go = async (plan: Plan) => {
     if (opening) return
-    setOpening(true)
+    setOpening(plan)
     try {
-      if (!(await alipayPack())) setOpening(false)
+      await alipayPack(plan)
     } catch (e) {
-      setOpening(false)
+      setOpening(undefined)
       toast.error(messageOf(e))
       retry("billing")
     }
   }
   return (
     <div className="flex flex-col gap-2">
-      <div>
-        <Button variant="outline" aria-disabled={opening} onClick={go}>
-          {opening ? t("Opening Alipay…") : t("Buy with Alipay")}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" aria-disabled={!!opening} onClick={() => go("monthly")}>
+          {opening === "monthly" ? t("Opening Alipay…") : t("Alipay · 1 month {price}", { price: ALIPAY_PRICES.monthly })}
+        </Button>
+        <Button variant="outline" aria-disabled={!!opening} onClick={() => go("yearly")}>
+          {opening === "yearly" ? t("Opening Alipay…") : t("Alipay · 1 year {price}", { price: ALIPAY_PRICES.yearly })}
         </Button>
       </div>
-      <p className="text-caption text-muted-foreground">
-        {t("{month} a month or {year} a year, paid with Alipay. It doesn't renew.", { month: ALIPAY_PRICES.monthly, year: ALIPAY_PRICES.yearly })}
-      </p>
+      <p className="text-caption text-muted-foreground">{t("Paid once with Alipay. It doesn't renew.")}</p>
     </div>
   )
 }
@@ -1071,7 +1073,7 @@ function PlanDetails({ b, confirming }: { b: Billing; confirming: boolean }) {
             {!confirming && b.alipay && <BuyWithAlipay />}
           </>
         )
-      // An Alipay time pack (ADR-061) is paid once; there is no card and nothing to manage.
+      // An Alipay time pack (ADR-063) is paid once; there is no card and nothing to manage.
       if (sub.provider === "alipay")
         return (
           <p className="flex flex-wrap items-center gap-2">
@@ -1224,11 +1226,14 @@ function PlanRow({ s }: { s: State }) {
 }
 
 export function AccountPane({ s }: { s: State }) {
-  // Waffo sends the payer back to /account?checkout=done.
+  // Waffo sends the payer back to /account?checkout=done, Alipay to /account?paid=alipay&out_trade_no=….
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("checkout") !== "done") return
+    const q = new URLSearchParams(location.search)
+    const order = q.get("paid") === "alipay" ? q.get("out_trade_no") : null
+    if (q.get("checkout") !== "done" && !order) return
     history.replaceState(null, "", "/account")
-    watchCheckout()
+    if (order) watchAlipay(order)
+    else watchCheckout()
   }, [])
   useEffect(() => refreshList("devices"), [])
   const a = s.account

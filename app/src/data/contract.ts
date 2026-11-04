@@ -301,8 +301,10 @@ export const agentRenamed = z.object({ agent: myAgent })
 /** API-033, API-034 */
 export const checkout = z.object({ checkout_url: z.string() })
 export const portal = z.object({ portal_url: z.string() })
-/** API-080. `purchase_url` is where to pay; it's absent when the pack was already paid for and is now recorded. */
-export const alipayPack = z.object({ status: z.string(), paid_until: time.optional(), purchase_url: z.string().optional() })
+/** API-080: Alipay's cashier page for the web app. */
+export const alipayPack = z.object({ purchase_url: z.string() })
+/** API-084: `granted` with `paid_until` once the order is recorded, else `unpaid`. */
+export const alipayCheck = z.object({ status: z.string(), paid_until: time.optional() })
 
 // List responses wrap their items.
 export const conversations = z.object({ conversations: z.array(conversation) })
@@ -323,6 +325,7 @@ export type Message = z.infer<typeof message>
 export type Via = NonNullable<z.infer<typeof sender>["via"]>
 export type Conversation = z.infer<typeof conversation>
 export type Billing = z.infer<typeof billing>
+export type AlipayCheck = z.infer<typeof alipayCheck>
 export type MessagesPage = z.infer<typeof messagesPage>
 export type Me = z.infer<typeof me>
 export type WebLogin = z.infer<typeof webLogin>

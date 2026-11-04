@@ -878,7 +878,7 @@ export async function signOut() {
 // ── Billing ──────────────────────────────────────────────────────────────────
 
 export const PRICES = { monthly: "$2", yearly: "$20" } as const
-/** API-080: an Alipay time pack costs this; Watcha's page is where the month or the year is picked. */
+/** API-080: what an Alipay time pack costs. */
 export const ALIPAY_PRICES = { monthly: "¥15", yearly: "¥150" } as const
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -912,15 +912,26 @@ export async function checkout(plan: Plan) {
 }
 export const portalUrl = () => api.portal()
 
+/** API-080: leaves for Alipay's cashier. Throws ApiError when the server refuses. */
+export async function alipayPack(plan: Plan) {
+  location.assign(await api.alipayPack(plan))
+}
+
 /**
- * API-080. Resolves true when the page is leaving for the payment page; no address back means the pack was paid for
- * already and the server has just recorded it, so the plan row only needs the new answer.
+ * Back from Alipay's cashier with the order number: the server looks the order up (API-084). Not recorded yet, or
+ * Alipay not answering, it waits for the payment notice as after Waffo (FLOW-ALIPAY-PACK S6).
  */
-export async function alipayPack() {
-  const url = await api.alipayPack()
-  if (url) return location.assign(url), true
-  set({ billing: ready(await api.billing()) })
-  return false
+export async function watchAlipay(outTradeNo: string) {
+  set({ checkout: "waiting" })
+  try {
+    if ((await api.alipayCheck(outTradeNo)).status === "granted") {
+      set({ billing: ready(await api.billing()), checkout: undefined })
+      return
+    }
+  } catch (e) {
+    if (expired(e)) return
+  }
+  watchCheckout()
 }
 
 // ── Reading the state ────────────────────────────────────────────────────────
