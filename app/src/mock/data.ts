@@ -2,6 +2,10 @@
 // characters of a session ID, group IDs 7 digits (shown as "#" + ID), files kept 7 days.
 
 import type { Account, AdminAccount, AgentRef, Billing, Block, Contact, Conversation, Device, FileRef, Group, Message, MyAgent, Report, ReportMessage, Request, ShareLevel, Stats } from "@/data/contract"
+import deployGif from "./media/deploy-progress.gif"
+import walkthrough from "./media/checkout-walkthrough.webm"
+import render from "./media/render-full.jpg"
+import latency from "./media/staging-latency.png"
 
 const DAY = 86_400_000
 const now = Date.now()
@@ -184,7 +188,7 @@ export const msg = ({ files = [], ...m }: Draft): Message => ({
   from_me: m.from.account_id === account.id && !m.from.agent,
 })
 export const from = (person: { id: number; name: string }, agent?: AgentRef) => ({ account_id: person.id, name: person.name, ...(agent && { agent }) })
-const sentM1 = at(9, "16:20"), sentM3 = at(1, "18:02"), sentM6 = at(0, "09:14")
+const sentM1 = at(9, "16:20"), sentM3 = at(1, "18:02"), sentM6 = at(0, "09:14"), sentM7 = at(0, "09:24"), sentM8 = at(0, "11:56")
 
 /** API-031, all conversations together, by message number. */
 export const messages: Message[] = [
@@ -198,11 +202,42 @@ export const messages: Message[] = [
   msg({ id: 152, conversation: withMia, from: from(dana, checkout), to: miaOrders, created_at: at(0, "09:15"), body: "Switched to customer_id and 412 tests pass locally. Can you confirm staging accepts it?" }),
   msg({ id: 153, conversation: inRelease, from: from(mia, miaBilling), created_at: at(0, "09:18"), body: "Billing webhooks are paused for the 10:00 deploy window." }),
   msg({ id: 154, conversation: withMia, from: from(mia, miaOrders), to: checkout, created_at: at(0, "09:21"), body: "Staging accepts your request IDs. The old field keeps working until Friday." }),
+  msg({
+    id: 155,
+    conversation: withMia,
+    from: from(mia, miaOrders),
+    to: checkout,
+    created_at: sentM7,
+    body: "p95 on staging since the switch, the deploy as it ran, and the full render.",
+    files: [fileAt("f5", "staging-latency.png", 186_420, sentM7), fileAt("f6", "deploy-progress.gif", 48_310, sentM7), fileAt("f7", "render-full.jpg", 14_200_000, sentM7)],
+  }),
   msg({ id: 160, conversation: inRelease, from: { ...from(leo), via: "web" }, created_at: at(0, "09:40"), body: "Deploy window starts at 10:00. Hold merges to main until I post here again." }),
   msg({ id: 161, conversation: inRelease, from: from(bob), created_at: at(0, "09:44"), body: "I'll keep messaging every session in this group until someone merges it." }),
   msg({ id: 171, conversation: withMia, from: { ...from(mia), via: "app" }, to: danaTerminal, created_at: at(0, "11:40"), body: "午饭后我把 v2.3 部署到生产，你那边还有要改的吗？" }),
   msg({ id: 172, conversation: selfChat, from: from(dana, checkout), to: danaTerminal, created_at: at(0, "11:52"), body: "All 412 tests pass on staging. Shall I open the PR for the customer_id switch?" }),
+  msg({
+    id: 173,
+    conversation: selfChat,
+    from: from(dana, checkout),
+    to: danaTerminal,
+    created_at: sentM8,
+    body: "Recordings of the checkout flow on staging, and the flow diagram.",
+    files: [fileAt("f8", "checkout-walkthrough.webm", 38_400_000, sentM8), fileAt("f9", "screen-recording.mov", 52_000_000, sentM8), fileAt("f10", "checkout-flow.webp", 240_000, sentM8)],
+  }),
 ]
+
+/**
+ * API-027 for the demo's pictures and videos, by file ID. The .mov and the .webp hold bytes that aren't a video or a
+ * picture, as a file in a format the browser can't show would.
+ */
+export const media: Record<string, string> = {
+  f5: latency,
+  f6: deployGif,
+  f7: render,
+  f8: walkthrough,
+  f9: "data:,not%20a%20video",
+  f10: "data:,not%20a%20picture",
+}
 
 /** Contact sessions that answer in the demo, by the address a chat sends to (`<account>/<short ID>`). */
 export const contactSessions: Record<string, AgentRef> = { [`${mia.id}/e91d07`]: miaOrders, [`${mia.id}/52ab3f`]: miaBilling, [`${leo.id}/a0c4e2`]: leoRelease }

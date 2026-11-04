@@ -8,6 +8,13 @@ import { ApiError, noAnswer, type DataLayer, type Page } from "./layer"
 // its contract schema.
 const API = import.meta.env.DEV ? "" : "https://api.imbo.dev"
 
+/** A refusal's problem+json: its `type`, and the server's `detail` to show. */
+function refused(r: Response, json: unknown) {
+  const p = c.problem.safeParse(json)
+  const retry = Number(r.headers.get("retry-after")) || undefined
+  return new ApiError(r.status, p.success ? p.data.type : "unknown", (p.success && (p.data.detail ?? p.data.title)) || noAnswer(), retry)
+}
+
 /** `body` goes as JSON, except a Blob (a picture or a file), which goes as is with its own type, or `headers` when given. */
 async function call<T extends z.ZodType>(schema: T, method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<z.infer<T>> {
   let r: Response
@@ -30,11 +37,7 @@ async function call<T extends z.ZodType>(schema: T, method: string, path: string
       // A body cut off on the way (the page navigated, the connection dropped) is no answer, not a wrong one.
       if (r.ok) throw new ApiError(0, "network", noAnswer())
     }
-  if (!r.ok) {
-    const p = c.problem.safeParse(json)
-    const retry = Number(r.headers.get("retry-after")) || undefined
-    throw new ApiError(r.status, p.success ? p.data.type : "unknown", (p.success && (p.data.detail ?? p.data.title)) || noAnswer(), retry)
-  }
+  if (!r.ok) throw refused(r, json)
   const parsed = schema.safeParse(json)
   if (!parsed.success) {
     if (import.meta.env.DEV) console.error(`${method} ${path} doesn't match src/data/contract.ts:\n${z.prettifyError(parsed.error)}`)
@@ -128,6 +131,28 @@ export const online = {
   alipayCheck: (out_trade_no) => call(c.alipayCheck, "POST", "/v1/billing/alipay/check", { out_trade_no }),
   // The response carries Content-Disposition: attachment, so a plain link downloads it.
   fileUrl: (f) => `${API}/v1/files/${encodeURIComponent(f.id)}`,
+  // With the session cookie, like every other call. Read piece by piece when someone watches how far it got: the share
+  // of Content-Length, or of the size the message gave when there's none.
+  fileBytes: async (f, signal, progress) => {
+    try {
+      const r = await fetch(`${API}/v1/files/${encodeURIComponent(f.id)}`, { credentials: "include", signal })
+      if (!r.ok) throw refused(r, await r.json().catch(() => undefined))
+      if (!progress || !r.body) return await r.blob()
+      const total = Number(r.headers.get("content-length")) || f.size
+      const reader = r.body.getReader()
+      const parts: Uint8Array<ArrayBuffer>[] = []
+      for (let got = 0; ; ) {
+        const { done, value } = await reader.read()
+        if (done) return new Blob(parts)
+        parts.push(value)
+        got += value.length
+        progress(Math.min(1, got / total))
+      }
+    } catch (e) {
+      if (e instanceof ApiError || signal?.aborted) throw e
+      throw new ApiError(0, "network", noAnswer())
+    }
+  },
   groups: async () => (await get(c.groups, "/v1/groups")).groups,
   createGroup: async (name, sessions) => (await call(c.groupOne, "POST", "/v1/groups", { name, sessions })).group,
   renameGroup: async (id, name) => (await call(c.groupOne, "PATCH", `/v1/groups/${id}`, { name })).group,

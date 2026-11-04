@@ -88,6 +88,9 @@ body {
 @media (width < 40rem) {
   .dialog-panel[data-state="open"], .drawer-panel[data-state="open"] { animation: sheet-in var(--semantic-motion-duration-slow) var(--semantic-motion-easing-emphasized); }
 }
+/* A picture or video full screen (pages/inbox/viewer.tsx) fades in and out, the same with reduced motion. */
+.viewer[data-state="open"] { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
+.viewer[data-state="closed"] { animation: fade-out var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(0.5rem) scale(0.98); } }

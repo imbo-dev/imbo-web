@@ -464,6 +464,53 @@ const drafts = new Map<ThreadKey, string>()
 export const draftOf = (key: ThreadKey) => drafts.get(key) ?? ""
 export const keepDraft = (key: ThreadKey, text: string) => void (text ? drafts.set(key, text) : drafts.delete(key))
 
+// ── Pictures and videos in messages (RULE-020, RULE-021) ─────────────────────
+
+/** Extensions the page shows itself, with the type their bytes get: API-027 sends every file as octet-stream. */
+const MEDIA = new Map([
+  ["png", "image/png"],
+  ["jpg", "image/jpeg"],
+  ["jpeg", "image/jpeg"],
+  ["gif", "image/gif"],
+  ["webp", "image/webp"],
+  ["mp4", "video/mp4"],
+  ["mov", "video/quicktime"],
+  ["m4v", "video/x-m4v"],
+  ["webm", "video/webm"],
+])
+const typeOf = (f: FileRef) => MEDIA.get(/\.([^.]+)$/.exec(f.name)?.[1].toLowerCase() ?? "")
+/** A picture the page shows or a video it plays, by the file's extension; an expired file is neither. */
+export const mediaOf = (f: FileRef) => (fileExpired(f) ? undefined : (typeOf(f)?.split("/")[0] as "image" | "video" | undefined))
+/** Pictures up to 10 MB show in the message by themselves; bigger ones when asked. */
+export const PICTURE_SHOWN_BYTES = 10 * 1024 * 1024
+
+/** Bytes fetched while the page lives, by file ID, so the thread refreshing doesn't fetch them again. */
+const fetched = new Map<string, Blob>()
+/** Fetches without a signal share one request. */
+const inFlight = new Map<string, Promise<Blob>>()
+export const fetchedFile = (f: FileRef) => fetched.get(f.id)
+/**
+ * API-027: a picture's or video's bytes with their type, from memory once fetched. `signal` stops it, rejecting with
+ * the signal's reason; `progress` gets the share that has arrived, 0 to 1.
+ */
+export function fetchFile(f: FileRef, signal?: AbortSignal, progress?: (share: number) => void): Promise<Blob> {
+  const done = fetched.get(f.id)
+  if (done) return Promise.resolve(done)
+  const shared = !signal && inFlight.get(f.id)
+  if (shared) return shared
+  const p = api.fileBytes(f, signal, progress).then((b) => {
+    const typed = b.slice(0, b.size, typeOf(f))
+    fetched.set(f.id, typed)
+    return typed
+  })
+  if (!signal) {
+    inFlight.set(f.id, p)
+    const forget = () => inFlight.delete(f.id)
+    p.then(forget, forget)
+  }
+  return p
+}
+
 // ── Picture, blocks and reports ──────────────────────────────────────────────
 
 /** Something the page waits on: a 401 signs out; anything else comes back as an ApiError for the page to show. */

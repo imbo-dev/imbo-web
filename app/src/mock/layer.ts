@@ -133,8 +133,9 @@ function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
 // Stored the way the server stores it: once per client_msg_id, answered by the sessions it went to a moment later.
 
 const sentByCid = new Map<string, Sent>()
-/** Files Dana uploaded, by ID, and how much she uploaded today. */
+/** Files Dana uploaded, by ID, with their bytes, and how much she uploaded today. */
 const uploads = new Map<string, FileRef>()
+const uploadedBytes = new Map<string, Blob>()
 let uploadedToday = 0
 const GB = 1_073_741_824
 const filesOf = (ids: string[] = []) => ids.map((id) => uploads.get(id)!)
@@ -409,6 +410,7 @@ export const mock = {
     uploadedToday += file.size
     const ref: FileRef = { id: `f-${uploads.size + 1}`, name: file.name, size: file.size, sha256, expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString() }
     uploads.set(ref.id, ref)
+    uploadedBytes.set(ref.id, file)
     const midnight = new Date()
     midnight.setUTCHours(16, 0, 0, 0)
     if (midnight.getTime() < Date.now()) midnight.setUTCDate(midnight.getUTCDate() + 1)
@@ -563,6 +565,23 @@ export const mock = {
     throw new ApiError(404, "/errors/not-found", "This server does not sell time packs here.")
   },
   fileUrl: (file) => `data:text/plain;charset=utf-8,${encodeURIComponent(`Demo file: ${file.name}\n`)}`,
+  /**
+   * What Dana uploaded, or the demo's pictures and videos; anything else isn't found. Arrives in steps, about 1 s for
+   * every 10 MB the message says it has, at least 0.4 s and at most 4 s.
+   */
+  async fileBytes(file, signal, progress) {
+    signedIn()
+    const steps = Math.min(40, Math.max(4, Math.round(file.size / 1_000_000)))
+    for (let i = 1; i <= steps; i++) {
+      await wait(100)
+      signal?.throwIfAborted()
+      if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
+      progress?.(i / steps)
+    }
+    const bytes = uploadedBytes.get(file.id) ?? (f.media[file.id] && (await (await fetch(f.media[file.id])).blob()))
+    if (!bytes) throw new ApiError(404, "/errors/not-found", "File not found.")
+    return bytes
+  },
   groups: () => data(() => f.groups, []),
   /** Same name rules as the server; the group is Dana's, with the sessions she picked. */
   async createGroup(name, sessions) {

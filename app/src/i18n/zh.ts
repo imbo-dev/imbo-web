@@ -334,6 +334,8 @@ export const zh = {
   "Show earlier messages": "显示更早的消息",
   "Couldn't load them. Try again.": "没加载出来，再试一次。",
   "Jump to latest": "跳到最新",
+  "Load image": "加载图片",
+  "Play {name}": "播放 {name}",
   // pages/inbox/safety.tsx
   "{name} is unblocked.": "已解除对 {name} 的屏蔽。",
   "{name} is blocked.": "已屏蔽 {name}。",
@@ -535,4 +537,9 @@ export const zh = {
   "You're an Imbo admin.": "你是 Imbo 管理员。",
   "Open admin": "打开管理后台",
   "Reports, users and the dashboard.": "举报、用户和数据看板。",
+  // pages/inbox/viewer.tsx
+  "Share": "分享",
+  "Download": "下载",
+  "Downloading… {percent}%": "正在下载… {percent}%",
+  "This video can't play here. Download it to open it in another app.": "这里放不了这个视频，可以下载后用别的应用打开。",
 } as const

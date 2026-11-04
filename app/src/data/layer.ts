@@ -102,6 +102,11 @@ export type DataLayer = {
   /** API-084: the order Alipay sent the buyer back with. */
   alipayCheck(outTradeNo: string): Promise<AlipayCheck>
   fileUrl(f: FileRef): string
+  /**
+   * API-027: the file's bytes, for a picture or video the page shows itself. `progress` gets the share that has
+   * arrived, 0 to 1; `signal` stops the download, which then rejects with the signal's reason.
+   */
+  fileBytes(f: FileRef, signal?: AbortSignal, progress?: (share: number) => void): Promise<Blob>
   /** API-019: the groups I'm in, with their members. */
   groups(): Promise<Group[]>
   /** API-018: a group I own, its messages going to `sessions` (agent IDs). */

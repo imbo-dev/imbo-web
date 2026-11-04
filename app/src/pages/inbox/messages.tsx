@@ -1,8 +1,9 @@
-import { Fragment, type ReactNode } from "react"
-import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText } from "lucide-react"
+import { Fragment, useEffect, useState, type ReactNode } from "react"
+import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText, Play } from "lucide-react"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog } from "@/components/ui/dialog"
 import { agentAvatar, Avatar, SessionName, Sep, Tag } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
 import type { FileRef, Message, Via } from "@/data/contract"
@@ -11,12 +12,16 @@ import {
   contactOf,
   dataOf,
   discard,
+  fetchedFile,
+  fetchFile,
   fileExpired,
   fileUrl,
   groupOf,
   isMe,
   loadOlder,
+  mediaOf,
   photoOf,
+  PICTURE_SHOWN_BYTES,
   recipientOf,
   resend,
   resendTo,
@@ -28,43 +33,152 @@ import {
 import { t } from "@/i18n"
 import { clock, dayLabel, fileSize, langOf, sameDay } from "@/lib/format"
 import { useFollow } from "@/lib/useFollow"
+import { useObjectUrl } from "@/lib/useObjectUrl"
+import { PictureViewer, VideoViewer } from "./viewer"
 
 // Messages as bubbles, as in the App. What I sent in person is on the right in the primary color, my picture after it;
 // everything else, my sessions' messages included, is on the left after its sender's picture: a session's product mark,
 // or the picture of whoever sent it in person, from whichever terminal, App or web page. Above each bubble a heading says who sent it — "Mia orders-api", "Mia · App" —
 // and, where it matters, which session or inbox it went to; under it, how its delivery is going.
 
-function Attachments({ files }: { files: FileRef[] }) {
+const DownloadLink = ({ f }: { f: FileRef }) => (
+  <Button asChild variant="ghost" size="icon">
+    <a href={fileUrl(f)} download={f.name} aria-label={t("Download {name}", { name: f.name })}>
+      <Download size={16} aria-hidden="true" />
+    </a>
+  </Button>
+)
+
+/**
+ * A file as a card: its name, size and download until it expires. `lead` takes the icon's place; `action` sits before
+ * the download.
+ */
+function FileCard({ f, lead, action }: { f: FileRef; lead?: ReactNode; action?: ReactNode }) {
+  const expired = fileExpired(f)
+  return (
+    <li className={cn("flex items-center gap-3 rounded-md border-(length:--semantic-layout-hairline) border-border bg-card py-2 pr-2", lead ? "pl-2" : "pl-3")}>
+      {lead ?? <FileText size={20} aria-hidden="true" className="flex-none text-muted-foreground" />}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-body wrap-anywhere text-foreground">{f.name}</span>
+        <span className="flex items-center gap-2 text-caption text-muted-foreground">
+          {fileSize(f.size)}
+          {expired && (
+            <>
+              <Sep />
+              {t("Files are kept 7 days")}
+            </>
+          )}
+        </span>
+      </span>
+      {expired ? (
+        <Tag>{t("Expired")}</Tag>
+      ) : (
+        <>
+          {action}
+          <DownloadLink f={f} />
+        </>
+      )}
+    </li>
+  )
+}
+
+/**
+ * RULE-020: a picture up to 10 MB shows in the message by itself, a bigger one once Load image has fetched it; clicking
+ * it opens it full screen. One that can't be fetched or doesn't decode stays a file card. The box keeps one shape from
+ * the start, so the thread doesn't move when the picture arrives.
+ */
+function Picture({ f, right }: { f: FileRef; right: boolean }) {
+  const shown = f.size <= PICTURE_SHOWN_BYTES
+  // "wait": over 10 MB, not asked for yet.
+  const [got, setGot] = useState<Blob | "wait" | "fetch" | "failed">(() => fetchedFile(f) ?? (shown ? "fetch" : "wait"))
+  const [open, setOpen] = useState(false)
+  const url = useObjectUrl(got instanceof Blob ? got : undefined)
+  useEffect(() => {
+    if (got !== "fetch") return
+    let live = true
+    fetchFile(f).then(
+      (blob) => live && setGot(blob),
+      () => live && setGot("failed")
+    )
+    return () => {
+      live = false
+    }
+  }, [got, f.id])
+
+  if (got === "failed") return <FileCard f={f} />
+  if (!(got instanceof Blob) && !shown)
+    return (
+      <FileCard
+        f={f}
+        action={
+          <Button variant="secondary" size="sm" data-testid={`file-load-${f.id}`} aria-disabled={got === "fetch"} onClick={() => setGot("fetch")}>
+            {got === "fetch" ? t("Loading…") : t("Load image")}
+          </Button>
+        }
+      />
+    )
+  return (
+    <li className={cn("flex w-64 max-w-full flex-col gap-1.5", right && "self-end")}>
+      {url && got instanceof Blob ? (
+        <>
+          <button
+            type="button"
+            data-testid={`file-thumb-${f.id}`}
+            onClick={() => setOpen(true)}
+            className="state-layer focus-ring aspect-4/3 w-full cursor-zoom-in overflow-hidden rounded-md border-(length:--semantic-layout-hairline) border-border bg-muted"
+          >
+            <img src={url} alt={f.name} draggable={false} onError={() => setGot("failed")} className="size-full object-cover" />
+          </button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <PictureViewer f={f} blob={got} url={url} />
+          </Dialog>
+        </>
+      ) : (
+        <span aria-hidden="true" className="block aspect-4/3 w-full overflow-hidden rounded-md">
+          <span className="skeleton block size-full" />
+        </span>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-caption wrap-anywhere text-foreground">{f.name}</span>
+          <span className="text-caption text-muted-foreground">{fileSize(f.size)}</span>
+        </span>
+        <DownloadLink f={f} />
+      </div>
+    </li>
+  )
+}
+
+/** RULE-021: a video is a card with a play button, which opens it full screen to download and play. */
+function Video({ f }: { f: FileRef }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <FileCard
+      f={f}
+      lead={
+        <>
+          <Button size="icon" data-testid={`file-video-${f.id}`} aria-label={t("Play {name}", { name: f.name })} onClick={() => setOpen(true)} className="size-10 rounded-full">
+            {/* Optical centering: a play triangle's weight sits left of its box, so it moves 2px right. */}
+            <Play size={16} aria-hidden="true" className="ml-0.5" />
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <VideoViewer f={f} />
+          </Dialog>
+        </>
+      }
+    />
+  )
+}
+
+/** `right`: the message is on my side, where a picture lines up on the right too. */
+function Attachments({ files, right }: { files: FileRef[]; right: boolean }) {
   return (
     <ul className="mt-2 flex max-w-sm flex-col gap-2">
       {files.map((f) => {
-        const expired = fileExpired(f)
-        return (
-          <li key={f.id} className="flex items-center gap-3 rounded-md border-(length:--semantic-layout-hairline) border-border bg-card py-2 pr-2 pl-3">
-            <FileText size={20} aria-hidden="true" className="flex-none text-muted-foreground" />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-body wrap-anywhere text-foreground">{f.name}</span>
-              <span className="flex items-center gap-2 text-caption text-muted-foreground">
-                {fileSize(f.size)}
-                {expired && (
-                  <>
-                    <Sep />
-                    {t("Files are kept 7 days")}
-                  </>
-                )}
-              </span>
-            </span>
-            {expired ? (
-              <Tag>{t("Expired")}</Tag>
-            ) : (
-              <Button asChild variant="ghost" size="icon">
-                <a href={fileUrl(f)} download={f.name} aria-label={t("Download {name}", { name: f.name })}>
-                  <Download size={16} aria-hidden="true" />
-                </a>
-              </Button>
-            )}
-          </li>
-        )
+        const media = mediaOf(f)
+        if (media === "image") return <Picture key={f.id} f={f} right={right} />
+        if (media === "video") return <Video key={f.id} f={f} />
+        return <FileCard key={f.id} f={f} />
       })}
     </ul>
   )
@@ -180,7 +294,7 @@ export function MessageRow({ s, m }: { s: State; m: Message }) {
         </time>
       </header>
       {m.body && <Bubble body={m.body} right={right} />}
-      {m.files.length > 0 && <Attachments files={m.files} />}
+      {m.files.length > 0 && <Attachments files={m.files} right={right} />}
       <Delivery s={s} m={m} />
     </Row>
   )
@@ -236,7 +350,7 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
         {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{toText(to)}</span>}
       </header>
       {o.body && <Bubble body={o.body} right />}
-      {o.files.length > 0 && <Attachments files={o.files} />}
+      {o.files.length > 0 && <Attachments files={o.files} right />}
       {!e ? (
         <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{t("Sending…")}</StatusLine>
       ) : (
