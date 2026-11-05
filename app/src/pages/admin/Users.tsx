@@ -9,6 +9,7 @@ import { ApiError, messageOf } from "@/data/layer"
 import { admin, type Load } from "@/data/store"
 import { clock, daysUntil, sameDay, shortDate } from "@/lib/format"
 import { navigate, useQuery } from "@/lib/router"
+import { useLatest } from "@/lib/useLatest"
 import { EmptyState, ErrorState, ListSkeleton } from "@/pages/inbox/states"
 import { BanDialog, BannedTag, Refusal, appStoreNote, nameOf, retryCancel } from "./Admin"
 import { Pager } from "./Reports"
@@ -61,14 +62,17 @@ export function Users({ recount }: { recount: () => void }) {
   const [dialog, setDialog] = useState<Dialogs>()
   const [busy, setBusy] = useState<number>()
 
+  const start = useLatest()
   const load = useCallback(async () => {
+    const current = start()
     setList({ status: "loading" })
     try {
-      setList({ status: "ready", data: await admin.accounts(q, page) })
+      const data = await admin.accounts(q, page)
+      if (current()) setList({ status: "ready", data })
     } catch (e) {
-      setList({ status: "error", error: e as ApiError })
+      if (current()) setList({ status: "error", error: e as ApiError })
     }
-  }, [q, page])
+  }, [q, page, start])
   useEffect(() => void load(), [load])
 
   // The search goes into the address a moment after typing stops (replacing it: Back skips each keystroke).

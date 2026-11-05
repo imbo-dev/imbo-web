@@ -11,6 +11,7 @@ import { admin, type Load } from "@/data/store"
 import { ago, clock, dateTime, fileSize, langOf, sameDay, shortDate } from "@/lib/format"
 import { onLinkClick, onFilterClick, useQuery } from "@/lib/router"
 import { useCopy } from "@/lib/useCopy"
+import { useLatest } from "@/lib/useLatest"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "@/pages/inbox/states"
 import { BanDialog, BannedTag, Refusal, appStoreNote, nameOf, retryCancel } from "./Admin"
 
@@ -62,19 +63,22 @@ export function Reports({ recount }: { recount: () => void }) {
   const [list, setList] = useState<Load<ReportsPage>>({ status: "loading" })
   const [openCount, setOpenCount] = useState<number>()
 
+  const start = useLatest()
   const load = useCallback(
     async (quiet = false) => {
+      const current = start()
       if (!quiet) setList({ status: "loading" })
       try {
         const data = await admin.reports(status, page)
+        if (!current()) return
         setList({ status: "ready", data })
         if (status === "open") setOpenCount(data.total)
         else setOpenCount((await admin.reports("open", 1)).total)
       } catch (e) {
-        if (!quiet) setList({ status: "error", error: e as ApiError })
+        if (!quiet && current()) setList({ status: "error", error: e as ApiError })
       }
     },
-    [status, page]
+    [status, page, start]
   )
   useEffect(() => void load(), [load])
   /** A report changed: the list, its count and the tab's count follow. */
@@ -308,16 +312,19 @@ function ReportDetail({ id, onChanged }: { id: number; onChanged: () => void }) 
   /** true after a ban when the person still has an App Store subscription that renews (FLOW-BAN S7). */
   const [appStore, setAppStore] = useState(false)
 
+  const start = useLatest()
   const load = useCallback(
     async (quiet = false) => {
+      const current = start()
       if (!quiet) setR({ status: "loading" })
       try {
-        setR({ status: "ready", data: await admin.report(id) })
+        const data = await admin.report(id)
+        if (current()) setR({ status: "ready", data })
       } catch (e) {
-        setR({ status: "error", error: e as ApiError })
+        if (current()) setR({ status: "error", error: e as ApiError })
       }
     },
-    [id]
+    [id, start]
   )
   useEffect(() => void load(), [load])
 

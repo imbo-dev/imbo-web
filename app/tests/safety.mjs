@@ -606,8 +606,11 @@ try {
     ok('TC-230 #3 Copy link', copied === `${base}/admin?report=${made.R1}`, copied);
   });
   await step('TC-230 #4 All', async () => {
+    // The Open rows stay on screen until the list reloads; count only after the All list has come back.
+    const all = adm.waitForResponse((r) => r.url().includes('/v1/admin/reports?status=all'));
     await adm.getByRole('navigation', { name: 'Which reports' }).getByRole('link', { name: 'All' }).click();
     await adm.waitForURL(/status=all/);
+    await all;
     await rows().first().waitFor();
     const current = await adm.getByRole('navigation', { name: 'Reports', exact: true }).locator('a[aria-current=page]').innerText();
     const n = await rows().count();
