@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react"
 import { Download, Share2, X } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
@@ -67,9 +67,9 @@ const BAR_BUTTON = "max-sm:w-8 max-sm:px-0"
 
 /**
  * The picture fits the window, a small one at its own size; the wheel, a pinch or a double-click zooms in, and dragging
- * moves it while zoomed.
+ * moves it while zoomed. A click on the space around the picture closes it; one that ends a drag doesn't.
  */
-export function PictureViewer({ f, blob, url }: { f: FileRef; blob: Blob; url: string }) {
+export function PictureViewer({ f, blob, url, onClose }: { f: FileRef; blob: Blob; url: string; onClose: () => void }) {
   const file = useMemo(() => new File([blob], f.name, { type: blob.type }), [blob, f.name])
   // Share only where the browser can hand a picture to other apps.
   const canShare = !!navigator.canShare?.({ files: [file] })
@@ -77,6 +77,8 @@ export function PictureViewer({ f, blob, url }: { f: FileRef; blob: Blob; url: s
     navigator.share({ files: [file], title: f.name }).catch((e: Error) => e.name !== "AbortError" && toast.error(t("Couldn't share the image. Download it instead.")))
   // With reduced motion a double-click jumps to the new size instead of growing to it.
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches
+  const down = useRef({ x: 0, y: 0 })
+  const picture = useRef<HTMLImageElement>(null)
   return (
     <Viewer
       f={f}
@@ -97,11 +99,25 @@ export function PictureViewer({ f, blob, url }: { f: FileRef; blob: Blob; url: s
         </>
       }
     >
-      <TransformWrapper minScale={1} maxScale={8} doubleClick={{ mode: "toggle", step: 1, animationTime: still ? 0 : 180 }}>
-        <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
-          <img src={url} alt={f.name} draggable={false} className="max-h-full max-w-full object-contain" />
-        </TransformComponent>
-      </TransformWrapper>
+      {/* Esc and Close stay the keyboard's ways out; this only adds the pointer's. */}
+      <div
+        data-testid="file-viewer-stage"
+        className="size-full"
+        onPointerDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
+        onClick={(e) => {
+          // The zoom layer takes the clicks meant for the picture, so where the picture is decides; its box follows the zoom.
+          const r = picture.current?.getBoundingClientRect()
+          const onPicture = !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+          if (onPicture || Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return
+          onClose()
+        }}
+      >
+        <TransformWrapper minScale={1} maxScale={8} doubleClick={{ mode: "toggle", step: 1, animationTime: still ? 0 : 180 }}>
+          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+            <img ref={picture} src={url} alt={f.name} draggable={false} className="max-h-full max-w-full object-contain" />
+          </TransformComponent>
+        </TransformWrapper>
+      </div>
     </Viewer>
   )
 }

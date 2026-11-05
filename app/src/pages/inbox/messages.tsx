@@ -32,6 +32,7 @@ import {
 } from "@/data/store"
 import { t } from "@/i18n"
 import { clock, dayLabel, fileSize, langOf, sameDay } from "@/lib/format"
+import { pieces } from "@/lib/links"
 import { useFollow } from "@/lib/useFollow"
 import { useObjectUrl } from "@/lib/useObjectUrl"
 import { PictureViewer, VideoViewer } from "./viewer"
@@ -130,7 +131,7 @@ function Picture({ f, right }: { f: FileRef; right: boolean }) {
             <img src={url} alt={f.name} draggable={false} onError={() => setGot("failed")} className="size-full object-cover" />
           </button>
           <Dialog open={open} onOpenChange={setOpen}>
-            <PictureViewer f={f} blob={got} url={url} />
+            <PictureViewer f={f} blob={got} url={url} onClose={() => setOpen(false)} />
           </Dialog>
         </>
       ) : (
@@ -200,12 +201,29 @@ export const afterName = (from: { agent?: { title: string }; via?: Via }) => fro
 const toText = (to: { owner: string; title: string; inbox: boolean }) =>
   to.inbox ? t("to {owner}'s inbox", { owner: to.owner }) : t("to {owner} {title}", { owner: to.owner, title: to.title })
 
-/** The message's text, in the primary color on my side; 3rem short of the far side, so a long one still reads as one side's. */
+/**
+ * The message's text, in the primary color on my side; 3rem short of the far side, so a long one still reads as one side's.
+ * Its http:// and https:// addresses are underlined links that open in a new tab (RULE-022).
+ */
 function Bubble({ body, right }: { body: string; right: boolean }) {
   return (
     <div className={cn("mt-1 max-w-[min(calc(100%_-_3rem),42rem)] rounded-lg px-3.5 py-2.5", right ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-accent text-foreground")}>
       <p lang={langOf(body)} className="text-body whitespace-pre-wrap wrap-anywhere">
-        {body}
+        {pieces(body).map(({ text, url }, i) =>
+          url ? (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("focus-ring rounded-sm underline underline-offset-4", right ? "text-(--semantic-color-text-link-on-action)" : "text-(--semantic-color-text-link)")}
+            >
+              {text}
+            </a>
+          ) : (
+            <Fragment key={i}>{text}</Fragment>
+          ),
+        )}
       </p>
     </div>
   )
@@ -245,7 +263,8 @@ function StatusLine({ icon, tone, children }: { icon: ReactNode; tone?: "error";
 /**
  * API-036 `state` of what I sent one of my sessions (FLOW-WEB-SEND S8); a state this page doesn't know shows nothing. In
  * a chat, API-031 `state` is on what reached my sessions and isn't in them yet: it says so while they're offline
- * (FLOW-WEB-CHAT S1).
+ * (FLOW-WEB-CHAT S1). In a group the line names mine, else counts them: a bare "your sessions" reads as the others'
+ * sessions, online and replying.
  */
 function Delivery({ s, m }: { s: State; m: Message }) {
   if (!m.state) return null
@@ -255,8 +274,15 @@ function Delivery({ s, m }: { s: State; m: Message }) {
   const online = (id: string) => !!dataOf(s.agents)?.some((a) => a.id === id && a.online)
   const line = (text: string) => <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{text}</StatusLine>
   if (!m.to) {
-    const g = m.conversation.group && groupOf(s, m.conversation.group.id)
-    return g && g.my_sessions.some((x) => online(x.id)) ? null : line(t("Waiting for your sessions to come online"))
+    const mine = (m.conversation.group && groupOf(s, m.conversation.group.id)?.my_sessions) || []
+    if (mine.some((x) => online(x.id))) return null
+    return line(
+      mine.length === 1
+        ? t("Waiting for your session {name} to come online", { name: mine[0].title })
+        : mine.length > 1
+          ? t("Waiting for your {n} sessions in this group to come online", { n: mine.length })
+          : t("Waiting for your sessions to come online")
+    )
   }
   if (!online(m.to.id)) return line(t("Waiting for {name} to come online", { name: m.to.title }))
   return mine(s, m) ? line(t("Sending…")) : null

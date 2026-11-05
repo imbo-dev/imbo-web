@@ -177,7 +177,7 @@ try {
     });
   const say = (h) => `${h.text} [${h.pic}${h.sep ? ', hairline' : ''}] under: ${h.under}`;
   const WAITING_DOCS = 'Waiting for docs-site to come online';
-  const WAITING_GROUP = 'Waiting for your sessions to come online';
+  const WAITING_GROUP = 'Waiting for your session docs-site to come online';
   const G = as('alice', 'group list').match(/#(\d+)/)[1];
 
   // ── TC-452 ──
@@ -237,7 +237,7 @@ try {
       const old = await heading(page, 'Deploy window starts');
       const team = await chatRow(page, 'release-team').textContent();
       await shot(page, 'tc453-2');
-      ok('TC-453 #2 T453 to the group waits for my sessions; Deploy window… doesn\'t; no red dot', mine.under === WAITING_GROUP && !old.under.startsWith('Waiting') && !/unread/.test(team), `${say(mine)} | ${say(old)} | ${team}`);
+      ok('TC-453 #2 T453 to the group waits for my session docs-site; Deploy window… doesn\'t; no red dot', mine.under === WAITING_GROUP && !old.under.startsWith('Waiting') && !/unread/.test(team), `${say(mine)} | ${say(old)} | ${team}`);
     });
     await step('TC-453 #3', async () => {
       const z = await zhPage();
@@ -247,7 +247,7 @@ try {
       await openChat(z, 'bob', false);
       const docs = (await heading(z, 'T452 to docs-site')).under;
       await shot(z, 'tc453-3');
-      ok('TC-453 #3 in Chinese: 等会话上线, 等 docs-site 上线', group === '等会话上线' && docs === '等 docs-site 上线', `${group} | ${docs}`);
+      ok('TC-453 #3 in Chinese: 等你的会话 docs-site 上线, 等 docs-site 上线', group === '等你的会话 docs-site 上线' && docs === '等 docs-site 上线', `${group} | ${docs}`);
     });
     await step('TC-453 #4', async () => {
       as('alice', `dev fake-session ${DOCS} --title docs-site`);
