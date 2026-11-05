@@ -228,12 +228,12 @@ try {
     ok('TC-476 #1 only @carol is marked, the layer lays out as the box does', m.texts.join('|') === '@carol' && m.tall[0] === m.tall[1] && m.colors[0] !== m.colors[1], JSON.stringify(m));
   });
   await step('TC-476 #2', async () => {
-    for (let n = 0; n < 8; n++) await box.press('Shift+Enter');
+    for (let n = 0; n < 24; n++) await box.press('Shift+Enter');
     await box.pressSequentially('@billing');
     await wait(300);
     const m = await marks();
     await shot(page, 'tc476-2');
-    ok('TC-476 #2 nine lines down: the box scrolls, @billing is still marked under it', m.texts.join('|') === '@carol|@billing' && m.scrolled[1] > 0 && m.scrolled[0] === m.scrolled[1] && m.inside.join() === 'false,true', JSON.stringify(m));
+    ok('TC-476 #2 25 lines down: the box scrolls, @billing is still marked under it', m.texts.join('|') === '@carol|@billing' && m.scrolled[1] > 0 && m.scrolled[0] === m.scrolled[1] && m.inside.join() === 'false,true', JSON.stringify(m));
     await box.fill('');
   });
   await step('TC-460 #8', async () => {

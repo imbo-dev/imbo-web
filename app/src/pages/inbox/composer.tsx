@@ -64,9 +64,13 @@ function useGrow(text: string) {
   }, [])
   useLayoutEffect(() => {
     const ta = area.current
-    if (fieldSizing || !ta) return
-    ta.style.height = "auto"
-    ta.style.height = `${ta.scrollHeight}px`
+    if (!ta) return
+    if (!fieldSizing) {
+      ta.style.height = "auto"
+      ta.style.height = `${ta.scrollHeight}px`
+    }
+    // At the limit, typing at the end keeps the last line clear of the bottom edge (ui-constraints INT-010).
+    if (ta.selectionEnd === ta.value.length) ta.scrollTop = ta.scrollHeight
   }, [text])
   return { shell, area }
 }

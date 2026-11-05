@@ -60,9 +60,10 @@ body {
   100% { --fade-start: 1.5rem; --fade-end: 0px; }
 }
 
-/* Message box: the textarea takes its text's height at once, up to 10 rem, then scrolls inside without a scrollbar
-   (ui-constraints RESP-022); its outline catches up with a short transition, set from script (pages/inbox/composer.tsx). */
-.composer { field-sizing: content; max-height: 10rem; overflow-y: auto; scrollbar-width: none; }
+/* Message box: three lines tall when empty; the textarea takes its text's height at once, up to 40% of the chat pane
+   (the size container on <main>, pages/inbox/Shell.tsx), then scrolls inside without a scrollbar (ui-constraints
+   RESP-022); its outline catches up with a short transition, set from script (pages/inbox/composer.tsx). */
+.composer { field-sizing: content; min-height: calc(3lh + 1rem); max-height: 40cqh; overflow-y: auto; scrollbar-width: none; }
 .composer::-webkit-scrollbar { display: none; }
 .composer-shell { overflow: visible; transition: height var(--semantic-motion-duration-fast) var(--semantic-motion-easing-standard); }
 .composer-shell[data-dir="shrink"] { transition-duration: var(--semantic-motion-duration-base); }
