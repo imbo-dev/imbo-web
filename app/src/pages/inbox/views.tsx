@@ -1,8 +1,30 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { ArrowLeft, Bot, ChevronDown, Clock, ExternalLink, FlaskConical, ListChecks, MessageSquare, Pencil, Share, ShieldCheck, UserPlus, Users } from "lucide-react"
+import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import {
+  ArrowLeft,
+  Bell,
+  BellOff,
+  Bot,
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  FlaskConical,
+  ListChecks,
+  MessageSquare,
+  MessageSquareDot,
+  MessageSquareText,
+  Pencil,
+  Pin,
+  PinOff,
+  Search,
+  Share,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Dialog } from "@/components/ui/dialog"
 import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
 import type { Billing, Conversation, Message, MyAgent, Request } from "@/data/contract"
@@ -25,11 +47,13 @@ import {
   isBlocked,
   isMe,
   loadThread,
+  markChatRead,
   openThread,
   portalUrl,
   refreshList,
   renameAgent,
   retry,
+  setChatPrefs,
   signOut,
   watchAlipay,
   watchCheckout,
@@ -50,6 +74,7 @@ import { openGroupDetails, openNewGroup } from "./groups"
 import { MessageList, Outbox, PaneHeader, leadOf, type Picking } from "./messages"
 import { RenameButtons, RenameHint, RenameInput, useRename, useReturnFocus } from "./rename"
 import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
+import { SearchBar, SearchResults, useChatSearch } from "./search"
 import { MAX_PICKED, ShareDialogContent } from "./share"
 import { EmptyState, ErrorState, ListSkeleton, ThreadSkeleton } from "./states"
 
@@ -69,15 +94,24 @@ export function BackLink({ to, label }: { to: string; label: string }) {
  * A row in the left column; the open item is marked with the selected surface (brand: selection is not a state layer).
  * `appear`: fades in, as rows Load more adds.
  */
-function ListRow({ href, current, appear, children }: { href: string; current: boolean; appear?: boolean; children: ReactNode }) {
+function ListRow({
+  href,
+  current,
+  appear,
+  className,
+  children,
+  ...rest
+}: { href: string; current: boolean; appear?: boolean; children: ReactNode } & Omit<ComponentProps<"a">, "href" | "children">) {
   return (
     <a
+      {...rest}
       href={href}
       onClick={onLinkClick}
       aria-current={current ? "page" : undefined}
       className={cn(
         "state-layer focus-ring grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-foreground aria-[current=page]:bg-accent",
-        appear && "pick-in"
+        appear && "pick-in",
+        className
       )}
     >
       {children}
@@ -89,11 +123,15 @@ function ListRow({ href, current, appear, children }: { href: string; current: b
  * API-030 `pending`: what a chat sent my inbox that isn't read yet; opening the chat reads it (API-078). Also API-014
  * `unread`, with `sr` saying what the number counts.
  */
-export function PendingBadge({ n, small, sr = t("unread") }: { n: number; small?: boolean; sr?: string }) {
+export function PendingBadge({ n, small, quiet, sr = t("unread") }: { n: number; small?: boolean; quiet?: boolean; sr?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex flex-none items-center justify-center rounded-full bg-(--semantic-color-signal-unread) px-1 text-caption leading-none font-bold tabular-nums text-(--semantic-color-signal-on-unread)",
+        "inline-flex flex-none items-center justify-center rounded-full px-1 text-caption leading-none font-bold tabular-nums",
+        // A muted chat's count, grey (FLOW-CHAT-PREFS S3).
+        quiet
+          ? "bg-(--semantic-color-surface-selected) text-(--semantic-color-text-secondary)"
+          : "bg-(--semantic-color-signal-unread) text-(--semantic-color-signal-on-unread)",
         small ? "h-4 min-w-4" : "h-5 min-w-5"
       )}
     >
@@ -166,29 +204,78 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
           const last = c.last_message
           const who = !last ? "" : isMe(s, last.from.account_id) ? t("You") : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? leadOf(last.from.via))
           return (
-            <ListRow key={c.id} href={`/chats/${c.id}`} current={String(c.id) === open}>
-              <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
-              <span className="min-w-0">
-                <span className="block truncate text-body">{title}</span>
-                {last && (
-                  <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
-                    {who}: {last.preview}
+            <ChatMenu key={c.id} c={c}>
+              <ListRow href={`/chats/${c.id}`} current={String(c.id) === open} className={cn(c.pinned && "bg-(--semantic-color-surface-sunken)")}>
+                <Avatar kind={c.kind === "group" ? "group" : "person"} label={title} src={(c.group ?? c.peer)?.avatar_url} />
+                <span className="min-w-0">
+                  <span className="block truncate text-body">
+                    {title}
+                    {c.pinned && <span className="sr-only">, {t("pinned")}</span>}
                   </span>
-                )}
-              </span>
-              <span className="flex flex-col items-end gap-1">
-                {last && (
-                  <time dateTime={last.created_at} className="text-caption tabular-nums text-(--semantic-color-text-tertiary)">
-                    {shortWhen(last.created_at)}
-                  </time>
-                )}
-                {c.pending > 0 ? <PendingBadge n={c.pending} /> : <span className="h-5" />}
-              </span>
-            </ListRow>
+                  {last && (
+                    <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
+                      {who}: {last.preview}
+                    </span>
+                  )}
+                </span>
+                <span className="flex flex-col items-end gap-1">
+                  {last && (
+                    <time dateTime={last.created_at} className="text-caption tabular-nums text-(--semantic-color-text-tertiary)">
+                      {shortWhen(last.created_at)}
+                    </time>
+                  )}
+                  <span className="flex h-5 items-center gap-1">
+                    {c.muted && (
+                      <BellOff size={12} className="text-(--semantic-color-text-tertiary)">
+                        <title>{t("Muted")}</title>
+                      </BellOff>
+                    )}
+                    {c.pending > 0 ? (
+                      <PendingBadge n={c.pending} quiet={c.muted} />
+                    ) : (
+                      c.marked_unread && (
+                        <span className="mx-1.5 size-2 rounded-full bg-(--semantic-color-signal-unread)">
+                          <span className="sr-only">{t("Marked unread")}</span>
+                        </span>
+                      )
+                    )}
+                  </span>
+                </span>
+              </ListRow>
+            </ChatMenu>
           )
         })}
       </nav>
     </>
+  )
+}
+
+/**
+ * Right-click on a chat, or a long press on a touch screen: pin it, mark it read or unread, mute it; mine only
+ * (FLOW-CHAT-PREFS). A change that doesn't go through is taken back, the reason in a toast.
+ */
+function ChatMenu({ c, children }: { c: Conversation; children: ReactNode }) {
+  const run = (p: Promise<unknown>) => p.catch((e) => toast.error(messageOf(e)))
+  const unread = c.pending > 0 || !!c.marked_unread
+  const read = () => (c.last_message ? markChatRead(c.id) : setChatPrefs(c.id, { marked_unread: false }))
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => run(setChatPrefs(c.id, { pinned: !c.pinned }))}>
+          {c.pinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />}
+          {c.pinned ? t("Unpin") : t("Pin")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => run(unread ? read() : setChatPrefs(c.id, { marked_unread: true }))}>
+          {unread ? <MessageSquareText size={16} aria-hidden="true" /> : <MessageSquareDot size={16} aria-hidden="true" />}
+          {unread ? t("Mark as read") : t("Mark as unread")}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => run(setChatPrefs(c.id, { muted: !c.muted }))}>
+          {c.muted ? <Bell size={16} aria-hidden="true" /> : <BellOff size={16} aria-hidden="true" />}
+          {c.muted ? t("Unmute") : t("Mute")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -231,6 +318,11 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
   const [pick, setPick] = useState<{ chat: string; ids: ReadonlySet<number> }>()
   const [shot, setShot] = useState<Message[]>()
   const [sharing, setSharing] = useState(false)
+  // Finding a message in this chat (FLOW-CHAT-SEARCH); `jump`: the one picked, for the list to scroll to.
+  const search = useChatSearch(Number(id))
+  const [searching, setSearching] = useState(false)
+  const [jump, setJump] = useState<{ id: number }>()
+  const searchButton = useRef<HTMLButtonElement>(null)
   const back = <BackLink to="/chats" label={t("Back to chats")} />
   const early = paneState(s.conversations, back, t("Couldn't load this chat"), () => retry("conversations"))
   if (early) return early
@@ -253,6 +345,16 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
       setPick({ chat: id, ids: next })
     },
   }
+  const stopSearching = () => {
+    setSearching(false)
+    search.setQ("")
+    requestAnimationFrame(() => searchButton.current?.focus())
+  }
+  const find = thread?.status === "ready" && (
+    <Button ref={searchButton} variant="ghost" size="icon" aria-label={t("Search in this chat")} onClick={() => setSearching(true)}>
+      <Search size={16} aria-hidden="true" />
+    </Button>
+  )
   const select = messages.length > 0 && (
     <Button variant="ghost" size="icon" aria-label={t("Select messages")} onClick={() => setPick({ chat: id, ids: new Set() })}>
       <ListChecks size={16} aria-hidden="true" />
@@ -306,11 +408,14 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
     <>
       {picked ? (
         <PickHeader n={picked.size} onCancel={() => setPick(undefined)} />
+      ) : searching ? (
+        <SearchBar search={search} onClose={stopSearching} />
       ) : c.group ? (
         <GroupMembers s={s} c={c}>
           {({ stack, count }) =>
             header(
               <span className="flex flex-none items-center gap-1">
+                {find}
                 {select}
                 {stack}
               </span>,
@@ -322,6 +427,7 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
         header(
           c.peer && (
             <span className="flex flex-none items-center gap-1">
+              {find}
               {select}
               {peer?.active && !blocked && <RecipientPicker s={s} c={c} />}
               <PeerMenu s={s} who={c.peer} />
@@ -329,7 +435,19 @@ export function ChatPane({ s, id }: { s: State; id: string }) {
           )
         )
       )}
-      <ThreadBody s={s} id={key} label={t("Messages with {name}", { name: title })} pick={picking} />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <ThreadBody s={s} id={key} label={t("Messages with {name}", { name: title })} pick={picking} jump={jump} />
+        {searching && (
+          <SearchResults
+            s={s}
+            search={search}
+            onPick={(m) => {
+              stopSearching()
+              setJump({ id: m })
+            }}
+          />
+        )}
+      </div>
       {picked ? (
         <ShareBar
           n={picked.size}
@@ -433,7 +551,7 @@ function paneState(l: Load<unknown>, back: ReactNode, failed: string, onRetry: (
 }
 
 /** The messages of a chat or session under its header: skeleton, failure with retry, `empty`, or the list. */
-function ThreadBody({ s, id, label, empty, pick }: { s: State; id: ThreadKey; label: string; empty?: ReactNode; pick?: Picking }) {
+function ThreadBody({ s, id, label, empty, pick, jump }: { s: State; id: ThreadKey; label: string; empty?: ReactNode; pick?: Picking; jump?: { id: number } }) {
   const thread = s.threads[id]
   if (!thread || thread.status === "loading") return <ThreadSkeleton />
   if (thread.status === "error")
@@ -443,7 +561,7 @@ function ThreadBody({ s, id, label, empty, pick }: { s: State; id: ThreadKey; la
       </div>
     )
   if (!thread.data.messages.length && !s.outbox[id]?.length && empty) return empty
-  return <MessageList s={s} id={id} thread={thread.data} label={label} pick={pick} />
+  return <MessageList s={s} id={id} thread={thread.data} label={label} pick={pick} goTo={jump} />
 }
 
 // ── Sessions ─────────────────────────────────────────────────────────────────

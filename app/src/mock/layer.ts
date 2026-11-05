@@ -319,9 +319,22 @@ export const mock = {
               last_message: last && { id: last.id, from: last.from, preview: (last.body || last.files.map((x) => x.name).join(", ")).slice(0, 100), created_at: last.created_at },
             }
           })
-          .sort((a, b) => Date.parse(b.last_message?.created_at ?? "0") - Date.parse(a.last_message?.created_at ?? "0")),
+          .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || Date.parse(b.last_message?.created_at ?? "0") - Date.parse(a.last_message?.created_at ?? "0")),
       []
     ),
+  async setConversationPrefs(id, prefs) {
+    signedIn()
+    await wait(200)
+    const c = f.conversations.find((x) => x.id === id)
+    if (!c) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
+    Object.assign(c, prefs)
+    return { pinned: !!c.pinned, marked_unread: !!c.marked_unread, muted: !!c.muted }
+  },
+  searchConversation: async (id, q) => {
+    if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
+    const found = allMessages().filter((m) => m.conversation.id === id && visible(m) && m.body.toLowerCase().includes(q.toLowerCase()))
+    return data(() => ({ messages: found.slice(-50).reverse(), has_more: found.length > 50 }), { messages: [], has_more: false })
+  },
   messages: async (id, p) => {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
     return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)), p), { messages: [], has_more: false })
@@ -446,6 +459,7 @@ export const mock = {
     if (!c) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
     const marked = c.pending + (controls.pendingExtra[id] ?? 0)
     c.pending = 0
+    c.marked_unread = false
     setControls({ pendingExtra: { ...controls.pendingExtra, [id]: 0 } })
     return marked
   },

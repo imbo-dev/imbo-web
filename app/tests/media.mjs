@@ -25,7 +25,7 @@ const ok = (name, cond, detail = '') => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const token = (who) => fs.readFileSync(`${L}/${who}/credentials`, 'utf8').match(/^token = "(.*)"/m)[1];
 
-// 前置: bob sends alice one message with the six files, uploaded from his computer (API-026, API-015).
+// 前置: bob sends alice the files one message each, uploaded from his computer (API-026, API-015).
 const NAMES = ['T531-small.png', 'T531-anim.gif', 'T531-big.jpg', 'T531-broken.webp', 'T532-clip.mp4', 'T532-clip.webm', 'T533-prores.mov'];
 const id = {};
 for (const name of NAMES) {
@@ -42,12 +42,15 @@ for (const name of NAMES) {
   });
   id[name] = (await r.json()).file.id;
 }
-const sent = await fetch(`${api}/v1/messages`, {
-  method: 'POST',
-  headers: { authorization: `Bearer ${token('bob')}`, 'content-type': 'application/json' },
-  body: JSON.stringify({ to: 'alice', body: 'T533 media', client_msg_id: 'T533 media', files: Object.values(id) }),
-});
-if (!sent.ok) throw new Error(`bob's message: ${sent.status}`);
+// One message each: two or more pictures in one message are a grid (TC-565).
+for (const name of NAMES) {
+  const sent = await fetch(`${api}/v1/messages`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token('bob')}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ to: 'alice', body: 'T533 media', client_msg_id: `T533 ${name}`, files: [id[name]] }),
+  });
+  if (!sent.ok) throw new Error(`bob's ${name}: ${sent.status}`);
+}
 
 const codeLines = (email) => fs.readFileSync(`${L}/server.log`, 'utf8').split('\n').filter((l) => l.includes('mail-log-only code=') && l.endsWith(`email=${email}`));
 async function codeFor(email, after) {

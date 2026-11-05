@@ -71,6 +71,9 @@ body {
 .pick-in { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
 /* The line over the box fades in when it changes, as when sending starts opening an offline session (FLOW-WAKE). */
 .composer-note { animation: fade-in var(--semantic-motion-duration-base) var(--semantic-motion-easing-standard); }
+/* The message a reply's quoted line jumped to lights up, then fades back (FLOW-REPLY S6). */
+.reply-flash { animation: reply-flash 1.2s var(--semantic-motion-easing-standard); }
+@keyframes reply-flash { from { background: var(--semantic-color-surface-selected); } }
 
 /* Radix marks the item under the pointer or arrow keys with data-highlighted. */
 .state-layer[data-highlighted]::after { opacity: var(--state-hover); }

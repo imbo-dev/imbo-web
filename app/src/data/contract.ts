@@ -97,7 +97,7 @@ export const conversationRef = z.object({ kind: z.enum(["direct", "group"]), id:
  * API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal.
  * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what went to one of my own sessions —
  * what I sent it (API-036, API-043) or, in a chat, what reached it and isn't in it yet (API-031): `pending`, `pushed`,
- * `delivered` or `canceled`.
+ * `delivered` or `canceled`. `in_reply_to`: the message it replies to (FLOW-REPLY); only `id` when I can't see that one.
  */
 export const message = z.object({
   id: z.number(),
@@ -110,6 +110,7 @@ export const message = z.object({
   to: agentRef.optional(),
   from_me: z.boolean().default(false),
   state: z.string().optional(),
+  in_reply_to: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional() }).optional(),
 })
 
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
@@ -123,7 +124,13 @@ export const conversation = z.object({
   group: profile.optional(),
   last_message: z.object({ id: z.number(), from: sender, preview: z.string(), created_at: time }).optional(),
   pending: z.number(),
+  /** Mine only (FLOW-CHAT-PREFS): pinned first, a dot without a number, no phone notifications. Left out when false. */
+  pinned: z.boolean().optional(),
+  marked_unread: z.boolean().optional(),
+  muted: z.boolean().optional(),
 })
+/** API-085 setConversationPrefs: all three after the change. */
+export const conversationPrefs = z.object({ pinned: z.boolean(), marked_unread: z.boolean(), muted: z.boolean() })
 
 /**
  * API-032 getBilling. `enabled: false`: the server has no Waffo (self-hosted), and `mode` is absent.
@@ -327,6 +334,7 @@ export type Conversation = z.infer<typeof conversation>
 export type Billing = z.infer<typeof billing>
 export type AlipayCheck = z.infer<typeof alipayCheck>
 export type MessagesPage = z.infer<typeof messagesPage>
+export type ConversationPrefs = z.infer<typeof conversationPrefs>
 export type Me = z.infer<typeof me>
 export type WebLogin = z.infer<typeof webLogin>
 export type Sent = z.infer<typeof sent>

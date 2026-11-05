@@ -1,14 +1,17 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react"
-import { ArrowDown, CheckCheck, CircleAlert, Clock, Download, FileText, Play } from "lucide-react"
+import { Fragment, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { ArrowDown, CheckCheck, CircleAlert, Clock, Copy, Download, FileText, Play, Reply } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Dialog } from "@/components/ui/dialog"
 import { agentAvatar, Avatar, SessionName, Sep, Tag } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
 import type { FileRef, Message, Via } from "@/data/contract"
 import type { ApiError } from "@/data/layer"
 import {
+  bringIn,
   contactOf,
   dataOf,
   discard,
@@ -23,9 +26,11 @@ import {
   photoOf,
   PICTURE_SHOWN_BYTES,
   recipientOf,
+  replyTo,
   resend,
   resendTo,
   type Outgoing,
+  type Quote,
   type State,
   type Thread,
   type ThreadKey,
@@ -88,11 +93,9 @@ function FileCard({ f, lead, action }: { f: FileRef; lead?: ReactNode; action?: 
  * it opens it full screen. One that can't be fetched or doesn't decode stays a file card. The box keeps one shape from
  * the start, so the thread doesn't move when the picture arrives.
  */
-function Picture({ f, right }: { f: FileRef; right: boolean }) {
-  const shown = f.size <= PICTURE_SHOWN_BYTES
+function usePicture(f: FileRef) {
   // "wait": over 10 MB, not asked for yet.
-  const [got, setGot] = useState<Blob | "wait" | "fetch" | "failed">(() => fetchedFile(f) ?? (shown ? "fetch" : "wait"))
-  const [open, setOpen] = useState(false)
+  const [got, setGot] = useState<Blob | "wait" | "fetch" | "failed">(() => fetchedFile(f) ?? (f.size <= PICTURE_SHOWN_BYTES ? "fetch" : "wait"))
   const url = useObjectUrl(got instanceof Blob ? got : undefined)
   useEffect(() => {
     if (got !== "fetch") return
@@ -105,6 +108,13 @@ function Picture({ f, right }: { f: FileRef; right: boolean }) {
       live = false
     }
   }, [got, f.id])
+  return { got, setGot, url }
+}
+
+function Picture({ f, right }: { f: FileRef; right: boolean }) {
+  const shown = f.size <= PICTURE_SHOWN_BYTES
+  const { got, setGot, url } = usePicture(f)
+  const [open, setOpen] = useState(false)
 
   if (got === "failed") return <FileCard f={f} />
   if (!(got instanceof Blob) && !shown)
@@ -150,6 +160,67 @@ function Picture({ f, right }: { f: FileRef; right: boolean }) {
   )
 }
 
+/** Width of the grid a message's pictures sit in when there are two or more, and the gap between them (RULE-020). */
+const GRID = 240
+const GRID_GAP = 4
+
+/**
+ * One picture of several, a square in the grid with no name or size: up to 10 MB it shows by itself, a bigger one once
+ * clicked; clicking it then opens it full screen, where its name and Download are. One that can't be fetched or doesn't
+ * decode shows a file icon and downloads.
+ */
+function Tile({ f, side }: { f: FileRef; side: number }) {
+  const { got, setGot, url } = usePicture(f)
+  const [open, setOpen] = useState(false)
+  const box = "state-layer focus-ring grid place-items-center overflow-hidden rounded-md border-(length:--semantic-layout-hairline) border-border bg-muted"
+  const style = { width: side, height: side }
+  if (got === "fetch" || (got instanceof Blob && !url))
+    return (
+      <li style={style} className="overflow-hidden rounded-md">
+        <span aria-hidden="true" className="skeleton block size-full" />
+      </li>
+    )
+  if (got instanceof Blob && url)
+    return (
+      <li style={style}>
+        <button type="button" data-testid={`file-thumb-${f.id}`} onClick={() => setOpen(true)} className={cn(box, "size-full cursor-zoom-in")}>
+          <img src={url} alt={f.name} draggable={false} onError={() => setGot("failed")} className="size-full object-cover" />
+        </button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <PictureViewer f={f} blob={got} url={url} onClose={() => setOpen(false)} />
+        </Dialog>
+      </li>
+    )
+  return (
+    <li style={style}>
+      {got === "wait" ? (
+        <button type="button" data-testid={`file-load-${f.id}`} aria-label={`${t("Load image")}, ${f.name}, ${fileSize(f.size)}`} onClick={() => setGot("fetch")} className={cn(box, "size-full text-muted-foreground")}>
+          <Download size={20} aria-hidden="true" />
+        </button>
+      ) : (
+        <a href={fileUrl(f)} download={f.name} aria-label={t("Download {name}", { name: f.name })} className={cn(box, "size-full text-muted-foreground")}>
+          <FileText size={20} aria-hidden="true" />
+        </a>
+      )}
+    </li>
+  )
+}
+
+/** Two or more pictures as squares: two a row when there are two or four, otherwise three. `right`: on my side. */
+function Pictures({ files, right }: { files: FileRef[]; right: boolean }) {
+  const across = files.length === 2 || files.length === 4 ? 2 : 3
+  const side = Math.floor((GRID - GRID_GAP * (across - 1)) / across)
+  return (
+    <li className={cn("flex", right && "self-end")}>
+      <ul className="flex flex-wrap" style={{ gap: GRID_GAP, width: side * across + GRID_GAP * (across - 1) }}>
+        {files.map((f) => (
+          <Tile key={f.id} f={f} side={side} />
+        ))}
+      </ul>
+    </li>
+  )
+}
+
 /** RULE-021: a video is a card with a play button, which opens it full screen to download and play. */
 function Video({ f }: { f: FileRef }) {
   const [open, setOpen] = useState(false)
@@ -171,13 +242,19 @@ function Video({ f }: { f: FileRef }) {
   )
 }
 
-/** `right`: the message is on my side, where a picture lines up on the right too. */
+/**
+ * `right`: the message is on my side, where a picture lines up on the right too. Two or more pictures go first, in a
+ * grid; the rest follow as they came.
+ */
 function Attachments({ files, right }: { files: FileRef[]; right: boolean }) {
+  const pictures = files.filter((f) => mediaOf(f) === "image")
+  const grid = pictures.length > 1
   return (
     <ul className="mt-2 flex max-w-sm flex-col gap-2">
+      {grid && <Pictures files={pictures} right={right} />}
       {files.map((f) => {
         const media = mediaOf(f)
-        if (media === "image") return <Picture key={f.id} f={f} right={right} />
+        if (media === "image") return grid ? null : <Picture key={f.id} f={f} right={right} />
         if (media === "video") return <Video key={f.id} f={f} />
         return <FileCard key={f.id} f={f} />
       })}
@@ -208,7 +285,12 @@ const toText = (to: { owner: string; title: string; inbox: boolean }) =>
 function Bubble({ body, right }: { body: string; right: boolean }) {
   return (
     <div className={cn("mt-1 max-w-[min(calc(100%_-_3rem),42rem)] rounded-lg px-3.5 py-2.5", right ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-accent text-foreground")}>
-      <p lang={langOf(body)} className="text-body whitespace-pre-wrap wrap-anywhere">
+      {/* A right-click on a link or on selected text opens the browser's own menu, not the message's. */}
+      <p
+        lang={langOf(body)}
+        onContextMenu={(e) => (e.target instanceof Element && e.target.closest("a")) || String(getSelection() ?? "") ? e.stopPropagation() : undefined}
+        className="text-body whitespace-pre-wrap wrap-anywhere"
+      >
         {pieces(body).map(({ text, url }, i) =>
           url ? (
             <a
@@ -229,14 +311,45 @@ function Bubble({ body, right }: { body: string; right: boolean }) {
   )
 }
 
-/** A message's row: the sender's picture before it on the left, mine after it on the right. */
-function Row({ right, picture, children }: { right: boolean; picture: ReactNode; children: ReactNode }) {
+/**
+ * A message's row: the sender's picture before it on the left, mine after it on the right. `flash`: just jumped to.
+ * The rest goes on the row, so a context menu trigger can wrap it.
+ */
+function Row({
+  right,
+  picture,
+  children,
+  id,
+  flash,
+  onFlashed,
+  className,
+  ...rest
+}: { right: boolean; picture: ReactNode; children: ReactNode; id?: number; flash?: boolean; onFlashed?: () => void } & Omit<ComponentProps<"article">, "id" | "children">) {
   return (
-    <article className="flex gap-3">
+    <article {...rest} data-message={id} onAnimationEnd={flash ? onFlashed : undefined} className={cn("group/row -mx-2 flex gap-3 rounded-lg px-2", flash && "reply-flash", className)}>
       {!right && picture}
       <div className={cn("flex min-w-0 flex-1 flex-col", right ? "items-end" : "items-start")}>{children}</div>
       {right && picture}
     </article>
+  )
+}
+
+/**
+ * Under a reply, what it answers: "Mia: the build fails", which jumps to that message; when I can't see it, a line
+ * that says so and does nothing (FLOW-REPLY S6).
+ */
+function Quoted({ q, onOpen }: { q: Quote; onOpen?: (id: number) => void }) {
+  if (q.from_name === undefined)
+    return <p className="mt-1 max-w-full text-caption text-(--semantic-color-text-tertiary)">{t("The original message is no longer visible")}</p>
+  return (
+    <button
+      type="button"
+      data-testid={`quote-${q.id}`}
+      onClick={() => onOpen?.(q.id)}
+      className="state-layer focus-ring mt-1 max-w-[min(100%,42rem)] truncate rounded-sm px-1 text-left text-caption text-(--semantic-color-text-tertiary)"
+    >
+      {t("{name}: {text}", { name: q.from_name, text: q.preview ?? "" })}
+    </button>
   )
 }
 
@@ -304,25 +417,69 @@ function Sender({ owner, session, via, group, you }: { owner: string; session?: 
   )
 }
 
-/** A message with no `from.agent` was sent in person, from `from.via`. Group messages have no `to`. */
-export function MessageRow({ s, m }: { s: State; m: Message }) {
+/**
+ * A message with no `from.agent` was sent in person, from `from.via`. Group messages have no `to`. With `onReply`, a
+ * Reply button shows beside the heading on hover (always on touch screens), and a right-click opens Reply and Copy.
+ */
+export function MessageRow({ s, m, onReply, onQuote, flash, onFlashed }: { s: State; m: Message; onReply?: () => void; onQuote?: (id: number) => void; flash?: boolean; onFlashed?: () => void }) {
   const to = recipientOf(s, m)
   const right = mine(s, m)
-  return (
-    <Row right={right} picture={right ? <Me s={s} /> : <SenderAvatar s={s} from={m.from} />}>
-      <header className="flex max-w-full min-w-0 items-baseline gap-2">
-        <SenderName s={s} from={m.from} group={m.conversation.group}>
-          <Sender owner={m.from.name} session={m.from.agent?.title} via={m.from.via} group={!!m.conversation.group} you={right} />
-        </SenderName>
-        {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{toText(to)}</span>}
-        <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
-          {clock(m.created_at)}
-        </time>
+  // Reply from the menu starts once the menu has closed, so the box can take the caret: an open menu keeps focus
+  // inside itself, and a closing one hands it back to the row.
+  const replied = useRef(false)
+  const row = (
+    <Row right={right} picture={right ? <Me s={s} /> : <SenderAvatar s={s} from={m.from} />} id={m.id} flash={flash} onFlashed={onFlashed}>
+      <header className={cn("flex max-w-full min-w-0 items-baseline gap-2", right && "flex-row-reverse")}>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <SenderName s={s} from={m.from} group={m.conversation.group}>
+            <Sender owner={m.from.name} session={m.from.agent?.title} via={m.from.via} group={!!m.conversation.group} you={right} />
+          </SenderName>
+          {to && <span className="min-w-0 truncate text-caption text-(--semantic-color-text-tertiary)">{toText(to)}</span>}
+          <time dateTime={m.created_at} className="flex-none text-caption tabular-nums text-(--semantic-color-text-tertiary)">
+            {clock(m.created_at)}
+          </time>
+        </span>
+        {onReply && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("Reply")}
+            data-testid={`reply-${m.id}`}
+            onClick={onReply}
+            className="-my-1 flex-none self-center text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+          >
+            <Reply size={14} aria-hidden="true" />
+          </Button>
+        )}
       </header>
       {m.body && <Bubble body={m.body} right={right} />}
       {m.files.length > 0 && <Attachments files={m.files} right={right} />}
+      {m.in_reply_to && <Quoted q={m.in_reply_to} onOpen={onQuote} />}
       <Delivery s={s} m={m} />
     </Row>
+  )
+  if (!onReply) return row
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent
+        onCloseAutoFocus={(e) => {
+          if (!replied.current) return
+          e.preventDefault()
+          replied.current = false
+          onReply()
+        }}
+      >
+        <ContextMenuItem onSelect={() => (replied.current = true)}>
+          <Reply size={16} aria-hidden="true" />
+          {t("Reply")}
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!m.body} onSelect={() => navigator.clipboard.writeText(m.body).then(() => toast(t("Copied")))}>
+          <Copy size={16} aria-hidden="true" />
+          {t("Copy")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -352,6 +509,8 @@ function refusal(e: ApiError, group: boolean, who: string) {
       return t("{name} doesn't accept your messages.", { name: who })
     case "/errors/unblock-first":
       return t("You blocked {name}. Unblock {name} to send messages.", { name: who })
+    case "/errors/reply-not-found":
+      return t("Can't find the message to reply to.")
   }
   return e.status === 0 ? t("Check your connection, then try again.") : e.message
 }
@@ -377,6 +536,7 @@ function OutgoingRow({ s, id, o }: { s: State; id: ThreadKey; o: Outgoing }) {
       </header>
       {o.body && <Bubble body={o.body} right />}
       {o.files.length > 0 && <Attachments files={o.files} right />}
+      {o.reply && <Quoted q={o.reply} />}
       {!e ? (
         <StatusLine icon={<Clock size={14} aria-hidden="true" />}>{t("Sending…")}</StatusLine>
       ) : (
@@ -459,12 +619,34 @@ function PickRow({ s, m, pick }: { s: State; m: Message; pick: Picking }) {
   )
 }
 
+/**
+ * Where a message can be replied to (FLOW-REPLY S1): while this thread's text box shows, in a chat; in a session's pane,
+ * only what went between me and that session, the conversation API-043 sends in.
+ */
+const repliable = (s: State, id: ThreadKey, m: Message) =>
+  !!s.composing[id] && (id.startsWith("c:") || (m.conversation.kind === "direct" && m.conversation.peer?.id === s.account?.id))
+
 /** Scrolling message list that stays on the newest message while you're at the bottom, with a day divider per day. */
-export function MessageList({ s, id, thread, label, pick }: { s: State; id: ThreadKey; thread: Thread; label: string; pick?: Picking }) {
+/** `goTo`: a message to scroll to and flash, from outside the list (FLOW-CHAT-SEARCH S4); a new object jumps again. */
+export function MessageList({ s, id, thread, label, pick, goTo }: { s: State; id: ThreadKey; thread: Thread; label: string; pick?: Picking; goTo?: { id: number } }) {
   const { messages } = thread
   const outbox = s.outbox[id] ?? []
   // Sending something follows the thread to the bottom again.
   const { ref, showJump, jump } = useFollow<HTMLDivElement>(`${messages.at(-1)?.id}:${outbox.length}`, `${id}:${s.sent[id] ?? 0}`)
+  const [flash, setFlash] = useState<number>()
+  // A reply's quoted line or a message found: bring it in, up to 10 pages back, then scroll to it and flash it
+  // (FLOW-REPLY S6, FLOW-CHAT-SEARCH S4).
+  const open = async (target: number, far = t("The original message is too far back")) => {
+    if (!(await bringIn(id, target))) return void toast(far)
+    requestAnimationFrame(() => {
+      const el = ref.current?.querySelector(`[data-message="${target}"]`)
+      el?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+      setFlash(target)
+    })
+  }
+  useEffect(() => {
+    if (goTo) void open(goTo.id, t("The message is too far back"))
+  }, [goTo])
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={ref} tabIndex={0} aria-label={label} className="scroll-pane focus-ring min-h-0 flex-1">
@@ -473,7 +655,18 @@ export function MessageList({ s, id, thread, label, pick }: { s: State; id: Thre
           {messages.map((m, i) => (
             <Fragment key={m.id}>
               {(i === 0 || !sameDay(messages[i - 1].created_at, m.created_at)) && <DayDivider at={m.created_at} />}
-              {pick ? <PickRow s={s} m={m} pick={pick} /> : <MessageRow s={s} m={m} />}
+              {pick ? (
+                <PickRow s={s} m={m} pick={pick} />
+              ) : (
+                <MessageRow
+                  s={s}
+                  m={m}
+                  onReply={repliable(s, id, m) ? () => replyTo(id, m) : undefined}
+                  onQuote={(q) => open(q)}
+                  flash={flash === m.id}
+                  onFlashed={() => setFlash(undefined)}
+                />
+              )}
             </Fragment>
           ))}
           {outbox.map((o) => (

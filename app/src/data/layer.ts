@@ -14,6 +14,7 @@ import type {
   ContactAsked,
   ContactShare,
   Conversation,
+  ConversationPrefs,
   Device,
   FileRef,
   Group,
@@ -61,11 +62,11 @@ export type DataLayer = {
   contacts(): Promise<Contact[]>
   /**
    * API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on
-   * retry. `files`: IDs from `upload`.
+   * retry. `files`: IDs from `upload`. `inReplyTo`: the message this one replies to, in the same chat.
    */
-  send(to: string, body: string, clientMsgId: string, files?: string[]): Promise<Sent>
+  send(to: string, body: string, clientMsgId: string, files?: string[], inReplyTo?: number): Promise<Sent>
   /** API-043: to one of my own sessions. */
-  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[]): Promise<Message>
+  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[], inReplyTo?: number): Promise<Message>
   /** API-026: `sha256` is the file's, 64 lowercase hex digits. */
   upload(file: File, sha256: string): Promise<Uploaded>
   /** API-073: an empty title goes back to the one from the tool. */
@@ -74,6 +75,10 @@ export type DataLayer = {
   markRead(agentId: string, upTo: number): Promise<number>
   /** API-078: what this chat sent my inbox, up to message `upTo`, counts as read; `imbo inbox` no longer lists it. */
   markConversationRead(conversationId: number, upTo: number): Promise<number>
+  /** API-085: my own pin, unread mark and mute for a chat; only the ones given change. */
+  setConversationPrefs(conversationId: number, prefs: Partial<ConversationPrefs>): Promise<ConversationPrefs>
+  /** API-086: messages in this chat with `q` in their body, newest first, up to 50. */
+  searchConversation(conversationId: number, q: string): Promise<MessagesPage>
   /**
    * API-079: calls `changed` with each area the server says changed, and with `all` once a dropped connection is back.
    * Returns what closes it for good.

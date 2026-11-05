@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, Device, FileRef, Group, Message, MyAgent, Request, ShareLevel, Uploaded } from "./contract"
+import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, ConversationPrefs, Device, FileRef, Group, Message, MyAgent, Request, ShareLevel, Uploaded } from "./contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { t } from "@/i18n"
@@ -30,7 +30,9 @@ export type ThreadKey = `c:${number}` | `a:${string}` | `n:${number}`
  * A message this page is sending or couldn't send. Retrying reuses `cid` (`client_msg_id`), so the server stores it
  * once. `id` is the server's message number once stored; the entry goes away when that message is in the thread.
  */
-export type Outgoing = { cid: string; to: string; body: string; files: FileRef[]; status: "sending" | "failed"; error?: ApiError; id?: number }
+export type Outgoing = { cid: string; to: string; body: string; files: FileRef[]; status: "sending" | "failed"; error?: ApiError; id?: number; reply?: Quote }
+/** What a reply shows of the message it answers (FLOW-REPLY); only `id` when I can't see that one. */
+export type Quote = NonNullable<Message["in_reply_to"]>
 /** A file for the next message in a thread: uploading, uploaded (`ref`), or not sendable (`error`, said for people). */
 export type Attachment = { key: string; file: File; ref?: FileRef; error?: string }
 
@@ -59,6 +61,10 @@ export type State = {
   outbox: Partial<Record<ThreadKey, Outgoing[]>>
   /** Files attached to the message being written, per thread (FLOW-WEB-CHAT S3). */
   attachments: Partial<Record<ThreadKey, Attachment[]>>
+  /** Per thread, the message the one being written replies to (FLOW-REPLY S1). */
+  replying: Partial<Record<ThreadKey, Quote>>
+  /** The threads whose text box is showing: only their messages offer Reply. */
+  composing: Partial<Record<ThreadKey, boolean>>
   /** How many messages this page has sent per thread; the message list goes back to the bottom when it grows. */
   sent: Partial<Record<ThreadKey, number>>
   /** Per direct chat, the short ID of the peer's session it sends to; none is the peer's terminal inbox (FLOW-WEB-CHAT S2). */
@@ -85,6 +91,8 @@ const fresh = (account: Account | null | undefined, isNew = false): State => ({
   threads: {},
   outbox: {},
   attachments: {},
+  replying: {},
+  composing: {},
   sent: {},
   sendTo: {},
 })
@@ -277,15 +285,18 @@ async function markShown(key: ThreadKey, arrived = false) {
   const chat = key.startsWith("c:")
   const id = key.slice(2)
   const last = t.data.messages.at(-1)?.id
-  const unread = (chat ? conversationOf(state, Number(id))?.pending : dataOf(state.agents)?.find((a) => a.id === id)?.unread) ?? 0
+  const c = chat ? conversationOf(state, Number(id)) : undefined
+  // Marked unread counts too: opening the chat takes the mark off (FLOW-CHAT-PREFS S5).
+  const unread = (chat ? (c?.pending || Number(!!c?.marked_unread)) : dataOf(state.agents)?.find((a) => a.id === id)?.unread) ?? 0
   const before = readUpTo.get(key) ?? 0
-  if (last === undefined || last <= before || (!unread && !arrived)) return
+  // A chat marked unread after it was read here still has its mark to take off.
+  if (last === undefined || (last <= before && !c?.marked_unread) || (!unread && !arrived)) return
   readUpTo.set(key, last)
   try {
     if (chat) {
       await api.markConversationRead(Number(id), last)
       const chats = dataOf(state.conversations)
-      if (chats) set({ conversations: ready(chats.map((c) => (c.id === Number(id) ? { ...c, pending: 0 } : c))) })
+      if (chats) set({ conversations: ready(chats.map((c) => (c.id === Number(id) ? { ...c, pending: 0, marked_unread: false } : c))) })
     } else {
       await api.markRead(id, last)
       const agents = dataOf(state.agents)
@@ -337,7 +348,9 @@ async function deliver(key: ThreadKey, o: Outgoing) {
   const files = o.files.length ? o.files.map((f) => f.id) : undefined
   try {
     if (key.startsWith("n:")) return await started(key, o, await api.send(o.to, o.body, o.cid, files))
-    const id = key.startsWith("a:") ? (await api.sendToAgent(key.slice(2), o.body, o.cid, files)).id : (await api.send(o.to, o.body, o.cid, files)).message_id
+    const id = key.startsWith("a:")
+      ? (await api.sendToAgent(key.slice(2), o.body, o.cid, files, o.reply?.id)).id
+      : (await api.send(o.to, o.body, o.cid, files, o.reply?.id)).message_id
     if (key.startsWith("a:")) load("agents", true)
     const t = state.threads[key]
     // A retry after a lost answer: the poll may already have brought the stored message in.
@@ -362,14 +375,15 @@ async function started(key: ThreadKey, o: Outgoing, sent: { conversation: { id: 
 
 /**
  * `to` is the API-015 address in a chat; a session pane sends to its own session and ignores it. Without `given`, the
- * uploaded attachments go with it and leave the box; a failed message sent again brings its own and leaves the box as it is.
+ * uploaded attachments and the message being replied to go with it and leave the box; a failed message sent again
+ * brings its own and leaves the box as it is.
  */
-export function send(key: ThreadKey, to: string, body: string, given?: FileRef[]) {
-  const o: Outgoing = { cid: crypto.randomUUID(), to, body, files: given ?? attachedFiles(key), status: "sending" }
+export function send(key: ThreadKey, to: string, body: string, given?: FileRef[], reply?: Quote) {
+  const o: Outgoing = { cid: crypto.randomUUID(), to, body, files: given ?? attachedFiles(key), status: "sending", reply: given ? reply : state.replying[key] }
   set({
     outbox: { ...state.outbox, [key]: [...(state.outbox[key] ?? []), o] },
     sent: { ...state.sent, [key]: (state.sent[key] ?? 0) + 1 },
-    ...(!given && { attachments: { ...state.attachments, [key]: [] } }),
+    ...(!given && { attachments: { ...state.attachments, [key]: [] }, replying: { ...state.replying, [key]: undefined } }),
   })
   deliver(key, o)
 }
@@ -384,11 +398,34 @@ export function resendTo(key: ThreadKey, cid: string, to: string) {
   const o = state.outbox[key]?.find((x) => x.cid === cid)
   if (!o || o.status === "sending") return
   discard(key, cid)
-  send(key, to, o.body, o.files)
+  send(key, to, o.body, o.files, o.reply)
 }
 export const discard = (key: ThreadKey, cid: string) => setOutbox(key, (state.outbox[key] ?? []).filter((o) => o.cid !== cid))
 
 export const chooseRecipient = (conversationId: number, shortId?: string) => set({ sendTo: { ...state.sendTo, [conversationId]: shortId } })
+
+/** As a reply shows the message it answers: its first 80 characters, line breaks as spaces, or its first file's name. */
+export const quoteOf = (m: Message): Quote => ({
+  id: m.id,
+  from_name: m.from.name,
+  preview: m.body ? [...m.body.replace(/\r\n?|\n/g, " ")].slice(0, 80).join("") : (m.files[0]?.name ?? ""),
+})
+export const replyTo = (key: ThreadKey, m: Message) => set({ replying: { ...state.replying, [key]: quoteOf(m) } })
+export const stopReplying = (key: ThreadKey) => set({ replying: { ...state.replying, [key]: undefined } })
+export const showingComposer = (key: ThreadKey, on: boolean) => set({ composing: { ...state.composing, [key]: on } })
+
+/** Up to 10 more pages back until message `id` is in the thread (FLOW-REPLY S6); false when it isn't. */
+export async function bringIn(key: ThreadKey, id: number) {
+  for (let pages = 0; ; pages++) {
+    const t = state.threads[key]
+    if (t?.status !== "ready") return false
+    if (t.data.messages.some((m) => m.id === id)) return true
+    if (!t.data.hasMore || pages === 10) return false
+    await loadOlder(key)
+    const after = state.threads[key]
+    if (after?.status === "ready" && after.data.older === "error") return false
+  }
+}
 
 // ── Attachments ──────────────────────────────────────────────────────────────
 
@@ -479,6 +516,8 @@ const MEDIA = new Map([
   ["webm", "video/webm"],
 ])
 const typeOf = (f: FileRef) => MEDIA.get(/\.([^.]+)$/.exec(f.name)?.[1].toLowerCase() ?? "")
+/** A file the message will show as a picture, by its name (the composer's thumbnails, RULE-020). */
+export const pictureName = (name: string) => typeOf({ name } as FileRef)?.startsWith("image/") ?? false
 /** A picture the page shows or a video it plays, by the file's extension; an expired file is neither. */
 export const mediaOf = (f: FileRef) => (fileExpired(f) ? undefined : (typeOf(f)?.split("/")[0] as "image" | "video" | undefined))
 /** Pictures up to 10 MB show in the message by themselves; bigger ones when asked. */
@@ -726,6 +765,39 @@ export async function askContact(to: { account_id: number } | { email: string },
   else await loadSent()
   return r
 }
+/** Pinned first, then the newest last message, as API-030 orders them. */
+const byPin = (a: Conversation, b: Conversation) => Number(!!b.pinned) - Number(!!a.pinned) || (b.last_message?.id ?? 0) - (a.last_message?.id ?? 0)
+function putChat(id: number, change: Partial<Conversation>) {
+  const chats = dataOf(state.conversations)
+  if (chats) set({ conversations: ready(chats.map((c) => (c.id === id ? { ...c, ...change } : c)).sort(byPin)) })
+}
+/**
+ * API-085: pin, mark unread or mute a chat, mine only. The list changes at once and goes back when the server says no.
+ * Throws ApiError.
+ */
+export async function setChatPrefs(id: number, change: Partial<ConversationPrefs>) {
+  const before = conversationOf(state, id)
+  if (!before) return
+  turn("conversations")
+  putChat(id, change)
+  try {
+    putChat(id, await act(() => api.setConversationPrefs(id, change)))
+  } catch (e) {
+    // Only what this change set goes back; another change that went through meanwhile stays.
+    putChat(id, Object.fromEntries(Object.keys(change).map((k) => [k, before[k as keyof ConversationPrefs]])))
+    throw e
+  }
+}
+/** API-078 from the list: everything up to its last message, and the unread mark goes. Throws ApiError. */
+export async function markChatRead(id: number) {
+  const c = conversationOf(state, id)
+  if (!c?.last_message) return
+  turn("conversations")
+  await act(() => api.markConversationRead(id, c.last_message!.id))
+  putChat(id, { pending: 0, marked_unread: false })
+}
+/** API-086: up to 50 of the chat's messages whose text has `q`, oldest first. Throws ApiError. */
+export const searchChat = (id: number, q: string) => act(() => api.searchConversation(id, q))
 /** API-013: the chat stays, and says they're no longer a contact. Throws ApiError. */
 export async function removeContact(accountId: number) {
   await act(() => api.removeContact(accountId))
@@ -989,7 +1061,8 @@ export const fileExpired = (f: FileRef) => Date.now() > Date.parse(f.expires_at)
 export const fileUrl = (f: FileRef) => api.fileUrl(f)
 export const conversationTitle = (c: Conversation) => c.group?.name ?? c.peer?.name ?? String(c.id)
 
-export const pendingTotal = (s: State) => (dataOf(s.conversations) ?? []).reduce((n, c) => n + c.pending, 0)
+/** What the Chats tab counts: muted chats left out (FLOW-CHAT-PREFS S3). */
+export const pendingTotal = (s: State) => (dataOf(s.conversations) ?? []).reduce((n, c) => n + (c.muted ? 0 : c.pending), 0)
 /** Replies from my sessions to my terminal inbox that nobody has read yet (API-014 `unread`). */
 export const unreadTotal = (s: State) => (dataOf(s.agents) ?? []).reduce((n, a) => n + a.unread, 0)
 export const conversationOf = (s: State, id: number) => dataOf(s.conversations)?.find((c) => c.id === id)

@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
-import { ArrowUp, Bot, ChevronDown, CircleAlert, FileText, Inbox, Paperclip, Pause, X } from "lucide-react"
+import { ArrowUp, Bot, ChevronDown, CircleAlert, FileText, Inbox, Paperclip, Pause, Reply, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -21,18 +21,22 @@ import {
   detach,
   draftOf,
   keepDraft,
+  pictureName,
   refreshList,
   send,
+  showingComposer,
+  stopReplying,
   type Attachment,
   type State,
   type ThreadKey,
 } from "@/data/store"
 import { t } from "@/i18n"
 import { ago, fileSize, toolName } from "@/lib/format"
+import { useObjectUrl } from "@/lib/useObjectUrl"
 
 // The text box at the bottom of an open chat or session (FLOW-WEB-CHAT S3, FLOW-WEB-SEND S3): text and files, sent as me
 // from my inbox. Enter sends, Shift+Enter starts a new line. Files pasted into it are attached like picked ones. In a group,
-// typing @ lists who can be mentioned.
+// typing @ lists who can be mentioned. Above it, the message being replied to, if any (FLOW-REPLY S1).
 
 const MAX_CHARS = 32_000
 const INBOX = "inbox"
@@ -92,6 +96,26 @@ function FileChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
       </span>
       <Button variant="ghost" size="icon-sm" aria-label={t("Remove {name}", { name: a.file.name })} className="flex-none text-muted-foreground" onClick={onRemove}>
         <X size={14} aria-hidden="true" />
+      </Button>
+    </li>
+  )
+}
+
+/** An attached picture as a 72×72 thumbnail with × at its corner, veiled while it uploads (RULE-020). */
+function Thumb({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
+  const url = useObjectUrl(a.file)
+  return (
+    <li className="relative size-18 flex-none overflow-hidden rounded-md border-(length:--semantic-layout-hairline) border-border bg-muted">
+      {url && <img src={url} alt={`${a.file.name}, ${a.ref ? fileSize(a.file.size) : t("Uploading…")}`} draggable={false} className="size-full object-cover" />}
+      {!a.ref && <span aria-hidden="true" className="skeleton absolute inset-0 rounded-none opacity-60" />}
+      <Button
+        variant="secondary"
+        size="icon-sm"
+        aria-label={t("Remove {name}", { name: a.file.name })}
+        className="absolute top-1 right-1 size-6 rounded-full border-(length:--semantic-layout-hairline) border-border bg-popover shadow-overlay"
+        onClick={onRemove}
+      >
+        <X size={12} aria-hidden="true" />
       </Button>
     </li>
   )
@@ -200,6 +224,15 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
   const refused = files.some((a) => a.error)
   const uploading = files.some((a) => !a.ref && !a.error)
   const [held, setHeld] = useState(false)
+  const quote = s.replying[threadKey]
+  useEffect(() => {
+    showingComposer(threadKey, true)
+    return () => showingComposer(threadKey, false)
+  }, [threadKey])
+  // Picking Reply on a message puts the caret here.
+  useEffect(() => {
+    if (quote) area.current?.focus()
+  }, [quote?.id])
   // In a group, the @ just before the caret lists who to mention (REQ-107); Esc closes the list for that @ only.
   const mentions = useMemo(() => (group ? mentionsOf(group, s.account?.id) : []), [group, s.account?.id])
   const [caret, setCaret] = useState<number>()
@@ -280,6 +313,11 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
         return setClosedAt(typing!.start)
       }
     }
+    // Esc lets go of the message being replied to; what's written stays.
+    if (e.key === "Escape" && quote) {
+      e.preventDefault()
+      return stopReplying(threadKey)
+    }
     if (!enter) return
     e.preventDefault()
     submit()
@@ -292,18 +330,36 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
           {note}
         </p>
       )}
+      {quote && (
+        <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-2.5">
+          <Reply size={14} aria-hidden="true" className="flex-none text-muted-foreground" />
+          <p className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
+            {t("Replying to {name}: {text}", { name: quote.from_name ?? "", text: quote.preview ?? "" })}
+          </p>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("Stop replying")}
+            className="flex-none text-muted-foreground"
+            onClick={() => {
+              stopReplying(threadKey)
+              area.current?.focus()
+            }}
+          >
+            <X size={14} aria-hidden="true" />
+          </Button>
+        </div>
+      )}
       {files.length > 0 && (
         <ul aria-label={t("Attached files")} className="flex flex-wrap gap-2">
-          {files.map((a) => (
-            <FileChip
-              key={a.key}
-              a={a}
-              onRemove={() => {
-                detach(threadKey, a.key)
-                area.current?.focus()
-              }}
-            />
-          ))}
+          {files.map((a) => {
+            const remove = () => {
+              detach(threadKey, a.key)
+              area.current?.focus()
+            }
+            // One that can't go shows as a file with the reason.
+            return pictureName(a.file.name) && !a.error ? <Thumb key={a.key} a={a} onRemove={remove} /> : <FileChip key={a.key} a={a} onRemove={remove} />
+          })}
         </ul>
       )}
       <form

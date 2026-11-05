@@ -65,9 +65,9 @@ export const online = {
   agentMessages: (id, page) => get(c.messagesPage, `/v1/agents/${encodeURIComponent(id)}/messages${query(page)}`),
   // With their sessions seen in the last 7 days, which a chat can also send to (FLOW-WEB-CHAT S2).
   contacts: async () => (await get(c.contacts, "/v1/contacts?offline=true")).contacts,
-  send: (to, body, client_msg_id, files) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files }),
-  sendToAgent: async (id, body, client_msg_id, files) =>
-    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files })).message,
+  send: (to, body, client_msg_id, files, in_reply_to) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files, in_reply_to }),
+  sendToAgent: async (id, body, client_msg_id, files, in_reply_to) =>
+    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files, in_reply_to })).message,
   upload: (file, sha256) =>
     call(c.uploaded, "POST", "/v1/files", file, {
       "content-type": "application/octet-stream",
@@ -77,6 +77,8 @@ export const online = {
   renameAgent: async (id, title) => (await call(c.agentRenamed, "PUT", `/v1/agents/${encodeURIComponent(id)}/title`, { title })).agent,
   markRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/agents/${encodeURIComponent(id)}/read`, { up_to })).marked,
   markConversationRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/conversations/${id}/read`, { up_to })).marked,
+  setConversationPrefs: (id, prefs) => call(c.conversationPrefs, "POST", `/v1/conversations/${id}/prefs`, prefs),
+  searchConversation: (id, q) => get(c.messagesPage, `/v1/conversations/${id}/search?q=${encodeURIComponent(q)}`),
   events: (changed) => {
     // Same host as every other call: through the dev server's proxy, or api.imbo.dev, which gets the session cookie too.
     const url = `${API ? API.replace(/^http/, "ws") : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`}/v1/events`
