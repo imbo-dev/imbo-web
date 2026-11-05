@@ -43,6 +43,7 @@ import {
   conversationWith,
   dataOf,
   declineRequest,
+  draftOf,
   groupOf,
   isBlocked,
   isMe,
@@ -172,6 +173,8 @@ export function GetStarted() {
 // ── Chats ────────────────────────────────────────────────────────────────────
 
 export function ChatList({ s, open }: { s: State; open?: string }) {
+  // Narrows the loaded list by chat name, without asking the server; kept while chats open beside it (FLOW-CHAT-LIST S1).
+  const [q, setQ] = useState("")
   const l = s.conversations
   if (l.status === "loading") return <ListSkeleton />
   if (l.status === "error") return <ErrorState title={t("Couldn't load chats")} error={l.error} onRetry={() => retry("conversations")} />
@@ -195,14 +198,38 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
         </EmptyState>
       </>
     )
+  const words = q.trim()
+  const shown = words ? l.data.filter((c) => conversationTitle(c).toLowerCase().includes(words.toLowerCase())) : l.data
   return (
     <>
+      <div className="px-4 pt-2">
+        <div className="state-layer focus-ring is-field flex h-8 items-center gap-2 rounded-md border border-input bg-muted px-3">
+          <Search size={14} aria-hidden="true" className="flex-none text-muted-foreground" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQ("")}
+            aria-label={t("Search chats")}
+            placeholder={t("Search chats")}
+            autoComplete="off"
+            className="w-full min-w-0 bg-transparent text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
+          />
+        </div>
+      </div>
       {newGroup}
-      <nav aria-label={t("Chats")} className="flex flex-col gap-0.5 p-2">
-        {l.data.map((c) => {
+      {!shown.length && (
+        <p role="status" className="px-4 py-6 text-body text-muted-foreground">
+          {t("No chat names contain “{q}”", { q: words })}
+        </p>
+      )}
+      <nav aria-label={t("Chats")} hidden={!shown.length} className="flex flex-col gap-0.5 p-2">
+        {shown.map((c) => {
           const title = conversationTitle(c)
           const last = c.last_message
           const who = !last ? "" : isMe(s, last.from.account_id) ? t("You") : c.kind === "group" ? last.from.name : (last.from.agent?.title ?? leadOf(last.from.via))
+          // Unsent text from this page, once the chat is no longer the one open (FLOW-CHAT-LIST S2).
+          const draft = String(c.id) === open ? "" : draftOf(`c:${c.id}`).replace(/\s+/g, " ").trim()
           return (
             <ChatMenu key={c.id} c={c}>
               <ListRow href={`/chats/${c.id}`} current={String(c.id) === open} className={cn(c.pinned && "bg-(--semantic-color-surface-sunken)")}>
@@ -212,10 +239,16 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
                     {title}
                     {c.pinned && <span className="sr-only">, {t("pinned")}</span>}
                   </span>
-                  {last && (
-                    <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
-                      {who}: {last.preview}
+                  {draft ? (
+                    <span lang={langOf(draft)} className="block truncate text-caption text-muted-foreground">
+                      <span className="text-(--semantic-color-feedback-warning)">{t("Draft")}:</span> {draft}
                     </span>
+                  ) : (
+                    last && (
+                      <span lang={langOf(last.preview)} className="block truncate text-caption text-muted-foreground">
+                        {who}: {last.preview}
+                      </span>
+                    )
                   )}
                 </span>
                 <span className="flex flex-col items-end gap-1">

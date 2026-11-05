@@ -562,6 +562,10 @@ export const zh = {
   "Mark as unread": "标为未读",
   "Mute": "免打扰",
   "Unmute": "取消免打扰",
+  // pages/inbox/views.tsx chat list (FLOW-CHAT-LIST)
+  "Draft": "草稿",
+  "Search chats": "查找对话",
+  "No chat names contain “{q}”": "没有名字里带“{q}”的对话",
   // pages/inbox/search.tsx
   "Search in this chat": "在对话里查找",
   "Close search": "关闭查找",
