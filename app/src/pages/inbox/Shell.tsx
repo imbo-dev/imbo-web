@@ -160,7 +160,7 @@ export function Inbox({ tab, item, missing, chat }: { tab: Tab; item?: string; m
             {listTab === "contacts" && <ContactList s={s} open={item} />}
           </div>
         </aside>
-        <main className={cn("flex min-h-0 min-w-0 flex-col [container-type:size]", !detail && "max-sm:hidden")}>
+        <main className={cn("flex min-h-0 min-w-0 flex-col", !detail && "max-sm:hidden")}>
           {missing ? (
             <NotFound back={<BackLink to="/chats" label={t("Back to chats")} />} title={t("This page isn't here")} />
           ) : tab === "account" && item === "blocks" ? (

@@ -65,9 +65,9 @@ export const online = {
   agentMessages: (id, page) => get(c.messagesPage, `/v1/agents/${encodeURIComponent(id)}/messages${query(page)}`),
   // With their sessions seen in the last 7 days, which a chat can also send to (FLOW-WEB-CHAT S2).
   contacts: async () => (await get(c.contacts, "/v1/contacts?offline=true")).contacts,
-  send: (to, body, client_msg_id, files, in_reply_to) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files, in_reply_to }),
-  sendToAgent: async (id, body, client_msg_id, files, in_reply_to) =>
-    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files, in_reply_to })).message,
+  send: (to, body, client_msg_id, files, quote) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files, quote }),
+  sendToAgent: async (id, body, client_msg_id, files, quote) =>
+    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files, quote })).message,
   upload: (file, sha256) =>
     call(c.uploaded, "POST", "/v1/files", file, {
       "content-type": "application/octet-stream",

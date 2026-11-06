@@ -32,7 +32,7 @@ export type ThreadKey = `c:${number}` | `a:${string}` | `n:${number}`
  */
 export type Outgoing = { cid: string; to: string; body: string; files: FileRef[]; status: "sending" | "failed"; error?: ApiError; id?: number; reply?: Quote }
 /** What a reply shows of the message it answers (FLOW-REPLY); only `id` when I can't see that one. */
-export type Quote = NonNullable<Message["in_reply_to"]>
+export type Quote = NonNullable<Message["quote"]>
 /** A file for the next message in a thread: uploading, uploaded (`ref`), or not sendable (`error`, said for people). */
 export type Attachment = { key: string; file: File; ref?: FileRef; error?: string }
 

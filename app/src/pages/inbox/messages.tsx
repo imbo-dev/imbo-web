@@ -454,7 +454,7 @@ export function MessageRow({ s, m, onReply, onQuote, flash, onFlashed }: { s: St
       </header>
       {m.body && <Bubble body={m.body} right={right} />}
       {m.files.length > 0 && <Attachments files={m.files} right={right} />}
-      {m.in_reply_to && <Quoted q={m.in_reply_to} onOpen={onQuote} />}
+      {m.quote && <Quoted q={m.quote} onOpen={onQuote} />}
       <Delivery s={s} m={m} />
     </Row>
   )

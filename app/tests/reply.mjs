@@ -134,7 +134,7 @@ try {
     ok('6 replying to my own message', quote === 'alice: T564 回复', `quoted "${quote}"`);
   });
   await step('7 the quoted line jumps back to the first message', async () => {
-    const r = aliceSends({ to: ids.bob, body: 'T564 跳回', client_msg_id: `t564-7-${Date.now()}`, in_reply_to: first });
+    const r = aliceSends({ to: ids.bob, body: 'T564 跳回', client_msg_id: `t564-7-${Date.now()}`, quote: first });
     await row('T564 跳回').waitFor({ timeout: 20_000 });
     const loaded = await row('T564 第一条').count();
     await row('T564 跳回').locator('[data-testid^="quote-"]').click();

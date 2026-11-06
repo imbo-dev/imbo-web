@@ -97,7 +97,7 @@ export const conversationRef = z.object({ kind: z.enum(["direct", "group"]), id:
  * API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal.
  * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what went to one of my own sessions —
  * what I sent it (API-036, API-043) or, in a chat, what reached it and isn't in it yet (API-031): `pending`, `pushed`,
- * `delivered` or `canceled`. `in_reply_to`: the message it replies to (FLOW-REPLY); only `id` when I can't see that one.
+ * `delivered` or `canceled`. `quote`: the message it replies to (FLOW-REPLY); only `id` when I can't see that one.
  */
 export const message = z.object({
   id: z.number(),
@@ -110,7 +110,7 @@ export const message = z.object({
   to: agentRef.optional(),
   from_me: z.boolean().default(false),
   state: z.string().optional(),
-  in_reply_to: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional() }).optional(),
+  quote: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional() }).optional(),
 })
 
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */

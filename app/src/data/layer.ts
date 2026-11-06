@@ -62,11 +62,11 @@ export type DataLayer = {
   contacts(): Promise<Contact[]>
   /**
    * API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on
-   * retry. `files`: IDs from `upload`. `inReplyTo`: the message this one replies to, in the same chat.
+   * retry. `files`: IDs from `upload`. `quote`: the message this one replies to, in the same chat.
    */
-  send(to: string, body: string, clientMsgId: string, files?: string[], inReplyTo?: number): Promise<Sent>
+  send(to: string, body: string, clientMsgId: string, files?: string[], quote?: number): Promise<Sent>
   /** API-043: to one of my own sessions. */
-  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[], inReplyTo?: number): Promise<Message>
+  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[], quote?: number): Promise<Message>
   /** API-026: `sha256` is the file's, 64 lowercase hex digits. */
   upload(file: File, sha256: string): Promise<Uploaded>
   /** API-073: an empty title goes back to the one from the tool. */
