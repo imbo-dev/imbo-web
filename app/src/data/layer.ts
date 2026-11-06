@@ -18,6 +18,7 @@ import type {
   Device,
   FileRef,
   Group,
+  GroupHit,
   Me,
   Message,
   MessagesPage,
@@ -25,6 +26,7 @@ import type {
   Report,
   ReportsPage,
   Request,
+  SentRequest,
   Resolved,
   Sent,
   ShareLevel,
@@ -62,11 +64,12 @@ export type DataLayer = {
   contacts(): Promise<Contact[]>
   /**
    * API-015: `to` is `<account>` (their terminal inbox), `<account>/<short_id>` or `#<group>`. Same `clientMsgId` on
-   * retry. `files`: IDs from `upload`. `quote`: the message this one replies to, in the same chat.
+   * retry. `files`: IDs from `upload`. `quote`: the message this one replies to, in the same chat;
+   * `quoteText`: the passage of it this one replies to.
    */
-  send(to: string, body: string, clientMsgId: string, files?: string[], quote?: number): Promise<Sent>
+  send(to: string, body: string, clientMsgId: string, files?: string[], quote?: number, quoteText?: string): Promise<Sent>
   /** API-043: to one of my own sessions. */
-  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[], quote?: number): Promise<Message>
+  sendToAgent(agentId: string, body: string, clientMsgId: string, files?: string[], quote?: number, quoteText?: string): Promise<Message>
   /** API-026: `sha256` is the file's, 64 lowercase hex digits. */
   upload(file: File, sha256: string): Promise<Uploaded>
   /** API-073: an empty title goes back to the one from the tool. */
@@ -84,10 +87,10 @@ export type DataLayer = {
    * Returns what closes it for good.
    */
   events(changed: (area: Area) => void): () => void
-  /** API-009: contact requests and group invitations waiting for me. */
+  /** API-009 with `include=join`: contact requests, group invitations and requests to join my groups waiting for me. */
   requests(): Promise<Request[]>
   /** API-009 `direction=out`: what I sent that is still waiting. */
-  sentRequests(): Promise<Request[]>
+  sentRequests(): Promise<SentRequest[]>
   /** API-008: by account ID or by the email they sign in with. */
   askContact(to: { account_id: number } | { email: string }, note?: string): Promise<ContactAsked>
   /** API-013 */
@@ -128,6 +131,14 @@ export type DataLayer = {
   transferGroup(groupId: number, accountId: number): Promise<Group>
   dissolveGroup(groupId: number): Promise<void>
   leaveGroup(groupId: number): Promise<void>
+  /** API-077 `discoverable`: the owner lets anyone find the group and ask to join, or stops it. */
+  setDiscoverable(groupId: number, on: boolean): Promise<Group>
+  /** API-089, API-090: the owner makes a member an admin, or an ordinary member again. */
+  setGroupAdmin(groupId: number, accountId: number, on: boolean): Promise<Group>
+  /** API-087: groups anyone can find, by name or ID. */
+  searchGroups(q: string): Promise<GroupHit[]>
+  /** API-088 */
+  applyToGroup(groupId: number, note?: string): Promise<void>
   /** API-075: a code to the new email. API-076 checks it and changes my email. */
   requestEmailChange(email: string): Promise<{ retry_after_s: number }>
   changeEmail(email: string, code: string): Promise<Account>

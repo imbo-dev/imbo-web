@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Dialog } from "@/components/ui/dialog"
 import { Avatar, Command, CopyId, Presence, Sep, Tag } from "@/components/bits"
-import type { Billing, Conversation, Message, MyAgent, Request } from "@/data/contract"
+import type { Billing, Conversation, Message, MyAgent, Request, SentRequest } from "@/data/contract"
 import { messageOf, type Plan } from "@/data/layer"
 import {
   ALIPAY_PRICES,
@@ -71,7 +71,7 @@ import { ComputersField, DeleteAccount, NameField } from "./account"
 import { ShareSection } from "./contact-share"
 import { ChangeEmail } from "./email"
 import { openAddContact } from "./contacts"
-import { openGroupDetails, openNewGroup } from "./groups"
+import { openFindGroup, openGroupDetails, openNewGroup } from "./groups"
 import { MessageList, Outbox, PaneHeader, leadOf, type Picking } from "./messages"
 import { RenameButtons, RenameHint, RenameInput, useRename, useReturnFocus } from "./rename"
 import { BlockedField, BlockedNote, BlockedTag, GroupMembers, PeerMenu, PictureField, unblockNow } from "./safety"
@@ -179,7 +179,11 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
   if (l.status === "loading") return <ListSkeleton />
   if (l.status === "error") return <ErrorState title={t("Couldn't load chats")} error={l.error} onRetry={() => retry("conversations")} />
   const newGroup = (
-    <div className="flex justify-end px-4 pt-2">
+    <div className="flex justify-end gap-2 px-4 pt-2">
+      <Button variant="outline" size="sm" onClick={openFindGroup}>
+        <Search size={14} aria-hidden="true" />
+        {t("Find a group")}
+      </Button>
       <Button variant="outline" size="sm" onClick={openNewGroup}>
         <Users size={14} aria-hidden="true" />
         {t("New group")}
@@ -787,16 +791,25 @@ export function SessionPane({ s, id }: { s: State; id: string }) {
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
-/** API-009 to API-011: a contact request or group invitation waiting for me, with its note, Accept and Decline. */
+/**
+ * API-009 to API-011: a contact request, a group invitation, or a request to join a group I own or am an admin of
+ * (FLOW-GROUP-APPROVE), waiting for me, with its note, Accept and Decline.
+ */
 function RequestRow({ r }: { r: Request }) {
   const [busy, setBusy] = useState(false)
-  const title = r.group ? t("{name} invited you to {group}", { name: r.from.name, group: r.group.name }) : r.from.name
+  const join = r.kind === "join" && r.group
+  const title = join
+    ? t("{name} wants to join {group}", { name: r.from.name, group: join.name })
+    : r.group
+      ? t("{name} invited you to {group}", { name: r.from.name, group: r.group.name })
+      : r.from.name
   const answer = async (accept: boolean) => {
     if (busy) return
     setBusy(true)
     try {
       if (!accept) return void (await declineRequest(r))
       const done = await acceptRequest(r)
+      if (join) return void toast(t("{name} is in {group} now.", { name: r.from.name, group: join.name }))
       // Joined a group: its chat, with the details open to pick which sessions get its messages (FLOW-GROUP-JOIN).
       if (done.group) {
         if (done.chat) navigate(`/chats/${done.chat}`)
@@ -810,11 +823,11 @@ function RequestRow({ r }: { r: Request }) {
   }
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2">
-      <Avatar kind={r.group ? "group" : "person"} label={r.from.name} />
+      <Avatar kind={r.group && !join ? "group" : "person"} label={r.from.name} />
       <div className="flex min-w-0 flex-col gap-2">
         <div>
           <p className="text-body wrap-anywhere text-foreground">{title}</p>
-          <p className="text-caption tabular-nums text-muted-foreground">{r.group ? t("Group {id}", { id: r.group.id }) : t("ID {id}", { id: r.from.id })}</p>
+          <p className="text-caption tabular-nums text-muted-foreground">{r.group && !join ? t("Group {id}", { id: r.group.id }) : t("ID {id}", { id: r.from.id })}</p>
           {r.note && (
             <p lang={langOf(r.note)} className="mt-1 text-body wrap-anywhere text-foreground">
               {r.note}
@@ -843,7 +856,7 @@ function ListHeading({ id, children }: { id: string; children: string }) {
 }
 
 /** API-009 `direction=out`: a contact request I sent, until they answer. */
-function SentRow({ r }: { r: Request }) {
+function SentRow({ r }: { r: SentRequest }) {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-2 py-2">
       <Avatar kind="person" label={r.to.name} />

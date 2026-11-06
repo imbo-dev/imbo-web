@@ -51,7 +51,7 @@ export function ContactDialogs({ s }: { s: State }) {
 }
 
 /** The server counts the note's characters (code points) after trimming, up to 200. */
-const NOTE_MAX = 200
+export const NOTE_MAX = 200
 const ID = /^\d{8}$/
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const invalid = () => t("That isn't an 8-digit account ID or an email address.")

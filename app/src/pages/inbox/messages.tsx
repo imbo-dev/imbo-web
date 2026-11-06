@@ -288,6 +288,7 @@ function Bubble({ body, right }: { body: string; right: boolean }) {
       {/* A right-click on a link or on selected text opens the browser's own menu, not the message's. */}
       <p
         lang={langOf(body)}
+        data-body
         onContextMenu={(e) => (e.target instanceof Element && e.target.closest("a")) || String(getSelection() ?? "") ? e.stopPropagation() : undefined}
         className="text-body whitespace-pre-wrap wrap-anywhere"
       >
@@ -335,8 +336,8 @@ function Row({
 }
 
 /**
- * Under a reply, what it answers: "Mia: the build fails", which jumps to that message; when I can't see it, a line
- * that says so and does nothing (FLOW-REPLY S6).
+ * Under a reply, what it answers: "Mia: the build fails", or the passage it answers, which jumps to that message; when I
+ * can't see it, a line that says so and does nothing (FLOW-REPLY S6).
  */
 function Quoted({ q, onOpen }: { q: Quote; onOpen?: (id: number) => void }) {
   if (q.from_name === undefined)
@@ -348,7 +349,7 @@ function Quoted({ q, onOpen }: { q: Quote; onOpen?: (id: number) => void }) {
       onClick={() => onOpen?.(q.id)}
       className="state-layer focus-ring mt-1 max-w-[min(100%,42rem)] truncate rounded-sm px-1 text-left text-caption text-(--semantic-color-text-tertiary)"
     >
-      {t("{name}: {text}", { name: q.from_name, text: q.preview ?? "" })}
+      {t("{name}: {text}", { name: q.from_name, text: q.text ?? q.preview ?? "" })}
     </button>
   )
 }
@@ -418,15 +419,32 @@ function Sender({ owner, session, via, group, you }: { owner: string; session?: 
 }
 
 /**
+ * What's selected in the body of the message `from` is in, trimmed and cut to 500 characters: the passage a reply
+ * answers. None when the selection reaches outside that body or takes all of it (FLOW-REPLY S1).
+ */
+function passage(from: Element, body: string) {
+  const p = from.closest("article")?.querySelector("[data-body]")
+  const sel = getSelection()
+  if (!p || !sel || sel.isCollapsed || !sel.rangeCount) return undefined
+  const r = sel.getRangeAt(0)
+  if (!p.contains(r.startContainer) || !p.contains(r.endContainer)) return undefined
+  const text = sel.toString().trim()
+  return text && text !== body.trim() ? [...text].slice(0, 500).join("") : undefined
+}
+
+/**
  * A message with no `from.agent` was sent in person, from `from.via`. Group messages have no `to`. With `onReply`, a
  * Reply button shows beside the heading on hover (always on touch screens), and a right-click opens Reply and Copy.
+ * The button replies to the passage selected in the message, if any.
  */
-export function MessageRow({ s, m, onReply, onQuote, flash, onFlashed }: { s: State; m: Message; onReply?: () => void; onQuote?: (id: number) => void; flash?: boolean; onFlashed?: () => void }) {
+export function MessageRow({ s, m, onReply, onQuote, flash, onFlashed }: { s: State; m: Message; onReply?: (passage?: string) => void; onQuote?: (id: number) => void; flash?: boolean; onFlashed?: () => void }) {
   const to = recipientOf(s, m)
   const right = mine(s, m)
   // Reply from the menu starts once the menu has closed, so the box can take the caret: an open menu keeps focus
   // inside itself, and a closing one hands it back to the row.
   const replied = useRef(false)
+  // Read as the button is pressed: some browsers drop the selection before the click.
+  const picked = useRef<string>(undefined)
   const row = (
     <Row right={right} picture={right ? <Me s={s} /> : <SenderAvatar s={s} from={m.from} />} id={m.id} flash={flash} onFlashed={onFlashed}>
       <header className={cn("flex max-w-full min-w-0 items-baseline gap-2", right && "flex-row-reverse")}>
@@ -445,7 +463,11 @@ export function MessageRow({ s, m, onReply, onQuote, flash, onFlashed }: { s: St
             size="icon-sm"
             aria-label={t("Reply")}
             data-testid={`reply-${m.id}`}
-            onClick={onReply}
+            onPointerDown={(e) => (picked.current = passage(e.currentTarget, m.body))}
+            onClick={(e) => {
+              onReply(picked.current ?? passage(e.currentTarget, m.body))
+              picked.current = undefined
+            }}
             className="-my-1 flex-none self-center text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           >
             <Reply size={14} aria-hidden="true" />
@@ -661,7 +683,7 @@ export function MessageList({ s, id, thread, label, pick, goTo }: { s: State; id
                 <MessageRow
                   s={s}
                   m={m}
-                  onReply={repliable(s, id, m) ? () => replyTo(id, m) : undefined}
+                  onReply={repliable(s, id, m) ? (text) => replyTo(id, m, text) : undefined}
                   onQuote={(q) => open(q)}
                   flash={flash === m.id}
                   onFlashed={() => setFlash(undefined)}

@@ -334,7 +334,7 @@ export function Composer({ s, threadKey, to, label, note, group }: { s: State; t
         <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-2.5">
           <Reply size={14} aria-hidden="true" className="flex-none text-muted-foreground" />
           <p className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
-            {t("Replying to {name}: {text}", { name: quote.from_name ?? "", text: quote.preview ?? "" })}
+            {t("Replying to {name}: {text}", { name: quote.from_name ?? "", text: quote.text ?? quote.preview ?? "" })}
           </p>
           <Button
             variant="ghost"

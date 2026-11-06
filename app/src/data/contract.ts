@@ -97,7 +97,8 @@ export const conversationRef = z.object({ kind: z.enum(["direct", "group"]), id:
  * API-031 / API-036 message. `reply_to` is the address to answer it: `#group`, `account/short_id`, or `account` for a terminal.
  * `from_me`: I sent it in person, from a terminal or this page. `state`: only on what went to one of my own sessions —
  * what I sent it (API-036, API-043) or, in a chat, what reached it and isn't in it yet (API-031): `pending`, `pushed`,
- * `delivered` or `canceled`. `quote`: the message it replies to (FLOW-REPLY); only `id` when I can't see that one.
+ * `delivered` or `canceled`. `quote`: the message it replies to (FLOW-REPLY); only `id` when I can't see that one, `text` when it
+ * replies to a passage of it.
  */
 export const message = z.object({
   id: z.number(),
@@ -110,7 +111,7 @@ export const message = z.object({
   to: agentRef.optional(),
   from_me: z.boolean().default(false),
   state: z.string().optional(),
-  quote: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional() }).optional(),
+  quote: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional(), text: z.string().optional() }).optional(),
 })
 
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
@@ -173,8 +174,16 @@ export const changed = z.object({ type: z.literal("changed"), area: z.enum(["con
 /**
  * API-019 listGroups: a group's members, and which of my sessions get its messages. `active` as in API-012. A member's
  * `sessions`: the ones they picked for this group's messages, listed when typing @ (REQ-107); servers before 0.2.17 leave it out.
+ * `role`: `owner`, `admin` or `member`; a group's `discoverable`: anyone can find it and ask to join (REQ-124, REQ-127).
  */
-export const member = z.object({ id: accountId, name: z.string(), avatar_url: z.string().optional(), active: z.boolean().default(true), sessions: z.array(agentRef).default([]) })
+export const member = z.object({
+  id: accountId,
+  name: z.string(),
+  avatar_url: z.string().optional(),
+  active: z.boolean().default(true),
+  sessions: z.array(agentRef).default([]),
+  role: z.string().optional(),
+})
 export const group = z.object({
   id: z.number(),
   name: z.string(),
@@ -182,11 +191,23 @@ export const group = z.object({
   members: z.array(member),
   my_sessions: z.array(agentRef).default([]),
   avatar_url: z.string().optional(),
+  discoverable: z.boolean().default(false),
 })
 /** API-018, API-038, API-077: the group as it is now. */
 export const groupOne = z.object({ group })
-/** API-020: the invitation; its other fields aren't read. */
+/** API-020: the invitation; its other fields aren't read. API-088: the request to join, the same. */
 export const invited = z.object({ request: z.object({ id: z.number() }) })
+/** API-087: a group anyone can find; `joined`: I'm in it, `applied`: I asked to join and nobody has answered yet. */
+export const groupHit = z.object({
+  id: z.number(),
+  name: z.string(),
+  avatar_url: z.string().optional(),
+  member_count: z.number(),
+  owner: accountRef,
+  joined: z.boolean(),
+  applied: z.boolean(),
+})
+export const groupHits = z.object({ groups: z.array(groupHit) })
 /** API-021 */
 export const groupSessions = z.object({ my_sessions: z.array(agentRef) })
 
@@ -269,22 +290,25 @@ export const codeSent = z.object({ retry_after_s: z.number() })
 /** API-028 */
 export const webLogin = z.object({ account, new_account: z.boolean() })
 /**
- * API-009, as the web calls it: contact requests (`kind` contact, maybe with a note) and group invitations waiting for
- * me, or the ones I sent (`direction=out`, without their notes).
+ * API-009, as the web calls it: contact requests (`kind` contact, maybe with a note), group invitations and requests to
+ * join a group I own or am an admin of (`kind` join, to the group, so without `to`) waiting for me, or the contact
+ * requests I sent (`direction=out`, without their notes).
  */
 export const request = z.object({
   id: z.number(),
   kind: z.string(),
   from: accountRef,
-  to: accountRef,
+  to: accountRef.optional(),
   group: groupRef.optional(),
   note: z.string().optional(),
   status: z.string(),
   created_at: time,
 })
 export const requests = z.object({ requests: z.array(request) })
+export const sentRequest = request.extend({ to: accountRef })
+export const sentRequests = z.object({ requests: z.array(sentRequest) })
 /** API-008: 201 with the new request, or 200 with the contact when they had already asked me (theirs is accepted). */
-export const contactAsked = z.union([z.object({ request }), z.object({ contact: accountRef })])
+export const contactAsked = z.union([z.object({ request: sentRequest }), z.object({ contact: accountRef })])
 /** API-010: the new contact, or the group I joined (a web login picks none of my sessions for it). */
 export const accepted = z.object({ contact: accountRef.optional(), group: groupRef.optional() })
 /** API-011: the request, now declined; its fields aren't read. */
@@ -341,6 +365,8 @@ export type Sent = z.infer<typeof sent>
 export type Profile = z.infer<typeof profile>
 export type Group = z.infer<typeof group>
 export type Request = z.infer<typeof request>
+export type SentRequest = z.infer<typeof sentRequest>
+export type GroupHit = z.infer<typeof groupHit>
 export type Accepted = z.infer<typeof accepted>
 export type Member = z.infer<typeof member>
 export type Block = z.infer<typeof block>

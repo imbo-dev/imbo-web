@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, ConversationPrefs, Device, FileRef, Group, Message, MyAgent, Request, ShareLevel, Uploaded } from "./contract"
+import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, ConversationPrefs, Device, FileRef, Group, Message, MyAgent, Request, SentRequest, ShareLevel, Uploaded } from "./contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { t } from "@/i18n"
@@ -56,7 +56,7 @@ export type State = {
   /** Contact requests and group invitations waiting for me (API-009). */
   requests: Request[]
   /** Contact requests I sent that are still waiting (API-009 `direction=out`). */
-  outgoing: Request[]
+  outgoing: SentRequest[]
   threads: Partial<Record<ThreadKey, Load<Thread>>>
   outbox: Partial<Record<ThreadKey, Outgoing[]>>
   /** Files attached to the message being written, per thread (FLOW-WEB-CHAT S3). */
@@ -349,8 +349,8 @@ async function deliver(key: ThreadKey, o: Outgoing) {
   try {
     if (key.startsWith("n:")) return await started(key, o, await api.send(o.to, o.body, o.cid, files))
     const id = key.startsWith("a:")
-      ? (await api.sendToAgent(key.slice(2), o.body, o.cid, files, o.reply?.id)).id
-      : (await api.send(o.to, o.body, o.cid, files, o.reply?.id)).message_id
+      ? (await api.sendToAgent(key.slice(2), o.body, o.cid, files, o.reply?.id, o.reply?.text)).id
+      : (await api.send(o.to, o.body, o.cid, files, o.reply?.id, o.reply?.text)).message_id
     if (key.startsWith("a:")) load("agents", true)
     const t = state.threads[key]
     // A retry after a lost answer: the poll may already have brought the stored message in.
@@ -404,13 +404,17 @@ export const discard = (key: ThreadKey, cid: string) => setOutbox(key, (state.ou
 
 export const chooseRecipient = (conversationId: number, shortId?: string) => set({ sendTo: { ...state.sendTo, [conversationId]: shortId } })
 
-/** As a reply shows the message it answers: its first 80 characters, line breaks as spaces, or its first file's name. */
-export const quoteOf = (m: Message): Quote => ({
+/**
+ * As a reply shows the message it answers: its first 80 characters, line breaks as spaces, or its first file's name;
+ * `text`, the passage of it picked to reply to.
+ */
+export const quoteOf = (m: Message, text?: string): Quote => ({
   id: m.id,
   from_name: m.from.name,
   preview: m.body ? [...m.body.replace(/\r\n?|\n/g, " ")].slice(0, 80).join("") : (m.files[0]?.name ?? ""),
+  text,
 })
-export const replyTo = (key: ThreadKey, m: Message) => set({ replying: { ...state.replying, [key]: quoteOf(m) } })
+export const replyTo = (key: ThreadKey, m: Message, text?: string) => set({ replying: { ...state.replying, [key]: quoteOf(m, text) } })
 export const stopReplying = (key: ThreadKey) => set({ replying: { ...state.replying, [key]: undefined } })
 export const showingComposer = (key: ThreadKey, on: boolean) => set({ composing: { ...state.composing, [key]: on } })
 
@@ -737,6 +741,14 @@ export async function removeMember(groupId: number, accountId: number) {
 }
 /** API-038: I stay in the group as a member. Throws ApiError. */
 export const transferGroup = async (groupId: number, accountId: number) => putGroup(await act(() => api.transferGroup(groupId, accountId)))
+/** API-077 `discoverable`. Throws ApiError. */
+export const setDiscoverable = async (groupId: number, on: boolean) => putGroup(await act(() => api.setDiscoverable(groupId, on)))
+/** API-089, API-090. Throws ApiError. */
+export const setGroupAdmin = async (groupId: number, accountId: number, on: boolean) => putGroup(await act(() => api.setGroupAdmin(groupId, accountId, on)))
+/** API-087. Throws ApiError. */
+export const searchGroups = (q: string) => act(() => api.searchGroups(q))
+/** API-088. Throws ApiError. */
+export const applyToGroup = (groupId: number, note?: string) => act(() => api.applyToGroup(groupId, note))
 /** API-039 or API-022: the group and its chat leave the lists. Throws ApiError. */
 async function gone(groupId: number, call: () => Promise<void>) {
   await act(call)

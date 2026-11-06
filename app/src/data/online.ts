@@ -65,9 +65,9 @@ export const online = {
   agentMessages: (id, page) => get(c.messagesPage, `/v1/agents/${encodeURIComponent(id)}/messages${query(page)}`),
   // With their sessions seen in the last 7 days, which a chat can also send to (FLOW-WEB-CHAT S2).
   contacts: async () => (await get(c.contacts, "/v1/contacts?offline=true")).contacts,
-  send: (to, body, client_msg_id, files, quote) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files, quote }),
-  sendToAgent: async (id, body, client_msg_id, files, quote) =>
-    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files, quote })).message,
+  send: (to, body, client_msg_id, files, quote, quote_text) => call(c.sent, "POST", "/v1/messages", { to, body, client_msg_id, files, quote, quote_text }),
+  sendToAgent: async (id, body, client_msg_id, files, quote, quote_text) =>
+    (await call(c.sentToAgent, "POST", `/v1/agents/${encodeURIComponent(id)}/messages`, { body, client_msg_id, files, quote, quote_text })).message,
   upload: (file, sha256) =>
     call(c.uploaded, "POST", "/v1/files", file, {
       "content-type": "application/octet-stream",
@@ -118,8 +118,8 @@ export const online = {
       ws?.close()
     }
   },
-  requests: async () => (await get(c.requests, "/v1/requests")).requests,
-  sentRequests: async () => (await get(c.requests, "/v1/requests?direction=out")).requests,
+  requests: async () => (await get(c.requests, "/v1/requests?include=join")).requests,
+  sentRequests: async () => (await get(c.sentRequests, "/v1/requests?direction=out")).requests,
   askContact: (to, note) => call(c.contactAsked, "POST", "/v1/contacts/requests", { ...to, note: note || undefined }),
   removeContact: (id) => call(none, "DELETE", `/v1/contacts/${id}`),
   contactShare: (id) => get(c.contactShare, `/v1/contacts/${id}/share`),
@@ -164,6 +164,10 @@ export const online = {
   removeMember: (id, account_id) => call(none, "DELETE", `/v1/groups/${id}/members/${account_id}`),
   transferGroup: async (id, account_id) => (await call(c.groupOne, "PUT", `/v1/groups/${id}/owner`, { account_id })).group,
   dissolveGroup: (id) => call(none, "DELETE", `/v1/groups/${id}`),
+  setDiscoverable: async (id, discoverable) => (await call(c.groupOne, "PATCH", `/v1/groups/${id}`, { discoverable })).group,
+  setGroupAdmin: async (id, account_id, on) => (await call(c.groupOne, on ? "PUT" : "DELETE", `/v1/groups/${id}/admins/${account_id}`)).group,
+  searchGroups: async (q) => (await get(c.groupHits, `/v1/groups/search?q=${encodeURIComponent(q)}`)).groups,
+  applyToGroup: async (id, note) => void (await call(c.invited, "POST", `/v1/groups/${id}/join-requests`, { note: note || undefined })),
   invite: async (id, account_id) => void (await call(c.invited, "POST", `/v1/groups/${id}/invites`, { account_id })),
   setGroupSessions: async (id, sessions) => (await call(c.groupSessions, "PUT", `/v1/groups/${id}/sessions`, { sessions })).my_sessions,
   requestEmailChange: (email) => call(c.codeSent, "POST", "/v1/me/email/code", { email }),

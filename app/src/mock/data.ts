@@ -101,6 +101,7 @@ export const groups: Group[] = [
     ...releaseTeam,
     avatar_url: pictures.releaseTeam,
     owner: leo,
+    discoverable: true,
     members: [
       { ...dana, avatar_url: pictures.dana, active: true, sessions: [checkout, migration] },
       { ...mia, avatar_url: pictures.mia, active: true, sessions: [miaOrders, miaBilling] },

@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, AgentRef, Block, ContactShare, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Block, ContactShare, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent, SentRequest } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -213,7 +213,7 @@ function dropGroup(g: Group) {
 }
 
 /** Contact requests Dana sent that are still waiting. */
-let outgoing: Request[] = []
+let outgoing: SentRequest[] = []
 /** Session titles Dana gave (API-073). */
 const titles: Record<string, string> = {}
 let myDevices: Device[] = [...f.devices]
@@ -491,7 +491,7 @@ export const mock = {
     }
     if (outgoing.some((r) => r.to.id === who.id && r.status === "pending")) throw new ApiError(409, "/errors/request-pending", `You already have a pending request to ${who.name}.`)
     if (outgoing.length >= 20) throw new ApiError(429, "/errors/rate-limited", "At most 20 contact requests per day.", 3600)
-    const request: Request = { id: 800 + outgoing.length, kind: "contact", from: { id: a.id, name: a.name }, to: who, status: "pending", created_at: new Date().toISOString() }
+    const request: SentRequest = { id: 800 + outgoing.length, kind: "contact", from: { id: a.id, name: a.name }, to: who, status: "pending", created_at: new Date().toISOString() }
     outgoing = [request, ...outgoing]
     return { request }
   },
@@ -533,7 +533,7 @@ export const mock = {
     const r = waiting(id)
     settle(id, "accepted")
     if (r.group) {
-      f.groups.push({ ...r.group, owner: r.from, members: [{ ...r.from, active: true, sessions: [] }, asMember(a)], my_sessions: [] })
+      f.groups.push({ ...r.group, owner: r.from, members: [{ ...r.from, active: true, sessions: [] }, asMember(a)], my_sessions: [], discoverable: false })
       f.conversations.push({ id: nextChatId(), kind: "group", group: r.group, pending: 0 })
       return { group: r.group }
     }
@@ -607,7 +607,7 @@ export const mock = {
       throw new ApiError(400, "/errors/invalid-request", "Group name cannot contain a slash, start with # or contain control characters.")
     const ref = { id: nextGroupId++, name: n }
     const mine = f.myAgents.filter((x) => sessions.includes(x.id)).map(f.ref)
-    const g: Group = { ...ref, owner: { id: a.id, name: a.name }, members: [asMember(a, mine)], my_sessions: mine }
+    const g: Group = { ...ref, owner: { id: a.id, name: a.name }, members: [asMember(a, mine)], my_sessions: mine, discoverable: false }
     f.groups.push(g)
     f.conversations.push({ id: nextChatId(), kind: "group", group: ref, pending: 0 })
     return g
@@ -656,6 +656,32 @@ export const mock = {
     if (accountId === a.id) throw new ApiError(400, "/errors/invalid-request", "Use leave to leave a group you're in.")
     if (!g.members.some((m) => m.id === accountId)) throw new ApiError(403, "/errors/not-member", `${accountId} isn't in ${g.name}.`)
     changeGroup(g, { members: g.members.filter((m) => m.id !== accountId) })
+  },
+  async setDiscoverable(groupId, on) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(400)
+    return changeGroup(g, { discoverable: on })
+  },
+  async setGroupAdmin(groupId, accountId, on) {
+    const g = ownGroup(signedIn(), groupId)
+    await wait(400)
+    if (!g.members.some((m) => m.id === accountId)) throw new ApiError(404, "/errors/not-found", `${accountId} is not in ${g.name}.`)
+    return changeGroup(g, { members: g.members.map((m) => (m.id === accountId ? { ...m, role: on ? "admin" : "member" } : m)) })
+  },
+  /** Only Dana's own groups can be found here, so every one found is Joined. */
+  async searchGroups(q) {
+    signedIn()
+    await wait(400)
+    const v = q.trim().replace(/^#/, "").toLowerCase()
+    if (!v || v.length > 64) throw new ApiError(400, "/errors/invalid-request", "Search with a group ID or 1 to 64 characters of its name.")
+    return f.groups
+      .filter((g) => g.discoverable && (String(g.id) === v || g.name.toLowerCase().includes(v)))
+      .map((g) => ({ id: g.id, name: g.name, avatar_url: g.avatar_url, member_count: g.members.length, owner: g.owner ?? g.members[0], joined: true, applied: false }))
+  },
+  async applyToGroup() {
+    signedIn()
+    await wait(400)
+    throw new ApiError(409, "/errors/already-member", "You are already in this group.")
   },
   async transferGroup(groupId, accountId) {
     const g = ownGroup(signedIn(), groupId)

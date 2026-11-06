@@ -11,6 +11,8 @@ import {
   MessageSquareOff,
   MoreHorizontal,
   Pencil,
+  Shield,
+  ShieldOff,
   Trash2,
   Undo2,
   Upload,
@@ -25,11 +27,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DrawerContent } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Avatar, Presence, Sep, Tag } from "@/components/bits"
-import type { AgentRef, Contact, Group, Member, MyAgent } from "@/data/contract"
+import type { AgentRef, Contact, Group, GroupHit, Member, MyAgent } from "@/data/contract"
 import { ApiError, messageOf } from "@/data/layer"
 import {
   PICTURE_TYPES,
+  applyToGroup,
   createGroup,
   dataOf,
   dissolveGroup,
@@ -43,6 +47,9 @@ import {
   removeMember,
   renameGroup,
   retry,
+  searchGroups,
+  setDiscoverable,
+  setGroupAdmin,
   setGroupSessions,
   transferGroup,
   uploadGroupPicture,
@@ -52,17 +59,19 @@ import { t } from "@/i18n"
 import { toolName } from "@/lib/format"
 import { navigate } from "@/lib/router"
 import { ConfirmContent } from "./confirm"
+import { NOTE_MAX } from "./contacts"
 import { RenameRow, useRename, useReturnFocus } from "./rename"
 import { pictureRefusal } from "./safety"
 import { ListSkeleton } from "./states"
 
-// Groups on the web (FLOW-GROUP-CREATE, FLOW-GROUP-SESSIONS, FLOW-GROUP-JOIN): New group, and a group's details with
-// its members, inviting contacts and which of my sessions get its messages; for its owner also its name and picture,
-// removing members, handing it on and dissolving it, for everyone else leaving it. One drawer for the whole page
-// (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all open it;
-// inviting and the questions before removing, handing on, dissolving or leaving open over it.
+// Groups on the web (FLOW-GROUP-CREATE, FLOW-GROUP-SESSIONS, FLOW-GROUP-JOIN, FLOW-GROUP-DISCOVER, FLOW-GROUP-ADMIN):
+// New group, Find a group, and a group's details with its members, inviting contacts and which of my sessions get its
+// messages; for its owner also its name and picture, who can find it, its admins, removing members, handing it on and
+// dissolving it, for its admins removing ordinary members, for everyone but the owner leaving it. One drawer for the
+// whole page (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all
+// open it; inviting and the questions before removing, handing on, dissolving or leaving open over it.
 
-type Open = { kind: "new" } | { kind: "details"; groupId: number }
+type Open = { kind: "new" } | { kind: "find" } | { kind: "details"; groupId: number }
 let opened: Open | undefined
 /** Where focus goes back to on close: nothing triggers these drawers in Radix's sense. */
 let returnTo: Element | null = null
@@ -79,6 +88,7 @@ function giveFocusBack(e: Event) {
 const close = () => setOpened(undefined)
 const subscribe = (l: () => void) => (listeners.add(l), () => listeners.delete(l))
 export const openNewGroup = () => setOpened({ kind: "new" })
+export const openFindGroup = () => setOpened({ kind: "find" })
 export const openGroupDetails = (groupId: number) => setOpened({ kind: "details", groupId })
 
 export function GroupDialogs({ s }: { s: State }) {
@@ -88,6 +98,9 @@ export function GroupDialogs({ s }: { s: State }) {
     <>
       <Dialog open={o?.kind === "new"} onOpenChange={change}>
         {o?.kind === "new" && <NewGroupDialog s={s} />}
+      </Dialog>
+      <Dialog open={o?.kind === "find"} onOpenChange={change}>
+        {o?.kind === "find" && <FindGroupDialog />}
       </Dialog>
       <Dialog open={o?.kind === "details"} onOpenChange={change}>
         {o?.kind === "details" && <GroupDetailsDialog key={o.groupId} s={s} groupId={o.groupId} />}
@@ -351,6 +364,167 @@ function NewGroupDialog({ s }: { s: State }) {
   )
 }
 
+type Found = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; groups: GroupHit[] }
+
+/**
+ * PAGE-WEB-GROUP-FIND (FLOW-GROUP-DISCOVER): groups whose owner lets anyone find them, by part of their name or their ID
+ * (API-087), each with how many are in it and who owns it. Ask to join opens a note under that group and Send request
+ * asks (API-088); a group I'm in or have already asked to join says so instead.
+ */
+function FindGroupDialog() {
+  const fieldId = useId()
+  const field = useRef<HTMLInputElement>(null)
+  const [q, setQ] = useState("")
+  const [found, setFound] = useState<Found>()
+  const [attempt, setAttempt] = useState(0)
+  const [asking, setAsking] = useState<number>()
+  const word = q.trim()
+  // Searches once typing pauses; the answer to an older search is dropped.
+  useEffect(() => {
+    setAsking(undefined)
+    if (!word) return setFound(undefined)
+    let live = true
+    const timer = setTimeout(() => {
+      setFound({ status: "loading" })
+      searchGroups(word).then(
+        (groups) => live && setFound({ status: "ready", groups }),
+        (e) => live && setFound({ status: "error", message: messageOf(e) })
+      )
+    }, 250)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [word, attempt])
+  const mark = (id: number, k: "joined" | "applied") =>
+    setFound((f) => (f?.status === "ready" ? { ...f, groups: f.groups.map((g) => (g.id === id ? { ...g, [k]: true } : g)) } : f))
+  const sent = (id: number, k: "joined" | "applied") => {
+    mark(id, k)
+    setAsking(undefined)
+    field.current?.focus()
+  }
+
+  return (
+    <DrawerContent title={t("Find a group")} description={t("Search by a group's name or ID. Only groups whose owner lets anyone find them show up.")} cancel={t("Close")} onCloseAutoFocus={giveFocusBack}>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={fieldId} className="sr-only">
+          {t("Group name or ID")}
+        </label>
+        <Input ref={field} id={fieldId} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Group name or ID")} maxLength={64} autoComplete="off" data-autofocus />
+      </div>
+      {!found ? null : found.status === "loading" ? (
+        <ListSkeleton rows={2} />
+      ) : found.status === "error" ? (
+        <div className="-mx-2">
+          <Retry failed={t("Couldn't search groups.")} message={found.message} onRetry={() => setAttempt(attempt + 1)} />
+        </div>
+      ) : found.groups.length ? (
+        <ul className="-mx-2 flex flex-col">
+          {found.groups.map((g) => (
+            <FoundGroup key={g.id} g={g} asking={asking === g.id} onAsk={() => setAsking(g.id)} onCancel={() => setAsking(undefined)} onSent={(k) => sent(g.id, k)} />
+          ))}
+        </ul>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <p className="text-body text-foreground">{t("No group found.")}</p>
+          <p className="text-caption text-muted-foreground">{t("A group shows up here once its owner lets anyone find it.")}</p>
+        </div>
+      )}
+    </DrawerContent>
+  )
+}
+
+/** One group found; `asking`: its note and Send request are open under it. */
+function FoundGroup({ g, asking, onAsk, onCancel, onSent }: { g: GroupHit; asking: boolean; onAsk: () => void; onCancel: () => void; onSent: (k: "joined" | "applied") => void }) {
+  const noteId = useId()
+  const ask = useRef<HTMLButtonElement>(null)
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  const long = [...note.trim()].length > NOTE_MAX
+  const cancel = () => {
+    onCancel()
+    requestAnimationFrame(() => ask.current?.focus())
+  }
+  const send = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy || long) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      await applyToGroup(g.id, note.trim() || undefined)
+      onSent("applied")
+      toast(t("Asked to join {group}.", { group: g.name }), { description: t("Its owner or an admin will answer.") })
+    } catch (e) {
+      setBusy(false)
+      // Asked or let in from somewhere else meanwhile: the row says so.
+      if (e instanceof ApiError && e.type === "/errors/request-pending") onSent("applied")
+      else if (e instanceof ApiError && e.type === "/errors/already-member") onSent("joined")
+      else setError(messageOf(e))
+    }
+  }
+  const n = g.member_count
+  return (
+    <li className="flex flex-col gap-3 px-2 py-1.5">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <Avatar kind="group" label={g.name} src={g.avatar_url} />
+        <span className="min-w-0">
+          <span className="block text-body wrap-anywhere text-foreground">{g.name}</span>
+          <span className="flex min-w-0 items-center gap-2 text-caption whitespace-nowrap text-muted-foreground">
+            <span className="tabular-nums">{n === 1 ? t("1 member") : t("{n} members", { n })}</span>
+            <Sep />
+            <span className="truncate">{t("Owner {name}", { name: g.owner.name })}</span>
+          </span>
+        </span>
+        {g.joined ? (
+          <Tag>{t("Joined")}</Tag>
+        ) : g.applied ? (
+          <Tag>{t("Requested")}</Tag>
+        ) : asking ? (
+          <span />
+        ) : (
+          <Button ref={ask} variant="outline" size="sm" onClick={onAsk}>
+            {t("Ask to join")}
+          </Button>
+        )}
+      </div>
+      {asking && !g.joined && !g.applied && (
+        <form onSubmit={send} noValidate className="flex flex-col gap-1.5">
+          <label htmlFor={noteId} className="text-label text-foreground">
+            {t("Note")} <span className="text-muted-foreground">{t("(optional)")}</span>
+          </label>
+          <div className={cn("state-layer focus-ring is-field rounded-md border bg-muted", long ? "border-destructive" : "border-input")}>
+            <textarea
+              id={noteId}
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              aria-invalid={long || undefined}
+              aria-describedby={`${noteId}-hint`}
+              autoFocus
+              className="block w-full resize-none bg-transparent px-3 py-2 text-body text-foreground outline-none"
+            />
+          </div>
+          <p id={`${noteId}-hint`} role={long ? "alert" : undefined} className={cn("text-caption", long ? "text-destructive" : "text-muted-foreground")}>
+            {long
+              ? t("A note can be up to {max} characters. This one has {n}.", { max: NOTE_MAX, n: [...note.trim()].length })
+              : t("Its owner and admins see it with your request. Up to {max} characters.", { max: NOTE_MAX })}
+          </p>
+          <DialogError>{error}</DialogError>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" size="sm" className="text-foreground" onClick={cancel}>
+              {t("Cancel")}
+            </Button>
+            <Button type="submit" size="sm" disabled={long} aria-disabled={busy}>
+              {busy ? t("Sending…") : t("Send request")}
+            </Button>
+          </div>
+        </form>
+      )}
+    </li>
+  )
+}
+
 /** `failed` says what didn't load; `message` is why. */
 export function Retry({ failed, message, onRetry }: { failed: string; message: string; onRetry: () => void }) {
   return (
@@ -419,8 +593,11 @@ function MySessions({ s, g }: { s: State; g: Group }) {
 /** Menus opened from the group's details sit over the drawer, not under it. */
 const IN_DIALOG = "z-(--semantic-layout-z-index-modal)"
 
-/** The owner's "…" on each other member: hand the group on, or remove them. */
-function MemberActions({ m, onAsk }: { m: Member; onAsk: (kind: "transfer" | "remove") => void }) {
+/**
+ * The "…" on another member: for the owner, making them an admin or not (API-089, API-090), handing the group on and
+ * removing them; for an admin, removing an ordinary member (RULE-010).
+ */
+function MemberActions({ m, owner, onAsk, onAdmin }: { m: Member; owner: boolean; onAsk: (kind: "transfer" | "remove") => void; onAdmin: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -429,10 +606,18 @@ function MemberActions({ m, onAsk }: { m: Member; onAsk: (kind: "transfer" | "re
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={IN_DIALOG}>
-        <DropdownMenuItem onSelect={() => onAsk("transfer")}>
-          <Crown size={16} aria-hidden="true" />
-          {t("Make {name} the owner…", { name: m.name })}
-        </DropdownMenuItem>
+        {owner && (
+          <>
+            <DropdownMenuItem onSelect={onAdmin}>
+              {m.role === "admin" ? <ShieldOff size={16} aria-hidden="true" /> : <Shield size={16} aria-hidden="true" />}
+              {m.role === "admin" ? t("Remove admin") : t("Make admin")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAsk("transfer")}>
+              <Crown size={16} aria-hidden="true" />
+              {t("Make {name} the owner…", { name: m.name })}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem onSelect={() => onAsk("remove")} className="text-destructive [&_svg]:text-destructive">
           <UserMinus size={16} aria-hidden="true" />
           {t("Remove {name}…", { name: m.name })}
@@ -442,7 +627,48 @@ function MemberActions({ m, onAsk }: { m: Member; onAsk: (kind: "transfer" | "re
   )
 }
 
-function Members({ s, g, onAsk }: { s: State; g: Group; onAsk?: (kind: "transfer" | "remove", m: Member) => void }) {
+/** The owner's switch for who can find the group (API-077); it moves at once and goes back if the server says no. */
+function Findable({ g }: { g: Group }) {
+  const id = useId()
+  const [pending, setPending] = useState<boolean>()
+  const change = async (on: boolean) => {
+    if (pending !== undefined) return
+    setPending(on)
+    try {
+      await setDiscoverable(g.id, on)
+    } catch (e) {
+      toast.error(messageOf(e))
+    } finally {
+      setPending(undefined)
+    }
+  }
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex min-w-0 flex-col gap-1">
+        <label htmlFor={id} className="text-label text-foreground">
+          {t("Let people find this group")}
+        </label>
+        <p id={`${id}-hint`} className="text-caption text-muted-foreground">
+          {t("Anyone can search for it by name or ID and ask to join. You and its admins answer.")}
+        </p>
+      </div>
+      <Switch id={id} checked={pending ?? g.discoverable} onCheckedChange={change} aria-describedby={`${id}-hint`} className="mt-0.5" />
+    </div>
+  )
+}
+
+/** My part in the group decides whose "…" I get: the owner everyone else's, an admin the ordinary members'. */
+function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "admin"; onAsk: (kind: "transfer" | "remove", m: Member) => void }) {
+  const admin = async (m: Member) => {
+    const on = m.role !== "admin"
+    try {
+      await setGroupAdmin(g.id, m.id, on)
+      toast(on ? t("{name} is now an admin of {group}.", { name: m.name, group: g.name }) : t("{name} is no longer an admin of {group}.", { name: m.name, group: g.name }))
+    } catch (e) {
+      toast.error(messageOf(e))
+    }
+  }
+  const managed = (m: Member) => !isMe(s, m.id) && (mine === "owner" || (mine === "admin" && m.role === "member"))
   return (
     <ul className="flex flex-col">
       {g.members.map((m) => (
@@ -452,12 +678,13 @@ function Members({ s, g, onAsk }: { s: State; g: Group; onAsk?: (kind: "transfer
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-body wrap-anywhere text-foreground">{m.name}</span>
               {g.owner?.id === m.id && <Tag>{t("Owner")}</Tag>}
+              {m.role === "admin" && <Tag>{t("Admin")}</Tag>}
               {isMe(s, m.id) && <Tag>{t("You")}</Tag>}
               {!m.active && <Tag>{t("Inactive")}</Tag>}
             </span>
             <span className="block text-caption tabular-nums text-muted-foreground">{t("ID {id}", { id: m.id })}</span>
           </span>
-          {onAsk && !isMe(s, m.id) ? <MemberActions m={m} onAsk={(kind) => onAsk(kind, m)} /> : <span />}
+          {managed(m) ? <MemberActions m={m} owner={mine === "owner"} onAsk={(kind) => onAsk(kind, m)} onAdmin={() => admin(m)} /> : <span />}
         </li>
       ))}
     </ul>
@@ -557,12 +784,14 @@ function GroupConfirm({
   s,
   g,
   v,
+  owner,
   onBack,
   onCloseAutoFocus,
 }: {
   s: State
   g: Group
   v: Exclude<View, { kind: "details" | "invite" }>
+  owner: boolean
   onBack: () => void
   onCloseAutoFocus: (e: Event) => void
 }) {
@@ -591,7 +820,12 @@ function GroupConfirm({
           consequences={[
             [<BellOff size={16} />, t("{name}'s sessions stop getting this group's messages.", { name: v.m.name })],
             [<Undo2 size={16} />, t("Messages to {name} from this group that haven't been delivered yet are taken back.", { name: v.m.name })],
-            [<UserRound size={16} />, t("{name} sees a notice in their inbox. You can invite them again later.", { name: v.m.name })],
+            [
+              <UserRound size={16} />,
+              owner
+                ? t("{name} sees a notice in their inbox. You can invite them again later.", { name: v.m.name })
+                : t("{name} sees a notice in their inbox. Only the owner can let them back in.", { name: v.m.name }),
+            ],
           ]}
           action={{ label: t("Remove {name}", { name: v.m.name }), busyLabel: t("Removing…"), icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
           onConfirm={() =>
@@ -652,10 +886,12 @@ function GroupConfirm({
 }
 
 /**
- * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS): who is in the group and who owns it (API-019), inviting contacts (API-020), who
- * accept in Contacts or from a terminal, and which of my sessions get its messages (API-021). Its owner renames it,
- * changes its picture, removes members, hands it on and dissolves it (API-077, API-056/057, API-037, API-038,
- * API-039); anyone else can leave it (API-022). Nothing here is one form, so the drawer's bar has only Close.
+ * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS, FLOW-GROUP-ADMIN): who is in the group, who owns it and who are its admins
+ * (API-019), inviting contacts (API-020), who accept in Contacts or from a terminal, and which of my sessions get its
+ * messages (API-021). Its owner renames it, changes its picture, lets anyone find it, makes admins, removes members,
+ * hands it on and dissolves it (API-077, API-056/057, API-089/090, API-037, API-038, API-039); its admins remove
+ * ordinary members; anyone but the owner can leave it (API-022). Nothing here is one form, so the drawer's bar has
+ * only Close.
  */
 function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
   const [view, setView] = useState<View>({ kind: "details" })
@@ -683,6 +919,7 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
       </DrawerContent>
     )
   const owner = !!g.owner && isMe(s, g.owner.id)
+  const mine = owner ? "owner" : g.members.some((m) => m.role === "admin" && isMe(s, m.id)) ? "admin" : undefined
   const n = g.members.length
   const renamed = () => setRenaming(false)
   const ask = (v: View) => {
@@ -729,9 +966,10 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         </div>
       }
     >
+      {owner && <Findable g={g} />}
       <Section title={t("Members")}>
-        {/* The owner's menu asks on the next frame, once it has closed and handed focus back to its "…". */}
-        <Members s={s} g={g} onAsk={owner ? (kind, m) => requestAnimationFrame(() => ask({ kind, m })) : undefined} />
+        {/* A member's menu asks on the next frame, once it has closed and handed focus back to its "…". */}
+        <Members s={s} g={g} mine={mine} onAsk={(kind, m) => requestAnimationFrame(() => ask({ kind, m }))} />
       </Section>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => ask({ kind: "invite" })}>
@@ -757,7 +995,7 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         {view.kind === "invite" ? (
           <InviteView s={s} g={g} onDone={back} onCloseAutoFocus={focusOpener} />
         ) : (
-          view.kind !== "details" && <GroupConfirm s={s} g={g} v={view} onBack={back} onCloseAutoFocus={focusOpener} />
+          view.kind !== "details" && <GroupConfirm s={s} g={g} v={view} owner={owner} onBack={back} onCloseAutoFocus={focusOpener} />
         )}
       </Dialog>
     </DrawerContent>
