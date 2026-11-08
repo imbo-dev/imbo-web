@@ -108,15 +108,18 @@ function Thumb({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
     <li className="relative size-18 flex-none overflow-hidden rounded-md border-(length:--semantic-layout-hairline) border-border bg-muted">
       {url && <img src={url} alt={`${a.file.name}, ${a.ref ? fileSize(a.file.size) : t("Uploading…")}`} draggable={false} className="size-full object-cover" />}
       {!a.ref && <span aria-hidden="true" className="skeleton absolute inset-0 rounded-none opacity-60" />}
-      <Button
-        variant="secondary"
-        size="icon-sm"
-        aria-label={t("Remove {name}", { name: a.file.name })}
-        className="absolute top-1 right-1 size-6 rounded-full border-(length:--semantic-layout-hairline) border-border bg-popover shadow-overlay"
-        onClick={onRemove}
-      >
-        <X size={12} aria-hidden="true" />
-      </Button>
+      {/* .state-layer sets position: relative, so the corner placement lives on a wrapper. */}
+      <span className="absolute top-1 right-1">
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          aria-label={t("Remove {name}", { name: a.file.name })}
+          className="size-6 rounded-full border-(length:--semantic-layout-hairline) border-border bg-popover shadow-overlay"
+          onClick={onRemove}
+        >
+          <X size={12} aria-hidden="true" />
+        </Button>
+      </span>
     </li>
   )
 }
