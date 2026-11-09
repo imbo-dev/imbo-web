@@ -66,8 +66,8 @@ import { ListSkeleton } from "./states"
 
 // Groups on the web (FLOW-GROUP-CREATE, FLOW-GROUP-SESSIONS, FLOW-GROUP-JOIN, FLOW-GROUP-DISCOVER, FLOW-GROUP-ADMIN):
 // New group, Find a group, and a group's details with its members, inviting contacts and which of my sessions get its
-// messages; for its owner also its name and picture, who can find it, its admins, removing members, handing it on and
-// dissolving it, for its admins removing ordinary members, for everyone but the owner leaving it. One drawer for the
+// messages; for its owner and admins also its name and picture, who can find it, its admins and removing anyone but the
+// owner, for its owner handing it on and dissolving it, for everyone but the owner leaving it. One drawer for the
 // whole page (rendered by the inbox shell), so the chats list, a group chat's title and an accepted invitation can all
 // open it; inviting and the questions before removing, handing on, dissolving or leaving open over it.
 
@@ -594,8 +594,8 @@ function MySessions({ s, g }: { s: State; g: Group }) {
 const IN_DIALOG = "z-(--semantic-layout-z-index-modal)"
 
 /**
- * The "…" on another member: for the owner, making them an admin or not (API-089, API-090), handing the group on and
- * removing them; for an admin, removing an ordinary member (RULE-010).
+ * The "…" on another member: making them an admin or not (API-089, API-090) and removing them; for the owner also handing
+ * the group on (RULE-010).
  */
 function MemberActions({ m, owner, onAsk, onAdmin }: { m: Member; owner: boolean; onAsk: (kind: "transfer" | "remove") => void; onAdmin: () => void }) {
   return (
@@ -606,17 +606,15 @@ function MemberActions({ m, owner, onAsk, onAdmin }: { m: Member; owner: boolean
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={IN_DIALOG}>
+        <DropdownMenuItem onSelect={onAdmin}>
+          {m.role === "admin" ? <ShieldOff size={16} aria-hidden="true" /> : <Shield size={16} aria-hidden="true" />}
+          {m.role === "admin" ? t("Remove admin") : t("Make admin")}
+        </DropdownMenuItem>
         {owner && (
-          <>
-            <DropdownMenuItem onSelect={onAdmin}>
-              {m.role === "admin" ? <ShieldOff size={16} aria-hidden="true" /> : <Shield size={16} aria-hidden="true" />}
-              {m.role === "admin" ? t("Remove admin") : t("Make admin")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAsk("transfer")}>
-              <Crown size={16} aria-hidden="true" />
-              {t("Make {name} the owner…", { name: m.name })}
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onSelect={() => onAsk("transfer")}>
+            <Crown size={16} aria-hidden="true" />
+            {t("Make {name} the owner…", { name: m.name })}
+          </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => onAsk("remove")} className="text-destructive [&_svg]:text-destructive">
           <UserMinus size={16} aria-hidden="true" />
@@ -627,7 +625,7 @@ function MemberActions({ m, owner, onAsk, onAdmin }: { m: Member; owner: boolean
   )
 }
 
-/** The owner's switch for who can find the group (API-077); it moves at once and goes back if the server says no. */
+/** The owner's and admins' switch for who can find the group (API-077); it moves at once and goes back if the server says no. */
 function Findable({ g }: { g: Group }) {
   const id = useId()
   const [pending, setPending] = useState<boolean>()
@@ -649,7 +647,7 @@ function Findable({ g }: { g: Group }) {
           {t("Let people find this group")}
         </label>
         <p id={`${id}-hint`} className="text-caption text-muted-foreground">
-          {t("Anyone can search for it by name or ID and ask to join. You and its admins answer.")}
+          {t("Anyone can search for it by name or ID and ask to join. Its owner and admins answer.")}
         </p>
       </div>
       <Switch id={id} checked={pending ?? g.discoverable} onCheckedChange={change} aria-describedby={`${id}-hint`} className="mt-0.5" />
@@ -658,8 +656,8 @@ function Findable({ g }: { g: Group }) {
 }
 
 /**
- * Each member with the sessions they picked for the group, which everyone in it sees. My part in the group decides whose
- * "…" I get: the owner everyone else's, an admin the ordinary members'.
+ * Each member with the sessions they picked for the group, which everyone in it sees. The owner and admins get the "…" of
+ * everyone else but the owner.
  */
 function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "admin"; onAsk: (kind: "transfer" | "remove", m: Member) => void }) {
   const admin = async (m: Member) => {
@@ -671,7 +669,7 @@ function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "
       toast.error(messageOf(e))
     }
   }
-  const managed = (m: Member) => !isMe(s, m.id) && (mine === "owner" || (mine === "admin" && m.role === "member"))
+  const managed = (m: Member) => !!mine && !isMe(s, m.id) && g.owner?.id !== m.id
   return (
     <ul className="flex flex-col">
       {g.members.map((m) => (
@@ -697,7 +695,7 @@ function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "
   )
 }
 
-/** The owner's picture menu (API-056, API-057): upload a JPEG or PNG, or remove the one there. */
+/** The owner's and admins' picture menu (API-056, API-057): upload a JPEG or PNG, or remove the one there. */
 function GroupPicture({ g }: { g: Group }) {
   const file = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -760,7 +758,7 @@ function GroupPicture({ g }: { g: Group }) {
   )
 }
 
-/** API-077: the owner renames the group in place. The rules are API-018's. */
+/** API-077: the owner or an admin renames the group in place. The rules are API-018's. */
 function RenameGroup({ g, onDone }: { g: Group; onDone: () => void }) {
   const r = useRename(g.name, (name) => renameGroup(g.id, name), onDone, nameProblem)
   return (
@@ -785,19 +783,17 @@ function left(g: Group, s: State, say: string) {
   toast(say)
 }
 
-/** One of the owner's or a member's questions over the details; Cancel goes back to them. */
+/** One of the owner's, an admin's or a member's questions over the details; Cancel goes back to them. */
 function GroupConfirm({
   s,
   g,
   v,
-  owner,
   onBack,
   onCloseAutoFocus,
 }: {
   s: State
   g: Group
   v: Exclude<View, { kind: "details" | "invite" }>
-  owner: boolean
   onBack: () => void
   onCloseAutoFocus: (e: Event) => void
 }) {
@@ -826,12 +822,7 @@ function GroupConfirm({
           consequences={[
             [<BellOff size={16} />, t("{name}'s sessions stop getting this group's messages.", { name: v.m.name })],
             [<Undo2 size={16} />, t("Messages to {name} from this group that haven't been delivered yet are taken back.", { name: v.m.name })],
-            [
-              <UserRound size={16} />,
-              owner
-                ? t("{name} sees a notice in their inbox. You can invite them again later.", { name: v.m.name })
-                : t("{name} sees a notice in their inbox. Only the owner can let them back in.", { name: v.m.name }),
-            ],
+            [<UserRound size={16} />, t("{name} sees a notice in their inbox. You can invite them again later.", { name: v.m.name })],
           ]}
           action={{ label: t("Remove {name}", { name: v.m.name }), busyLabel: t("Removing…"), icon: <UserMinus size={16} aria-hidden="true" />, destructive: true }}
           onConfirm={() =>
@@ -894,9 +885,9 @@ function GroupConfirm({
 /**
  * PAGE-WEB-GROUP (FLOW-GROUP-SESSIONS, FLOW-GROUP-ADMIN): who is in the group, who owns it and who are its admins
  * (API-019), inviting contacts (API-020), who accept in Contacts or from a terminal, and which of my sessions get its
- * messages (API-021). Its owner renames it, changes its picture, lets anyone find it, makes admins, removes members,
- * hands it on and dissolves it (API-077, API-056/057, API-089/090, API-037, API-038, API-039); its admins remove
- * ordinary members; anyone but the owner can leave it (API-022). Nothing here is one form, so the drawer's bar has
+ * messages (API-021). Its owner and admins rename it, change its picture, let anyone find it, make admins and remove
+ * anyone but the owner (API-077, API-056/057, API-089/090, API-037); its owner also hands it on and dissolves it
+ * (API-038, API-039); anyone but the owner can leave it (API-022). Nothing here is one form, so the drawer's bar has
  * only Close.
  */
 function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
@@ -926,6 +917,7 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
     )
   const owner = !!g.owner && isMe(s, g.owner.id)
   const mine = owner ? "owner" : g.members.some((m) => m.role === "admin" && isMe(s, m.id)) ? "admin" : undefined
+  const manager = !!mine
   const n = g.members.length
   const renamed = () => setRenaming(false)
   const ask = (v: View) => {
@@ -943,20 +935,20 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
       onCloseAutoFocus={giveFocusBack}
       // Escape while renaming leaves the name as it was and keeps the details open.
       onEscapeKeyDown={(e) => {
-        if (!renaming || !owner) return
+        if (!renaming || !manager) return
         e.preventDefault()
         renamed()
       }}
       header={
         <div className="flex items-center gap-3">
-          {owner ? <GroupPicture g={g} /> : <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />}
-          {owner && renaming ? (
+          {manager ? <GroupPicture g={g} /> : <Avatar kind="group" label={g.name} src={g.avatar_url} size="lg" />}
+          {manager && renaming ? (
             <RenameGroup g={g} onDone={renamed} />
           ) : (
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-1">
                 <DialogTitle className="min-w-0 wrap-anywhere">{g.name}</DialogTitle>
-                {owner && (
+                {manager && (
                   <Button ref={pencil} variant="ghost" size="icon" aria-label={t("Rename group")} className="flex-none text-muted-foreground" onClick={() => setRenaming(true)}>
                     <Pencil size={14} aria-hidden="true" />
                   </Button>
@@ -972,7 +964,7 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         </div>
       }
     >
-      {owner && <Findable g={g} />}
+      {manager && <Findable g={g} />}
       <Section title={t("Members")}>
         {/* A member's menu asks on the next frame, once it has closed and handed focus back to its "…". */}
         <Members s={s} g={g} mine={mine} onAsk={(kind, m) => requestAnimationFrame(() => ask({ kind, m }))} />
@@ -1001,7 +993,7 @@ function GroupDetailsDialog({ s, groupId }: { s: State; groupId: number }) {
         {view.kind === "invite" ? (
           <InviteView s={s} g={g} onDone={back} onCloseAutoFocus={focusOpener} />
         ) : (
-          view.kind !== "details" && <GroupConfirm s={s} g={g} v={view} owner={owner} onBack={back} onCloseAutoFocus={focusOpener} />
+          view.kind !== "details" && <GroupConfirm s={s} g={g} v={view} onBack={back} onCloseAutoFocus={focusOpener} />
         )}
       </Dialog>
     </DrawerContent>

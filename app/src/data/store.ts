@@ -666,7 +666,7 @@ function inviteRefusal(e: ApiError, name: string) {
     case "/errors/request-pending":
       return t("{name} already has an invitation to this group.", { name })
     case "/errors/removed-from-group":
-      return t("{name} was removed from this group; only the owner can invite them back.", { name })
+      return t("{name} was removed from this group; only its owner and admins can invite them back.", { name })
     case "/errors/blocked":
       return t("{name} doesn't accept your invitations.", { name })
     case "/errors/unblock-first":
