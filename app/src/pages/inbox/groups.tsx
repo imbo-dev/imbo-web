@@ -657,7 +657,10 @@ function Findable({ g }: { g: Group }) {
   )
 }
 
-/** My part in the group decides whose "…" I get: the owner everyone else's, an admin the ordinary members'. */
+/**
+ * Each member with the sessions they picked for the group, which everyone in it sees. My part in the group decides whose
+ * "…" I get: the owner everyone else's, an admin the ordinary members'.
+ */
 function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "admin"; onAsk: (kind: "transfer" | "remove", m: Member) => void }) {
   const admin = async (m: Member) => {
     const on = m.role !== "admin"
@@ -683,6 +686,9 @@ function Members({ s, g, mine, onAsk }: { s: State; g: Group; mine?: "owner" | "
               {!m.active && <Tag>{t("Inactive")}</Tag>}
             </span>
             <span className="block text-caption tabular-nums text-muted-foreground">{t("ID {id}", { id: m.id })}</span>
+            <span className="block text-caption wrap-anywhere text-muted-foreground">
+              {m.sessions.length ? t("Sessions: {list}", { list: m.sessions.map((x) => `${x.title} ${x.short_id}`).join(", ") }) : t("No sessions get this group's messages.")}
+            </span>
           </span>
           {managed(m) ? <MemberActions m={m} owner={mine === "owner"} onAsk={(kind) => onAsk(kind, m)} onAdmin={() => admin(m)} /> : <span />}
         </li>

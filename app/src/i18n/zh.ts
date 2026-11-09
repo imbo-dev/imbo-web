@@ -223,6 +223,8 @@ export const zh = {
   "{n} left": "还有 {n} 个",
   "Only your {n} most recent sessions are listed.": "只列出最近的 {n} 个会话。",
   "ID {id}": "ID {id}",
+  "Sessions: {list}": "会话：{list}",
+  "No sessions get this group's messages.": "没有会话收这个群的消息。",
   "{group} created.": "{group} 已创建。",
   "{group} created. Invitations sent.": "{group} 已创建，邀请已发出。",
   "New group": "新建群",
