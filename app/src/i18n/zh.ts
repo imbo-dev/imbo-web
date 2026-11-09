@@ -22,7 +22,7 @@ export const zh = {
   "A name can't contain a slash.": "名字里不能有斜杠。",
   "A name can't start with #.": "名字不能以 # 开头。",
   // data/store.ts
-  "Today's 1 GB upload limit is used up. It resets at midnight Beijing time.": "今天 1 GB 的上传额度用完了，北京时间零点重置。",
+  "Today's 2 GB upload limit is used up. It resets at midnight Beijing time.": "今天 2 GB 的上传额度用完了，北京时间零点重置。",
   "Over {n} files. A message can carry {n}.": "超过 {n} 个文件。一条消息最多带 {n} 个。",
   "Over 100 MB. Files in one message can add up to 100 MB.": "超过 100 MB。一条消息里的文件加起来最多 100 MB。",
   "Over the 100 MB the files in one message can add up to.": "超出一条消息里文件合计 100 MB 的上限。",

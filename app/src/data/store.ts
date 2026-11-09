@@ -436,7 +436,7 @@ export async function bringIn(key: ThreadKey, id: number) {
 /** What one message can carry (API-015): 20 files, 100 MB together. */
 const MAX_FILES = 20
 const MAX_FILES_BYTES = 104_857_600
-const quotaUsed = () => t("Today's 1 GB upload limit is used up. It resets at midnight Beijing time.")
+const quotaUsed = () => t("Today's 2 GB upload limit is used up. It resets at midnight Beijing time.")
 
 /** The day's upload use from the last upload. A refused upload can come back without its answer, so this decides first. */
 let quota: Uploaded["quota"] | undefined

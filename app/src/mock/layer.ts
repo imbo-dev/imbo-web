@@ -17,7 +17,7 @@ export type Picture = "ok" | "too-large" | "unreadable" | "limit"
 /** Whether canceling a banned account's Waffo subscription works (API-066, API-070). */
 export type Cancel = "ok" | "fails"
 export type ShareSave = "ok" | "fails"
-/** What the next file upload meets: taken, or today's 1 GB already used (API-026). */
+/** What the next file upload meets: taken, or today's 2 GB already used (API-026). */
 export type Upload = "ok" | "quota"
 export type Controls = {
   status: Status
@@ -137,7 +137,7 @@ const sentByCid = new Map<string, Sent>()
 const uploads = new Map<string, FileRef>()
 const uploadedBytes = new Map<string, Blob>()
 let uploadedToday = 0
-const GB = 1_073_741_824
+const LIMIT = 2_147_483_648
 const filesOf = (ids: string[] = []) => ids.map((id) => uploads.get(id)!)
 const agentSentByCid = new Map<string, number>()
 /** What sending changed about a session that sending can open: opening, open, or failed (FLOW-WAKE). */
@@ -412,14 +412,14 @@ export const mock = {
     }
     return withState(m)
   },
-  /** About 1 s a megabyte; the Demo panel can make today's 1 GB used up. */
+  /** About 1 s a megabyte; the Demo panel can make today's 2 GB used up. */
   async upload(file, sha256) {
     signedIn()
     await wait(600 + Math.min(4000, file.size / 1000))
     if (controls.status === "error") throw new ApiError(0, "network", noAnswer())
     if (file.size > 104_857_600) throw new ApiError(413, "/errors/file-too-large", "A file can be at most 100 MB (104857600 bytes).")
-    if (controls.upload === "quota" || uploadedToday + file.size > GB)
-      throw new ApiError(429, "/errors/upload-quota-exceeded", "Today's 1 GB upload limit is used up; it resets at 00:00 Beijing time.")
+    if (controls.upload === "quota" || uploadedToday + file.size > LIMIT)
+      throw new ApiError(429, "/errors/upload-quota-exceeded", "Today's 2 GB upload limit is used up; it resets at 00:00 Beijing time.")
     uploadedToday += file.size
     const ref: FileRef = { id: `f-${uploads.size + 1}`, name: file.name, size: file.size, sha256, expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString() }
     uploads.set(ref.id, ref)
@@ -427,7 +427,7 @@ export const mock = {
     const midnight = new Date()
     midnight.setUTCHours(16, 0, 0, 0)
     if (midnight.getTime() < Date.now()) midnight.setUTCDate(midnight.getUTCDate() + 1)
-    return { file: ref, quota: { used: uploadedToday, limit: GB, resets_at: midnight.toISOString() } }
+    return { file: ref, quota: { used: uploadedToday, limit: LIMIT, resets_at: midnight.toISOString() } }
   },
   /** Up to 200 characters; empty goes back to the title from the tool. */
   async renameAgent(id, title) {

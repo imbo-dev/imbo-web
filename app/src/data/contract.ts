@@ -325,7 +325,7 @@ export const device = z.object({
   current: z.boolean().default(false),
 })
 export const devices = z.object({ devices: z.array(device) })
-/** API-026: the uploaded file, and what the account uploaded today against the 1 GB limit. */
+/** API-026: the uploaded file, and what the account uploaded today against the 2 GB limit. */
 export const uploaded = z.object({ file, quota: z.object({ used: z.number(), limit: z.number(), resets_at: time }) })
 /** API-073 */
 export const agentRenamed = z.object({ agent: myAgent })
