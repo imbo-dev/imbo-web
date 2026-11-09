@@ -112,7 +112,14 @@ export const message = z.object({
   from_me: z.boolean().default(false),
   state: z.string().optional(),
   quote: z.object({ id: z.number(), from_name: z.string().optional(), preview: z.string().optional(), text: z.string().optional() }).optional(),
+  /** Who put a 👍 on it, first first, minus anyone I block (FLOW-LIKE); left out when nobody has. */
+  likes: z.array(accountRef).default([]),
 })
+
+/** API-091 / API-092 like, unlike: who has a 👍 on it now. */
+export const likes = z.object({ likes: z.array(accountRef) })
+/** API-093 conversationLikes: the messages after `after` that have a 👍, oldest first. */
+export const conversationLikes = z.object({ messages: z.array(z.object({ id: z.number(), likes: z.array(accountRef) })) })
 
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
 export const messagesPage = z.object({ messages: z.array(message), has_more: z.boolean() })
@@ -169,7 +176,7 @@ export const sentToAgent = z.object({ message })
 /** API-044 markAgentRead, API-078 markConversationRead */
 export const marked = z.object({ marked: z.number() })
 /** API-079: a frame on the live connection, naming what changed; `all` after the server's own listener came back. */
-export const changed = z.object({ type: z.literal("changed"), area: z.enum(["conversations", "agents", "contacts", "requests", "groups", "all"]) })
+export const changed = z.object({ type: z.literal("changed"), area: z.enum(["conversations", "agents", "contacts", "requests", "groups", "likes", "all"]) })
 
 /**
  * API-019 listGroups: a group's members, and which of my sessions get its messages. `active` as in API-012. A member's
@@ -353,6 +360,8 @@ export type ContactShare = z.infer<typeof contactShare>
 export type ShareLevel = z.infer<typeof shareLevel>
 export type FileRef = z.infer<typeof file>
 export type Message = z.infer<typeof message>
+export type Liker = z.infer<typeof accountRef>
+export type ConversationLikes = z.infer<typeof conversationLikes>
 export type Via = NonNullable<z.infer<typeof sender>["via"]>
 export type Conversation = z.infer<typeof conversation>
 export type Billing = z.infer<typeof billing>

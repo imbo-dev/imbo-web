@@ -14,11 +14,13 @@ import type {
   ContactAsked,
   ContactShare,
   Conversation,
+  ConversationLikes,
   ConversationPrefs,
   Device,
   FileRef,
   Group,
   GroupHit,
+  Liker,
   Me,
   Message,
   MessagesPage,
@@ -82,6 +84,10 @@ export type DataLayer = {
   setConversationPrefs(conversationId: number, prefs: Partial<ConversationPrefs>): Promise<ConversationPrefs>
   /** API-086: messages in this chat with `q` in their body, newest first, up to 50. */
   searchConversation(conversationId: number, q: string): Promise<MessagesPage>
+  /** API-091, API-092: put my 👍 on a message in a chat, or take it back; who has one now. Doing either twice is fine. */
+  like(messageId: number, on: boolean): Promise<Liker[]>
+  /** API-093: the messages after `after` in this chat that have a 👍, and who put them there. */
+  conversationLikes(conversationId: number, after: number): Promise<ConversationLikes>
   /**
    * API-079: calls `changed` with each area the server says changed, and with `all` once a dropped connection is back.
    * Returns what closes it for good.
