@@ -1,6 +1,6 @@
-// TC-351 (docs/TEST.md): sessions in Kimi Code, pi, Hermes Agent and DeepSeek Harness show the tool's name, not its ID. Setup is
-// §3「网页」, the page http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step. Codes are read from $L/server.log and
-// never printed.
+// TC-351 (docs/TEST.md): sessions in Kimi Code, pi, Hermes Agent, DeepSeek Harness and Antigravity CLI show the tool's name,
+// not its ID. Setup is §3「网页」, the page http://localhost:5190 (`npm run dev`). Prints PASS/FAIL per step. Codes are read
+// from $L/server.log and never printed.
 // usage: node web/app/tests/tool-names.mjs <screenshot dir>
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -41,6 +41,7 @@ const sessions = [
   ['t351-pi', 'pi', 'pi'],
   ['t351-hermes', 'hermes', 'Hermes Agent'],
   ['t351-dsh', 'deepseek-harness', 'DeepSeek Harness'],
+  ['t351-agy', 'antigravity', 'Antigravity CLI'],
 ];
 const fake = (extra) =>
   sessions.forEach(([title, tool], i) =>

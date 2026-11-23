@@ -89,6 +89,13 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await signIn(ctx);
   const shot = (n) => page.screenshot({ path: `${out}/${n}.png` });
+  // 前置: alice has read t567 up to T567 群一 (API-078), so only carol and bob have unread messages.
+  await page.evaluate(async () => {
+    const { conversations } = await (await fetch('/v1/conversations')).json();
+    const c = conversations.find((x) => x.group?.name === 't567');
+    await fetch(`/v1/conversations/${c.id}/read`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ up_to: c.last_message.id }) });
+  });
+  await page.reload();
   await rowOf(page, 'bob').waitFor();
 
   await step('1 right-click: Pin, Mark as read, Mute', async () => {
