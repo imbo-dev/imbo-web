@@ -66,6 +66,7 @@ const TOOLS: Record<string, string> = {
   pi: "pi",
   hermes: "Hermes Agent",
   "deepseek-harness": "DeepSeek Harness",
+  antigravity: "Antigravity CLI",
 }
 /** Display name of a server `tool` value; one this app doesn't know yet shows as sent. */
 export const toolName = (tool: string) => (tool === "terminal" ? t("Terminal") : (TOOLS[tool] ?? tool))

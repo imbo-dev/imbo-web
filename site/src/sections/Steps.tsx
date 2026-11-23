@@ -17,7 +17,7 @@ export function Steps() {
           {"\n      "}
         </div>
         {"\n      "}
-        <p className="lp-sub pb-2">Every open session in any of the six tools becomes an agent, named after its session title.</p>
+        <p className="lp-sub pb-2">Every open session in any of the eleven tools becomes an agent, named after its session title.</p>
         {"\n    "}
       </header>
       {"\n    "}

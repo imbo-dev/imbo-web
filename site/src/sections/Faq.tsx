@@ -262,6 +262,26 @@ export function Faq() {
                     <span className="text-outline" aria-hidden="true">–</span>
                     <span>ZCode desktop app, macOS only, tested with 3.16.3. Restart ZCode after <code>imbo setup</code>.</span>
                   </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Kimi Code (<code>kimi</code>), tested with 2.4.0</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>pi 1.4 or later</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Hermes Agent (<code>hermes</code>) 0.22.3 or later</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>DeepSeek Harness (<code>dsh</code>) 0.2.1-rc.5 or later</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-outline" aria-hidden="true">–</span>
+                    <span>Antigravity CLI (<code>agy</code>), tested with 1.5.15</span>
+                  </li>
                 </ul>
               </div>
               {"\n        "}
