@@ -99,3 +99,5 @@ N/A — 本站没有数据库。
 | 2026-11-05 | 发布 | 网页端 deployment `8879d67b`，commit `bc89118`：对话页和会话页的输入框空着时三行高，随字长高，最高到聊天区高度的 40%，再多在框里滚动；服务端 0.2.22；app.imbo.dev 与部署地址返回的都是新包 `index-DL4bwTSW.js`，与本地构建逐字节相同；RUN-458 线上 TC-041、TC-104 2/2 |
 | 2026-11-06 | 发布 | 网页端 deployment `4768a347`，commit `504719e`：消息正文里 `http://`、`https://` 开头的网址显示成蓝色链接，新标签页打开；全屏看图时点图外的空白处关掉；服务端 0.2.23；app.imbo.dev 与部署地址返回的都是新包 `index-CJZP7FPY.js`，与本地构建逐字节相同；RUN-479 线上 TC-041、TC-104 2/2 |
 | 2026-11-06 | 发布 | 网页端 deployment `f8a3dafc`，commit `66ee586`：管理端用户页搜索时，先发出、后回来的全部账号列表不再盖掉搜索结果，举报页的列表与详情同样只认最后一次取的结果；服务端 0.2.23；app.imbo.dev 与部署地址返回的都是新包 `index-BZ15KhAy.js`，与本地构建逐字节相同；RUN-483 线上 TC-041、TC-104 2/2 |
+| 2026-11-24 | 发布 | deployment `539eb372`，commit `c52a01b`（官网改动在 `67e3bfb`）：支持的工具加上 Antigravity CLI，首屏徽章与工具名单写 11 个，llms.txt 同步；服务端 0.2.27；imbo.dev 首页有 6 处 Antigravity CLI，与本地构建只差 Cloudflare 去掉的 `email_off` 注释；RUN-577 线上 TC-041 通过 |
+| 2026-11-24 | 发布 | 网页端 deployment `d4e2256f`，commit `c52a01b`：Antigravity CLI 的会话显示工具名；对话列表的红点改由服务端 0.2.27 算（别人发来、本人还没读的消息，点进对话清零，迁移 0019），网页只显示；app.imbo.dev 与部署地址返回的都是新包 `index-DaBDGlLm.js`，与本地构建逐字节相同；RUN-577 线上冒烟 7/7（含 TC-041、TC-104） |
