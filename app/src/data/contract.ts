@@ -124,7 +124,7 @@ export const conversationLikes = z.object({ messages: z.array(z.object({ id: z.n
 /** API-031 / API-036 response, paged with `?before=&after=&limit=50`. */
 export const messagesPage = z.object({ messages: z.array(message), has_more: z.boolean() })
 
-/** API-030 listConversations. `pending`: sent to my inbox and not read yet, here, in the App or in a terminal (REQ-104). */
+/** API-030 listConversations. `pending`: what others wrote in the chat that I haven't read (REQ-104). */
 export const conversation = z.object({
   id: z.number(),
   kind: z.enum(["direct", "group"]),

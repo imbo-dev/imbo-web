@@ -121,7 +121,7 @@ function ListRow({
 }
 
 /**
- * API-030 `pending`: what a chat sent my inbox that isn't read yet; opening the chat reads it (API-078). Also API-014
+ * API-030 `pending`: what others wrote in a chat that I haven't read; opening the chat reads it (API-078). Also API-014
  * `unread`, with `sr` saying what the number counts.
  */
 export function PendingBadge({ n, small, quiet, sr = t("unread") }: { n: number; small?: boolean; quiet?: boolean; sr?: string }) {

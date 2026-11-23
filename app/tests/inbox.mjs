@@ -1,10 +1,10 @@
-// TC-451~TC-455 (docs/TEST.md): pasting files into the text box, the chat list's red dot read on opening a chat, the
-// waiting line under what reached my offline sessions, where an in-person message was sent from, and the inbox wording,
-// against the local test server. Setup is §3「网页红点、消息来源与粘贴附件」; the page must be http://localhost:5190
-// (`npm run dev`). TC-452~TC-455 run in order on the same data, then TC-451; give TC numbers to run only those (in this
-// order). Prints PASS/FAIL per step, then any console errors the steps don't expect. Codes are read from
-// $L/server.log and never printed.
-// usage: node web/app/tests/inbox.mjs <screenshot dir> [452 453 454 455 451]
+// TC-451, TC-453~TC-455 and TC-645 (docs/TEST.md): pasting files into the text box, the chat list's red dot for what I
+// haven't read, gone on opening a chat, the waiting line under what reached my offline sessions, where an in-person
+// message was sent from, and the inbox wording, against the local test server. Setup is §3「网页红点、消息来源与粘贴附件」;
+// the page must be http://localhost:5190 (`npm run dev`). TC-645 and TC-453~TC-455 run in order on the same data, then
+// TC-451; give TC numbers to run only those (in this order). Prints PASS/FAIL per step, then any console errors the
+// steps don't expect. Codes are read from $L/server.log and never printed.
+// usage: node web/app/tests/inbox.mjs <screenshot dir> [645 453 454 455 451]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
@@ -180,42 +180,77 @@ try {
   const WAITING_GROUP = 'Waiting for your session docs-site to come online';
   const G = as('alice', 'group list').match(/#(\d+)/)[1];
 
-  // ── TC-452 ──
-  if (runs(452)) {
+  // ── TC-645 ──
+  if (runs(645)) {
     as('alice', `dev fake-session ${DOCS} --title docs-site --remove`);
-    asSession('bob', ORDERS, 'send', { to: 'alice/docs-site', body: 'T452 to docs-site' });
+    asSession('bob', ORDERS, 'send', { to: 'alice/docs-site', body: 'T645 to docs-site' });
     as('bob', `dev fake-session ${ORDERS} --title orders-api`);
     as('alice', `dev fake-session ${CHECKOUT} --title checkout`);
-    await step('TC-452 #1', async () => {
+    const pendingOf = async (group) => (await conversations()).find((c) => c.group?.name === group)?.pending;
+    await step('TC-645 #1', async () => {
       await page.goto(base + '/chats');
       await chatRow(page, 'bob').waitFor();
       await wait(1000);
       const bob = await chatRow(page, 'bob').textContent();
       const team = await chatRow(page, 'release-team').textContent();
       const tab = await chatsTab(page).textContent();
-      await shot(page, 'tc452-1');
-      ok('TC-452 #1 bob has the red dot 1 (1 unread), release-team none, the Chats tab 1', /1 unread$/.test(bob) && !/unread/.test(team) && /^Chats1 unread$/.test(tab), `${bob} | ${team} | ${tab}`);
+      await shot(page, 'tc645-1');
+      ok('TC-645 #1 bob has the red dot 3, release-team 2, the Chats tab 5', /3 unread$/.test(bob) && /2 unread$/.test(team) && /^Chats5 unread$/.test(tab), `${bob} | ${team} | ${tab}`);
     });
-    await step('TC-452 #2', async () => {
+    await step('TC-645 #2', async () => {
+      await openChat(page, 'release-team', false);
+      await wait(2000);
+      const team = await chatRow(page, 'release-team').textContent();
+      const tab = await chatsTab(page).textContent();
+      const pending = await pendingOf('release-team');
+      await shot(page, 'tc645-2');
+      ok('TC-645 #2 the group opened: no red dot on it, the Chats tab 3; pending 0', !/unread/.test(team) && /^Chats3 unread$/.test(tab) && pending === 0, `${team} | ${tab} | pending ${pending}`);
+    });
+    await step('TC-645 #3', async () => {
       await openChat(page, 'bob', false);
       await wait(2000);
       const bob = await chatRow(page, 'bob').textContent();
       const tab = await chatsTab(page).textContent();
       const pending = await pendingWith('bob');
-      await shot(page, 'tc452-2');
-      ok('TC-452 #2 opened: no red dot on bob or the Chats tab; pending 0', !/unread/.test(bob) && tab === 'Chats' && pending === 0, `${bob} | ${tab} | pending ${pending}`);
+      await shot(page, 'tc645-3');
+      ok('TC-645 #3 bob opened: no red dot on bob or the Chats tab; pending 0', !/unread/.test(bob) && tab === 'Chats' && pending === 0, `${bob} | ${tab} | pending ${pending}`);
     });
-    await step('TC-452 #3', async () => {
+    await step('TC-645 #4', async () => {
       const inbox = as('alice', 'inbox');
-      ok('TC-452 #3 imbo inbox: no Inbox part, not the lunch message', !inbox.split('\n').some((l) => l.startsWith('Inbox')) && !inbox.includes('午饭后'), inbox.split('\n')[0]);
+      ok('TC-645 #4 imbo inbox: no Inbox part, not the lunch message', !inbox.split('\n').some((l) => l.startsWith('Inbox')) && !inbox.includes('午饭后'), inbox.split('\n')[0]);
     });
-    await step('TC-452 #4', async () => {
-      as('bob', `send ${ids.alice} "T452 while open"`);
-      await article(page, 'T452 while open').waitFor({ timeout: 15_000 });
+    await step('TC-645 #5', async () => {
+      as('bob', `send ${ids.alice} "T645 while open"`);
+      await article(page, 'T645 while open').waitFor({ timeout: 15_000 });
       await wait(3000);
       const bob = await chatRow(page, 'bob').textContent();
       const pending = await pendingWith('bob');
-      ok('TC-452 #4 arrived while open: still no red dot; pending 0', !/unread/.test(bob) && pending === 0, `${bob} | pending ${pending}`);
+      ok('TC-645 #5 arrived while open: still no red dot; pending 0', !/unread/.test(bob) && pending === 0, `${bob} | pending ${pending}`);
+    });
+    await step('TC-645 #6', async () => {
+      as('carol', `send "#${G}" "T645 to the group"`);
+      const team = await until(() => chatRow(page, 'release-team').textContent(), (t) => /unread$/.test(t));
+      const tab = await chatsTab(page).textContent();
+      await shot(page, 'tc645-6');
+      ok('TC-645 #6 a group message with no @ while another chat is open: release-team 1, the Chats tab 1, no reload', /T645 to the group.*1 unread$/.test(team) && /^Chats1 unread$/.test(tab), `${team} | ${tab}`);
+    });
+    await step('TC-645 #7', async () => {
+      asSession('alice', CHECKOUT, 'send', { to: `#${G}`, body: 'T645 from my session' });
+      as('alice', `dev fake-session ${CHECKOUT} --title checkout`);
+      const team = await until(() => chatRow(page, 'release-team').textContent(), (t) => t.includes('T645 from my session'));
+      await wait(1000);
+      const pending = await pendingOf('release-team');
+      ok("TC-645 #7 my own session's message doesn't count: still 1", /1 unread$/.test(team) && pending === 1, `${team} | pending ${pending}`);
+    });
+    await step('TC-645 #8', async () => {
+      await openChat(page, 'release-team', false);
+      await wait(2000);
+      await page.goto(base + '/chats');
+      await chatRow(page, 'release-team').waitFor();
+      await wait(1000);
+      const team = await chatRow(page, 'release-team').textContent();
+      const tab = await chatsTab(page).textContent();
+      ok('TC-645 #8 opened, then the page loaded again: no red dot', !/unread/.test(team) && tab === 'Chats', `${team} | ${tab}`);
     });
   }
 
@@ -225,10 +260,10 @@ try {
     as('carol', `send "#${G}" "T453 to the group"`);
     await step('TC-453 #1', async () => {
       await openChat(page, 'bob');
-      const docs = await heading(page, 'T452 to docs-site');
+      const docs = await heading(page, 'T645 to docs-site');
       const checkout = await heading(page, 'customer_id. user_id was dropped');
       await shot(page, 'tc453-1');
-      ok('TC-453 #1 T452 to docs-site waits for docs-site; the one to checkout, online, has no such line', docs.under === WAITING_DOCS && !checkout.under.startsWith('Waiting'), `${say(docs)} | ${say(checkout)}`);
+      ok('TC-453 #1 T645 to docs-site waits for docs-site; the one to checkout, online, has no such line', docs.under === WAITING_DOCS && !checkout.under.startsWith('Waiting'), `${say(docs)} | ${say(checkout)}`);
     });
     await step('TC-453 #2', async () => {
       await openChat(page, 'release-team', false);
@@ -245,7 +280,7 @@ try {
       await openChat(z, 'release-team', false);
       const group = (await heading(z, 'T453 to the group')).under;
       await openChat(z, 'bob', false);
-      const docs = (await heading(z, 'T452 to docs-site')).under;
+      const docs = (await heading(z, 'T645 to docs-site')).under;
       await shot(z, 'tc453-3');
       ok('TC-453 #3 in Chinese: 等你的会话 docs-site 上线, 等 docs-site 上线', group === '等你的会话 docs-site 上线' && docs === '等 docs-site 上线', `${group} | ${docs}`);
     });
@@ -254,7 +289,7 @@ try {
       await openChat(page, 'release-team');
       const group = (await heading(page, 'T453 to the group')).under;
       await openChat(page, 'bob', false);
-      const docs = (await heading(page, 'T452 to docs-site')).under;
+      const docs = (await heading(page, 'T645 to docs-site')).under;
       ok('TC-453 #4 docs-site online: neither waits any more', !group.startsWith('Waiting') && !docs.startsWith('Waiting'), `${group} | ${docs}`);
     });
   }
