@@ -17,6 +17,7 @@
 .imbo-hero__ring+.imbo-hero__ring{margin-left:calc(var(--ring) * -0.22)}
 .imbo-hero__pill{margin-left:calc(var(--ring) * -0.42)}
 .imbo-hero__mark{display:grid;place-items:center;width:100%;height:100%;border-radius:999px;background:var(--lp-bg)}.imbo-hero__mark svg{width:1.125rem;height:1.125rem}
+@media (max-width:30rem){.imbo-hero__badge{--ring:2rem}.imbo-hero__ring+.imbo-hero__ring{margin-left:calc(var(--ring) * -0.3)}.imbo-hero__mark svg{width:.875rem;height:.875rem}}
 .imbo-hero__pill{display:flex;align-items:center;height:var(--ring);padding:0 1rem 0 calc(var(--ring) * 0.58);border-radius:999px;background:var(--lp-surface-2);color:var(--lp-fg-muted);font-size:.8125rem;white-space:nowrap}
 .imbo-hero__title{margin:0;font-family:"Geist Pixel Circle",var(--lp-font-display);font-size:var(--lp-hero-size);font-weight:400;line-height:var(--lp-hero-leading);letter-spacing:0;text-wrap:balance;color:var(--lp-fg)}
 .imbo-hero__title span{display:block}

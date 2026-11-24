@@ -40,13 +40,48 @@ export function Hero() {
             </span>
           </span>
           <span className="imbo-hero__ring lp-hair" aria-hidden="true" style={{ zIndex: "5" }}>
+            <span className="imbo-hero__mark">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <defs>
+                    <mask id="imbo-agy-mask" maskUnits="userSpaceOnUse" x="0" y="1" width="24" height="23">
+                      <path fill="#fff" d="M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z" />
+                    </mask>
+                    <filter id="imbo-agy-1" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-3.288" y="-11.917" width="19.838" height="17.587"><feGaussianBlur stdDeviation="1.117" /></filter>
+                    <filter id="imbo-agy-2" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="4.251" y="-13.493" width="38.9" height="38.565"><feGaussianBlur stdDeviation="5.4" /></filter>
+                    <filter id="imbo-agy-3" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-21.889" y="-10.592" width="40.955" height="36.517"><feGaussianBlur stdDeviation="4.591" /></filter>
+                    <filter id="imbo-agy-4" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-21.889" y="-10.592" width="40.955" height="36.517"><feGaussianBlur stdDeviation="4.591" /></filter>
+                    <filter id="imbo-agy-5" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-19.099" y="-10.278" width="36.632" height="36.595"><feGaussianBlur stdDeviation="4.591" /></filter>
+                    <filter id="imbo-agy-6" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x=".981" y="8.758" width="33.533" height="34.087"><feGaussianBlur stdDeviation="4.363" /></filter>
+                    <filter id="imbo-agy-7" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-6.143" y="-21.659" width="35.978" height="35.276"><feGaussianBlur stdDeviation="3.954" /></filter>
+                    <filter id="imbo-agy-8" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-11.96" y="-.46" width="45.114" height="46.523"><feGaussianBlur stdDeviation="3.531" /></filter>
+                    <filter id="imbo-agy-9" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="10.485" y=".58" width="25.094" height="24.054"><feGaussianBlur stdDeviation="3.159" /></filter>
+                    <filter id="imbo-agy-10" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="5.833" y="-12.467" width="33.508" height="30.007"><feGaussianBlur stdDeviation="2.669" /></filter>
+                    <filter id="imbo-agy-11" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB" x="-8.355" y="-8.876" width="22.194" height="26.151"><feGaussianBlur stdDeviation="3.303" /></filter>
+                  </defs>
+                  <g mask="url(#imbo-agy-mask)">
+                    <path filter="url(#imbo-agy-1)" fill="#FFE432" d="M-1.018-3.992c-.408 3.591 2.686 6.89 6.91 7.37 4.225.48 7.98-2.043 8.387-5.633.408-3.59-2.686-6.89-6.91-7.37-4.225-.479-7.98 2.043-8.387 5.633z" />
+                    <path filter="url(#imbo-agy-2)" fill="#FC413D" d="M15.269 7.747c1.058 4.557 5.691 7.374 10.348 6.293 4.657-1.082 7.575-5.653 6.516-10.21-1.058-4.556-5.691-7.374-10.348-6.292-4.657 1.082-7.575 5.653-6.516 10.21z" />
+                    <path filter="url(#imbo-agy-3)" fill="#00B95C" d="M-12.443 10.804c1.338 4.703 7.36 7.11 13.453 5.378 6.092-1.733 9.947-6.95 8.61-11.652C8.282-.173 2.26-2.58-3.833-.848-9.925.884-13.78 6.1-12.443 10.804z" />
+                    <path filter="url(#imbo-agy-4)" fill="#00B95C" d="M-12.443 10.804c1.338 4.703 7.36 7.11 13.453 5.378 6.092-1.733 9.947-6.95 8.61-11.652C8.282-.173 2.26-2.58-3.833-.848-9.925.884-13.78 6.1-12.443 10.804z" />
+                    <path filter="url(#imbo-agy-5)" fill="#00B95C" d="M-7.608 14.703c3.352 3.424 9.126 3.208 12.896-.483 3.77-3.69 4.108-9.459.756-12.883C2.69-2.087-3.083-1.871-6.853 1.82c-3.77 3.69-4.108 9.458-.755 12.883z" />
+                    <path filter="url(#imbo-agy-6)" fill="#3186FF" d="M9.932 27.617c1.04 4.482 5.384 7.303 9.7 6.3 4.316-1.002 6.971-5.448 5.93-9.93-1.04-4.483-5.384-7.304-9.7-6.301-4.316 1.002-6.971 5.448-5.93 9.93z" />
+                    <path filter="url(#imbo-agy-7)" fill="#FBBC04" d="M2.572-8.185C.392-3.329 2.778 2.472 7.9 4.771c5.122 2.3 11.042.227 13.222-4.63 2.18-4.855-.205-10.656-5.327-12.955-5.122-2.3-11.042-.227-13.222 4.63z" />
+                    <path filter="url(#imbo-agy-8)" fill="#3186FF" d="M-3.267 38.686c-5.277-2.072 3.742-19.117 5.984-24.83 2.243-5.712 8.34-8.664 13.616-6.592 5.278 2.071 11.533 13.482 9.29 19.195-2.242 5.713-23.613 14.298-28.89 12.227z" />
+                    <path filter="url(#imbo-agy-9)" fill="#749BFF" d="M28.71 17.471c-1.413 1.649-5.1.808-8.236-1.878-3.135-2.687-4.531-6.201-3.118-7.85 1.412-1.649 5.1-.808 8.235 1.878s4.532 6.2 3.119 7.85z" />
+                    <path filter="url(#imbo-agy-10)" fill="#FC413D" d="M18.163 9.077c5.81 3.93 12.502 4.19 14.946.577 2.443-3.612-.287-9.727-6.098-13.658-5.81-3.931-12.502-4.19-14.946-.577-2.443 3.612.287 9.727 6.098 13.658z" />
+                    <path filter="url(#imbo-agy-11)" fill="#FFEE48" d="M-.915 2.684c-1.44 3.473-.97 6.967 1.05 7.804 2.02.837 4.824-1.3 6.264-4.772 1.44-3.473.97-6.967-1.05-7.804-2.02-.837-4.824 1.3-6.264 4.772z" />
+                  </g>
+                </svg>
+            </span>
+          </span>
+          <span className="imbo-hero__ring lp-hair" aria-hidden="true" style={{ zIndex: "6" }}>
             <span className="imbo-hero__mark" style={{ color: "var(--lp-fg)" }}>
               <svg viewBox="0 0 24 24" fill="#F23F5D" fillRule="evenodd" aria-hidden="true">
                 <path d="M16.278 2c1.156 0 2.093.927 2.093 2.07v12.501a.74.74 0 00.744.709.74.74 0 00.743-.709V9.099a2.06 2.06 0 012.071-2.049A2.06 2.06 0 0124 9.1v6.561a.649.649 0 01-.652.645.649.649 0 01-.653-.645V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v7.472a2.037 2.037 0 01-2.048 2.026 2.037 2.037 0 01-2.048-2.026v-12.5a.785.785 0 00-.788-.753.785.785 0 00-.789.752l-.001 15.904A2.037 2.037 0 0113.441 22a2.037 2.037 0 01-2.048-2.026V18.04c0-.356.292-.645.652-.645.36 0 .652.289.652.645v1.934c0 .263.142.506.372.638.23.131.514.131.744 0a.734.734 0 00.372-.638V4.07c0-1.143.937-2.07 2.093-2.07zm-5.674 0c1.156 0 2.093.927 2.093 2.07v11.523a.648.648 0 01-.652.645.648.648 0 01-.652-.645V4.07a.785.785 0 00-.789-.78.785.785 0 00-.789.78v14.013a2.06 2.06 0 01-2.07 2.048 2.06 2.06 0 01-2.071-2.048V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v3.8a2.06 2.06 0 01-2.071 2.049A2.06 2.06 0 010 12.9v-1.378c0-.357.292-.646.652-.646.36 0 .653.29.653.646V12.9c0 .418.343.757.766.757s.766-.339.766-.757V9.099a2.06 2.06 0 012.07-2.048 2.06 2.06 0 012.071 2.048v8.984c0 .419.343.758.767.758.423 0 .766-.339.766-.758V4.07c0-1.143.937-2.07 2.093-2.07z" />
               </svg>
             </span>
           </span>
-          <span className="imbo-hero__ring lp-hair" aria-hidden="true" style={{ zIndex: "6" }}>
+          <span className="imbo-hero__ring lp-hair" aria-hidden="true" style={{ zIndex: "7" }}>
             <span className="imbo-hero__mark" style={{ color: "var(--lp-fg)" }}>
               <svg viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" aria-hidden="true">
                 <path d="M12.105 2L9.927 4.953H.653L2.83 2h9.276zM23.254 19.048L21.078 22h-9.242l2.174-2.952h9.244zM24 2L9.264 22H0L14.736 2H24z" />
