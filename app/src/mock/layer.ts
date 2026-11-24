@@ -1,4 +1,4 @@
-import type { Account, AdminAccount, AgentRef, Block, ContactShare, Device, FileRef, Group, Liker, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent, SentRequest } from "@/data/contract"
+import type { Account, AdminAccount, AgentRef, Block, ContactShare, Device, FileRef, Group, Message, MessagesPage, MyAgent, Profile, Report, Request, Sent, SentRequest } from "@/data/contract"
 import { account as accountSchema } from "@/data/contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan } from "@/data/layer"
 import * as f from "./data"
@@ -118,10 +118,6 @@ const profiles: Profile[] = [
 ]
 /** What Dana is shown of a thread: messages in a group from someone she blocked are hidden (RULE-013). */
 const visible = (m: Message) => !(m.conversation.kind === "group" && blockedByMe(m.from.account_id))
-
-/** Who put a 👍 on which message since the demo opened, on top of the fixtures' own (FLOW-LIKE). */
-const likesOf: Record<number, Liker[]> = {}
-const withLikes = (m: Message) => (likesOf[m.id] ? { ...m, likes: likesOf[m.id] } : m)
 
 /** Same paging as the server: up to 50, oldest first, `has_more` when more lie beyond the page. */
 function page(list: Message[], p: Page = {}, limit = 50): MessagesPage {
@@ -341,22 +337,8 @@ export const mock = {
   },
   messages: async (id, p) => {
     if (!f.conversations.some((c) => c.id === id)) throw new ApiError(404, "/errors/not-found", `No conversation ${id}.`)
-    return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)).map(withLikes), p), { messages: [], has_more: false })
+    return data(() => page(allMessages().filter((m) => m.conversation.id === id && visible(m)), p), { messages: [], has_more: false })
   },
-  async like(id, on) {
-    const a = signedIn()
-    await wait(200)
-    const m = allMessages().find((x) => x.id === id && visible(x))
-    if (!m || !f.conversations.some((c) => c.id === m.conversation.id)) throw new ApiError(404, "/errors/not-found", `No message ${id}.`)
-    const now = likesOf[id] ?? m.likes
-    likesOf[id] = on ? (now.some((x) => x.id === a.id) ? now : [...now, { id: a.id, name: a.name }]) : now.filter((x) => x.id !== a.id)
-    return likesOf[id]
-  },
-  conversationLikes: async (id, after) =>
-    data(
-      () => ({ messages: allMessages().filter((m) => m.conversation.id === id && m.id > after && visible(m)).map(withLikes).filter((m) => m.likes.length).map((m) => ({ id: m.id, likes: m.likes })) }),
-      { messages: [] }
-    ),
   agents: () => data(() => f.myAgents.map((a) => ({ ...a, ...woken[a.id], ...(titles[a.id] && { title: titles[a.id] }), unread: unread[a.id].length })), []),
   agentMessages: async (id, p) => {
     if (!f.myAgents.some((a) => a.id === id)) throw new ApiError(404, "/errors/not-found", "No such session.")

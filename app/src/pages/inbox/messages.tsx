@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
-import { ArrowDown, CheckCheck, CircleAlert, Clock, Copy, Download, FileText, Play, Reply, ThumbsUp } from "lucide-react"
+import { ArrowDown, CheckCheck, CircleAlert, Clock, Copy, Download, FileText, Play, Reply } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/cn"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,8 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Dialog } from "@/components/ui/dialog"
 import { agentAvatar, Avatar, SessionName, Sep, Tag } from "@/components/bits"
 import { SenderName, unblockNow } from "./safety"
-import type { FileRef, Liker, Message, Via } from "@/data/contract"
-import { messageOf, type ApiError } from "@/data/layer"
+import type { FileRef, Message, Via } from "@/data/contract"
+import { type ApiError } from "@/data/layer"
 import {
   bringIn,
   contactOf,
@@ -21,7 +21,6 @@ import {
   fileUrl,
   groupOf,
   isMe,
-  like,
   loadOlder,
   mediaOf,
   photoOf,
@@ -355,33 +354,6 @@ function Quoted({ q, onOpen }: { q: Quote; onOpen?: (id: number) => void }) {
   )
 }
 
-/**
- * Under a message someone put a 👍 on: who, me as "You", the first 3 and +N for the rest; all of them on hover and to
- * screen readers (FLOW-LIKE S3). Pressed when one is mine, and pressing it puts mine on or takes it back.
- */
-function Likes({ s, id, likes, onLike }: { s: State; id: number; likes: Liker[]; onLike: (on: boolean) => void }) {
-  if (!likes.length) return null
-  const liked = likes.some((x) => isMe(s, x.id))
-  const names = likes.map((x) => (isMe(s, x.id) ? t("You") : x.name))
-  const all = `👍 ${names.join(t(", "))}`
-  return (
-    <button
-      type="button"
-      aria-pressed={liked}
-      aria-label={all}
-      title={all}
-      data-testid={`likes-${id}`}
-      onClick={() => onLike(!liked)}
-      className={cn(
-        "state-layer focus-ring mt-1 inline-flex h-6 max-w-full items-center rounded-full border-(length:--semantic-layout-hairline) px-2 text-caption",
-        liked ? "border-(--semantic-color-action-primary) bg-(--semantic-color-surface-selected) text-foreground" : "border-border text-(--semantic-color-text-secondary)"
-      )}
-    >
-      <span className="truncate">{`👍 ${names.slice(0, 3).join(t(", "))}${names.length > 3 ? ` +${names.length - 3}` : ""}`}</span>
-    </button>
-  )
-}
-
 const Me = ({ s }: { s: State }) => <Avatar kind="person" label={s.account?.name} src={s.account?.avatar_url} />
 
 /** A session's mark; sent in person, the sender's own picture, wherever they sent it from. */
@@ -463,14 +435,12 @@ function passage(from: Element, body: string) {
 /**
  * A message with no `from.agent` was sent in person, from `from.via`. Group messages have no `to`. With `onReply`, a
  * Reply button shows beside the heading on hover (always on touch screens), and a right-click opens Reply and Copy.
- * The button replies to the passage selected in the message, if any. With `onLike` (in a chat), a 👍 button joins it
- * and the menu, and the 👍 line under the message can be pressed (FLOW-LIKE).
+ * The button replies to the passage selected in the message, if any.
  */
 export function MessageRow({
   s,
   m,
   onReply,
-  onLike,
   onQuote,
   flash,
   onFlashed,
@@ -478,14 +448,12 @@ export function MessageRow({
   s: State
   m: Message
   onReply?: (passage?: string) => void
-  onLike?: (on: boolean) => void
   onQuote?: (id: number) => void
   flash?: boolean
   onFlashed?: () => void
 }) {
   const to = recipientOf(s, m)
   const right = mine(s, m)
-  const liked = m.likes.some((x) => isMe(s, x.id))
   // Reply from the menu starts once the menu has closed, so the box can take the caret: an open menu keeps focus
   // inside itself, and a closing one hands it back to the row.
   const replied = useRef(false)
@@ -519,20 +487,14 @@ export function MessageRow({
             <Reply size={14} aria-hidden="true" />
           </Button>
         )}
-        {onLike && (
-          <Button variant="ghost" size="icon-sm" aria-label={liked ? t("Remove thumbs up") : t("Thumbs up")} data-testid={`like-${m.id}`} onClick={() => onLike(!liked)} className={onHover}>
-            <ThumbsUp size={14} aria-hidden="true" />
-          </Button>
-        )}
       </header>
       {m.body && <Bubble body={m.body} right={right} />}
       {m.files.length > 0 && <Attachments files={m.files} right={right} />}
       {m.quote && <Quoted q={m.quote} onOpen={onQuote} />}
-      {onLike && <Likes s={s} id={m.id} likes={m.likes} onLike={onLike} />}
       <Delivery s={s} m={m} />
     </Row>
   )
-  if (!onReply && !onLike) return row
+  if (!onReply) return row
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
@@ -544,18 +506,10 @@ export function MessageRow({
           onReply?.()
         }}
       >
-        {onReply && (
-          <ContextMenuItem onSelect={() => (replied.current = true)}>
-            <Reply size={16} aria-hidden="true" />
-            {t("Reply")}
-          </ContextMenuItem>
-        )}
-        {onLike && (
-          <ContextMenuItem onSelect={() => onLike(!liked)}>
-            <ThumbsUp size={16} aria-hidden="true" />
-            {liked ? t("Remove thumbs up") : t("Thumbs up")}
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem onSelect={() => (replied.current = true)}>
+          <Reply size={16} aria-hidden="true" />
+          {t("Reply")}
+        </ContextMenuItem>
         <ContextMenuItem disabled={!m.body} onSelect={() => navigator.clipboard.writeText(m.body).then(() => toast(t("Copied")))}>
           <Copy size={16} aria-hidden="true" />
           {t("Copy")}
@@ -747,7 +701,6 @@ export function MessageList({ s, id, thread, label, pick, goTo }: { s: State; id
                   s={s}
                   m={m}
                   onReply={repliable(s, id, m) ? (text) => replyTo(id, m, text) : undefined}
-                  onLike={id.startsWith("c:") ? (on) => like(id, m.id, on).catch((e) => toast.error(messageOf(e))) : undefined}
                   onQuote={(q) => open(q)}
                   flash={flash === m.id}
                   onFlashed={() => setFlash(undefined)}

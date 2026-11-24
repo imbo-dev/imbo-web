@@ -177,15 +177,14 @@ const withLeo = { kind: "direct" as const, id: 3, peer: leo }
 /** Dana and her own sessions (API-043); not a chat, so API-030 doesn't list it. */
 export const selfChat = { kind: "direct" as const, id: 9, peer: dana }
 
-type Draft = Omit<Message, "reply_to" | "files" | "from_me" | "likes"> & { files?: FileRef[]; likes?: Message["likes"] }
+type Draft = Omit<Message, "reply_to" | "files" | "from_me"> & { files?: FileRef[] }
 /**
  * Fills `reply_to` the way the server does (the group, the sending session, or the sender's terminal), and `from_me`
  * for what Dana sent in person.
  */
-export const msg = ({ files = [], likes = [], ...m }: Draft): Message => ({
+export const msg = ({ files = [], ...m }: Draft): Message => ({
   ...m,
   files,
-  likes,
   reply_to: m.conversation.group ? `#${m.conversation.group.id}` : m.from.agent ? `${m.from.account_id}/${m.from.agent.short_id}` : `${m.from.account_id}`,
   from_me: m.from.account_id === account.id && !m.from.agent,
 })

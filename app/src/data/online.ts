@@ -79,8 +79,6 @@ export const online = {
   markConversationRead: async (id, up_to) => (await call(c.marked, "POST", `/v1/conversations/${id}/read`, { up_to })).marked,
   setConversationPrefs: (id, prefs) => call(c.conversationPrefs, "POST", `/v1/conversations/${id}/prefs`, prefs),
   searchConversation: (id, q) => get(c.messagesPage, `/v1/conversations/${id}/search?q=${encodeURIComponent(q)}`),
-  like: async (id, on) => (await call(c.likes, on ? "PUT" : "DELETE", `/v1/messages/${id}/like`)).likes,
-  conversationLikes: (id, after) => get(c.conversationLikes, `/v1/conversations/${id}/likes?after=${after}`),
   events: (changed) => {
     // Same host as every other call: through the dev server's proxy, or api.imbo.dev, which gets the session cookie too.
     const url = `${API ? API.replace(/^http/, "ws") : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`}/v1/events`

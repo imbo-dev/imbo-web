@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, ConversationPrefs, Device, FileRef, Group, Liker, Message, MyAgent, Request, SentRequest, ShareLevel, Uploaded } from "./contract"
+import type { Accepted, Account, Area, Billing, Block, Contact, ContactShare, Conversation, ConversationPrefs, Device, FileRef, Group, Message, MyAgent, Request, SentRequest, ShareLevel, Uploaded } from "./contract"
 import { ApiError, noAnswer, type DataLayer, type Page, type Plan, type ReportReason } from "./layer"
 import { online } from "./online"
 import { t } from "@/i18n"
@@ -808,49 +808,6 @@ export async function markChatRead(id: number) {
   await act(() => api.markConversationRead(id, c.last_message!.id))
   putChat(id, { pending: 0, marked_unread: false })
 }
-/** Sets who has a 👍 on the messages in `likes` in a chat's thread; with `from`, messages from it on missing there have none. */
-function putLikes(key: ThreadKey, likes: Map<number, Liker[]>, from?: number) {
-  const cur = state.threads[key]
-  if (cur?.status !== "ready") return
-  const now = (m: Message) => likes.get(m.id) ?? (from !== undefined && m.id >= from ? [] : m.likes)
-  const same = (a: Liker[], b: Liker[]) => a.length === b.length && a.every((x, i) => x.id === b[i].id && x.name === b[i].name)
-  if (cur.data.messages.every((m) => same(now(m), m.likes))) return
-  setThread(key, ready({ ...cur.data, messages: cur.data.messages.map((m) => (same(now(m), m.likes) ? m : { ...m, likes: now(m) })) }))
-}
-/**
- * API-091, API-092: my 👍 on a message in a chat, or taking it back (FLOW-LIKE). The row changes at once and goes back
- * when the server says no. Throws ApiError.
- */
-export async function like(key: ThreadKey, id: number, on: boolean) {
-  const me = state.account
-  const t = state.threads[key]
-  const before = t?.status === "ready" ? t.data.messages.find((m) => m.id === id)?.likes : undefined
-  if (!me || !before) return
-  const others = before.filter((x) => x.id !== me.id)
-  putLikes(key, new Map([[id, on ? [...others, { id: me.id, name: me.name }] : others]]))
-  try {
-    putLikes(key, new Map([[id, await act(() => api.like(id, on))]]))
-  } catch (e) {
-    putLikes(key, new Map([[id, before]]))
-    throw e
-  }
-}
-/**
- * API-093: who has a 👍 on the open chat's messages now, from the first one shown on (FLOW-LIVE S5). It lists at most the
- * newest 500, so when it is full, the ones before its first keep what they show.
- */
-async function likesNow(key: ThreadKey) {
-  const t = state.threads[key]
-  const first = t?.status === "ready" ? t.data.messages[0]?.id : undefined
-  if (first === undefined) return
-  const n = seq[key]
-  try {
-    const { messages } = await api.conversationLikes(Number(key.slice(2)), first - 1)
-    if (seq[key] === n) putLikes(key, new Map(messages.map((x) => [x.id, x.likes])), messages.length >= 500 ? messages[0].id : first)
-  } catch (e) {
-    expired(e)
-  }
-}
 /** API-086: up to 50 of the chat's messages whose text has `q`, oldest first. Throws ApiError. */
 export const searchChat = (id: number, q: string) => act(() => api.searchConversation(id, q))
 /** API-013: the chat stays, and says they're no longer a contact. Throws ApiError. */
@@ -924,13 +881,13 @@ export const admin: DataLayer["admin"] = {
 // ── Keeping up ───────────────────────────────────────────────────────────────
 
 /**
- * Fetches an area again: conversations take the open chat or session pane's messages along; groups, any open details;
- * likes, only the open chat's.
+ * Fetches an area again: conversations take the open chat or session pane's messages along; groups, any open details.
  */
 function refetch(area: Area) {
-  if (area === "all") return void (["conversations", "agents", "contacts", "requests", "groups", "likes"] as const).forEach(refetch)
+  if (area === "all") return void (["conversations", "agents", "contacts", "requests", "groups"] as const).forEach(refetch)
   if (area === "requests") return void (loadRequests(), loadSent())
-  if (area === "likes") return void (openKey?.startsWith("c:") && likesNow(openKey))
+  // The server still names `likes` as an area; the web no longer shows them, so ignore it.
+  if (area === "likes") return
   const loaded = load(area, true)
   // What a contact can see changed here or in another tab, or one of my sessions messaged them (RULE-019). Not for someone
   // no longer a contact: the server refuses.
