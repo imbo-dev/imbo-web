@@ -3,6 +3,6 @@
   "version": "1.101.0",
   "license": "MIT",
   "homepage": "https://lobehub.com/icons",
-  "files": ["claudecode-color.svg", "openai.svg", "cursor.svg", "opencode.svg", "minimax-color.svg", "zai.svg"],
-  "note": "Copied from mobile/assets/logos. Agent product marks shown for sessions. Codex uses the OpenAI mark, ZCode the Z.ai mark. Claude Code and MiniMax Code use the color versions; the rest follow the text color."
+  "files": ["claudecode-color.svg", "openai.svg", "cursor.svg", "opencode.svg", "minimax-color.svg", "zai.svg", "antigravity-color.svg"],
+  "note": "Copied from mobile/assets/logos. Agent product marks shown for sessions. Codex uses the OpenAI mark, ZCode the Z.ai mark. Claude Code, MiniMax Code and Antigravity CLI use the color versions; the rest follow the text color. antigravity-color.svg is from version 1.106.0."
 }

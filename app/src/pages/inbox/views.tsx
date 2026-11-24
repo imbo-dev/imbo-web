@@ -120,6 +120,27 @@ function ListRow({
   )
 }
 
+/** The box over a list in the left column: what's typed narrows the loaded list, Esc empties it. */
+function ListSearch({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <search className="px-4 pt-2">
+      <div className="state-layer focus-ring is-field flex h-8 items-center gap-2 rounded-md border border-input bg-muted px-3">
+        <Search size={14} aria-hidden="true" className="flex-none text-muted-foreground" />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && onChange("")}
+          aria-label={label}
+          placeholder={label}
+          autoComplete="off"
+          className="w-full min-w-0 bg-transparent text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
+        />
+      </div>
+    </search>
+  )
+}
+
 /**
  * API-030 `pending`: what others wrote in a chat that I haven't read; opening the chat reads it (API-078). Also API-014
  * `unread`, with `sr` saying what the number counts.
@@ -179,7 +200,7 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
   if (l.status === "loading") return <ListSkeleton />
   if (l.status === "error") return <ErrorState title={t("Couldn't load chats")} error={l.error} onRetry={() => retry("conversations")} />
   const newGroup = (
-    <div className="flex justify-end gap-2 px-4 pt-2">
+    <div className="grid grid-cols-2 gap-2 px-4 pt-2">
       <Button variant="outline" size="sm" onClick={openFindGroup}>
         <Search size={14} aria-hidden="true" />
         {t("Find a group")}
@@ -206,21 +227,7 @@ export function ChatList({ s, open }: { s: State; open?: string }) {
   const shown = words ? l.data.filter((c) => conversationTitle(c).toLowerCase().includes(words.toLowerCase())) : l.data
   return (
     <>
-      <div className="px-4 pt-2">
-        <div className="state-layer focus-ring is-field flex h-8 items-center gap-2 rounded-md border border-input bg-muted px-3">
-          <Search size={14} aria-hidden="true" className="flex-none text-muted-foreground" />
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQ("")}
-            aria-label={t("Search chats")}
-            placeholder={t("Search chats")}
-            autoComplete="off"
-            className="w-full min-w-0 bg-transparent text-body text-foreground outline-none placeholder:text-(--semantic-color-text-tertiary)"
-          />
-        </div>
-      </div>
+      <ListSearch label={t("Search chats")} value={q} onChange={setQ} />
       {newGroup}
       {!shown.length && (
         <p role="status" className="px-4 py-6 text-body text-muted-foreground">
@@ -617,13 +624,19 @@ function ToolLine({ x }: { x: MyAgent }) {
 const PAGE = 20
 const MOST = 200
 
+/** API-014 `last_message_at` as a number to sort by; 0 without one. Not compared as text: the server's fraction digits vary. */
+const lastMessageAt = (x: MyAgent) => (x.last_message_at ? Date.parse(x.last_message_at) : 0)
+
 /**
  * PAGE-WEB-SESSIONS: the 20 most recent first, 20 more each time Load more is pressed, at most 200: one account had 4,140
- * sessions.
+ * sessions. The sessions with a message in the last 7 days come first, the latest on top, the rest after them in the
+ * server's order; the box on top narrows the loaded list by session, tool or computer name, without asking the server, and
+ * is kept while sessions open beside it (FLOW-SESSION-LIST).
  */
 export function SessionList({ s, open }: { s: State; open?: string }) {
   const l = s.agents
   const [limit, setLimit] = useState(PAGE)
+  const [q, setQ] = useState("")
   const nav = useRef<HTMLElement>(null)
   if (l.status === "loading") return <ListSkeleton rows={4} />
   if (l.status === "error") return <ErrorState title={t("Couldn't load sessions")} error={l.error} onRetry={() => retry("agents")} />
@@ -636,7 +649,11 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
         </div>
       </EmptyState>
     )
-  const rest = Math.min(l.data.length, MOST) - limit
+  const sorted = l.data.toSorted((a, b) => lastMessageAt(b) - lastMessageAt(a))
+  const words = q.trim()
+  const has = (v?: string) => !!v?.toLowerCase().includes(words.toLowerCase())
+  const found = words ? sorted.filter((x) => has(x.title) || has(toolName(x.tool)) || has(x.device_name)) : sorted
+  const rest = Math.min(found.length, MOST) - limit
   // Focus moves to the first row just shown, so the keyboard carries on down the list.
   const more = () => {
     setLimit(limit + PAGE)
@@ -644,8 +661,14 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
   }
   return (
     <>
-      <nav ref={nav} aria-label={t("My sessions")} className="flex flex-col gap-0.5 p-2">
-        {l.data.slice(0, limit).map((x, i) => (
+      <ListSearch label={t("Search sessions")} value={q} onChange={setQ} />
+      {!found.length && (
+        <p role="status" className="px-4 py-6 text-body wrap-anywhere text-muted-foreground">
+          {t("No sessions match “{q}”", { q: words })}
+        </p>
+      )}
+      <nav ref={nav} aria-label={t("My sessions")} hidden={!found.length} className="flex flex-col gap-0.5 p-2">
+        {found.slice(0, limit).map((x, i) => (
           <ListRow key={x.id} href={`/sessions/${x.id}`} current={x.id === open} appear={i >= PAGE}>
             <Avatar kind="agent" tool={x.tool} />
             <span className="min-w-0">
@@ -656,7 +679,16 @@ export function SessionList({ s, open }: { s: State; open?: string }) {
                 <span className="truncate">{toolName(x.tool)}</span>
               </span>
             </span>
-            {x.unread > 0 && <PendingBadge n={x.unread} sr={x.unread === 1 ? t("new reply") : t("new replies")} />}
+            <span className="flex flex-col items-end gap-1">
+              {x.last_message_at && (
+                <time dateTime={x.last_message_at} className="text-caption tabular-nums text-(--semantic-color-text-tertiary)">
+                  {shortWhen(x.last_message_at)}
+                </time>
+              )}
+              <span className="flex h-5 items-center">
+                {x.unread > 0 && <PendingBadge n={x.unread} sr={x.unread === 1 ? t("new reply") : t("new replies")} />}
+              </span>
+            </span>
           </ListRow>
         ))}
       </nav>

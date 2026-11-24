@@ -5,6 +5,7 @@ import { t } from "@/i18n"
 import { cn } from "@/lib/cn"
 import { ago } from "@/lib/format"
 import { useCopy } from "@/lib/useCopy"
+import antigravity from "@/assets/logos/antigravity-color.svg?raw"
 import claudeCode from "@/assets/logos/claudecode-color.svg?raw"
 import cursor from "@/assets/logos/cursor.svg?raw"
 import minimax from "@/assets/logos/minimax-color.svg?raw"
@@ -17,8 +18,8 @@ const AVATAR_SIZES = { sm: "size-6 text-caption", md: "size-8", lg: "size-10 tex
 /** LobeHub marks (src/assets/logos, MIT) without their size and title, so the box sizes them and nothing shows on hover. */
 const mark = (svg: string) => svg.replace(/<title>.*?<\/title>/, "").replace(/ (width|height)="1em"/g, "")
 
-// Server `tool` values → product marks, as in the App. Codex shows the OpenAI mark, ZCode the Z.ai mark; Claude Code
-// and MiniMax keep their own colors, the rest follow the text color.
+// Server `tool` values → product marks, as in the App. Codex shows the OpenAI mark, ZCode the Z.ai mark; Claude Code,
+// MiniMax and Antigravity keep their own colors, the rest follow the text color.
 const MARKS: Record<string, string> = {
   "claude-code": mark(claudeCode),
   codex: mark(openai),
@@ -26,6 +27,7 @@ const MARKS: Record<string, string> = {
   opencode: mark(opencode),
   "minimax-code": mark(minimax),
   zcode: mark(zai),
+  antigravity: mark(antigravity),
 }
 
 /**

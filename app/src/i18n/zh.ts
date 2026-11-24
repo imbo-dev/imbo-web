@@ -592,6 +592,9 @@ export const zh = {
   "Draft": "草稿",
   "Search chats": "查找对话",
   "No chat names contain “{q}”": "没有名字里带“{q}”的对话",
+  // pages/inbox/views.tsx session list (FLOW-SESSION-LIST)
+  "Search sessions": "查找会话",
+  "No sessions match “{q}”": "没有对得上“{q}”的会话",
   // pages/inbox/search.tsx
   "Search in this chat": "在对话里查找",
   "Close search": "关闭查找",

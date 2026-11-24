@@ -45,6 +45,8 @@ export const myAgent = agentRef.extend({
   device_id: z.string().nullable(),
   device_name: z.string().optional(),
   last_online_at: time.optional(),
+  // When it last sent or got a message, if within 7 days.
+  last_message_at: time.optional(),
   unread: z.number().default(0),
   wakeable: z.boolean().default(false),
   wake: z.object({ state: z.enum(["waking", "failed"]), detail: z.string().optional(), at: time }).nullish(),

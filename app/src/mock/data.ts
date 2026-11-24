@@ -57,10 +57,10 @@ const releaseTeam = { id: 5520183, name: "release-team" }
 
 /** API-014 */
 export const myAgents: MyAgent[] = [
-  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp", unread: 1, wakeable: false },
+  { id: "a-checkout", short_id: "3fa9c1", session_id: "s-3fa9c1", title: "checkout", tool: "claude-code", online: true, device_id: "d1", device_name: "dana-mbp", last_message_at: iso(now - 3 * 3_600_000), unread: 1, wakeable: false },
   { id: "a-migration", short_id: "7b2e40", session_id: "s-7b2e40", title: "orders-migration", tool: "codex", online: true, device_id: "d2", device_name: "build-box", unread: 0, wakeable: false },
   { id: "a-api-tests", short_id: "e04a7d", session_id: "s-e04a7d", title: "api-tests", tool: "zcode", online: true, device_id: "d2", device_name: "build-box", unread: 0, wakeable: false },
-  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000), unread: 0, wakeable: false },
+  { id: "a-docs", short_id: "c0d81e", session_id: "s-c0d81e", title: "docs-site", tool: "opencode", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 2 * 3_600_000), last_message_at: iso(now - 25 * 60_000), unread: 0, wakeable: false },
   // Claude Code sessions that sending can open on their computer (FLOW-WAKE): billing opens; search-index's last try failed.
   { id: "a-billing", short_id: "5d19b2", session_id: "s-5d19b2", title: "billing", tool: "claude-code", online: false, device_id: "d1", device_name: "dana-mbp", last_online_at: iso(now - 5 * 3_600_000), unread: 0, wakeable: true },
   {
