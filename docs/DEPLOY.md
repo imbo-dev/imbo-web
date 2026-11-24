@@ -101,3 +101,4 @@ N/A — 本站没有数据库。
 | 2026-11-06 | 发布 | 网页端 deployment `f8a3dafc`，commit `66ee586`：管理端用户页搜索时，先发出、后回来的全部账号列表不再盖掉搜索结果，举报页的列表与详情同样只认最后一次取的结果；服务端 0.2.23；app.imbo.dev 与部署地址返回的都是新包 `index-BZ15KhAy.js`，与本地构建逐字节相同；RUN-483 线上 TC-041、TC-104 2/2 |
 | 2026-11-24 | 发布 | deployment `539eb372`，commit `c52a01b`（官网改动在 `67e3bfb`）：支持的工具加上 Antigravity CLI，首屏徽章与工具名单写 11 个，llms.txt 同步；服务端 0.2.27；imbo.dev 首页有 6 处 Antigravity CLI，与本地构建只差 Cloudflare 去掉的 `email_off` 注释；RUN-577 线上 TC-041 通过 |
 | 2026-11-24 | 发布 | 网页端 deployment `d4e2256f`，commit `c52a01b`：Antigravity CLI 的会话显示工具名；对话列表的红点改由服务端 0.2.27 算（别人发来、本人还没读的消息，点进对话清零，迁移 0019），网页只显示；app.imbo.dev 与部署地址返回的都是新包 `index-DaBDGlLm.js`，与本地构建逐字节相同；RUN-577 线上冒烟 7/7（含 TC-041、TC-104） |
+| 2026-11-24 | 发布 | deployment `4e70ec68`，commit `ffd5b0d`：首屏徽章的图标叠排在 Cursor 后加上 Antigravity CLI 的标，共 7 个；窄于 30rem 时圆圈从 2.5rem 缩到 2rem，360 宽两边各留 18px；imbo.dev 首页 7 个圆圈，1440 与 360 宽线上截图核对，控制台无报错 |
