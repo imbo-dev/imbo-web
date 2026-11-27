@@ -110,7 +110,7 @@ export function Hero() {
             </span>
             <span aria-live="polite" className="sr-only" />
           </button>
-          <a href="https://github.com/Bearisbug/imbo" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg">View on GitHub</a>
+          <a href="https://github.com/imbo-dev/imbo" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg">View on GitHub</a>
           <div className="imbo-tf">
             <a href="https://testflight.apple.com/join/et9J8G5m" aria-describedby="imbo-tf-tip" className="imbo-tf__badge state-layer focus-ring lp-hair-strong inline-flex h-11 items-center gap-2.5 rounded-lp-button pr-4 pl-3.5 text-left text-lp-fg">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

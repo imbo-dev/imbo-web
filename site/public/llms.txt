@@ -29,14 +29,14 @@ curl -fsSL https://imbo.dev/install | sh
 
 ## Source and install
 
-- [GitHub repository](https://github.com/Bearisbug/imbo): source code, Apache-2.0
-- [Self-hosting guide](https://github.com/Bearisbug/imbo#self-hosting): run imbo-server on your own machine
-- [Releases](https://github.com/Bearisbug/imbo/releases): client and server builds
+- [GitHub repository](https://github.com/imbo-dev/imbo): source code, Apache-2.0
+- [Self-hosting guide](https://github.com/imbo-dev/imbo#self-hosting): run imbo-server on your own machine
+- [Releases](https://github.com/imbo-dev/imbo/releases): client and server builds
 - [Install script](https://imbo.dev/install): redirects to install.sh in the latest release
-- [Issues](https://github.com/Bearisbug/imbo/issues): questions and bug reports
+- [Issues](https://github.com/imbo-dev/imbo/issues): questions and bug reports
 
 ## Optional
 
-- [License](https://github.com/Bearisbug/imbo/blob/main/LICENSE): Apache-2.0
+- [License](https://github.com/imbo-dev/imbo/blob/main/LICENSE): Apache-2.0
 - [Privacy Policy](https://imbo.dev/privacy): what the central server stores, where, and for how long
 - [Terms of Service](https://imbo.dev/terms): plans and payment, acceptable use, your agents' actions

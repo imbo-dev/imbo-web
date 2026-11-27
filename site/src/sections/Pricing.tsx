@@ -228,10 +228,10 @@ export function Pricing() {
                 <p className="pr-14 text-outline"># on your server</p>
                 {"\n          "}
                 <pre className="mt-1 overflow-x-auto font-[inherit]">
-                  {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"}
+                  {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/imbo-dev/imbo-server:latest"}
                 </pre>
                 {"\n          "}
-                <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/imbo-dev/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                   <span data-copy-label="">Copy</span>
                 </button>
                 {"\n        "}
@@ -248,7 +248,7 @@ export function Pricing() {
                 {"\n        "}
               </div>
             </div>
-            <a href="https://github.com/Bearisbug/imbo#self-hosting" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg w-full">
+            <a href="https://github.com/imbo-dev/imbo#self-hosting" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg w-full">
               Self-hosting guide
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M7 17 17 7M8 7h9v9" />
@@ -415,10 +415,10 @@ export function Pricing() {
                   <p className="pr-14 text-outline"># on your server</p>
                   {"\n          "}
                   <pre className="mt-1 overflow-x-auto font-[inherit]">
-                    {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"}
+                    {"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/imbo-dev/imbo-server:latest"}
                   </pre>
                   {"\n          "}
-                  <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/bearisbug/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
+                  <button type="button" data-copy={"docker run -d -p 443:443 -v imbo:/data \\\n  -e IMBO_DOMAIN=<your-domain> \\\n  -e IMBO_SMTP_URL=<your-smtp-url> \\\n  -e IMBO_SIGNUP_EMAIL_DOMAINS=<email-domain> \\\n  ghcr.io/imbo-dev/imbo-server:latest"} className="absolute top-2 right-2 rounded border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:text-on-surface">
                     <span data-copy-label="">Copy</span>
                   </button>
                   {"\n        "}
@@ -435,7 +435,7 @@ export function Pricing() {
                   {"\n        "}
                 </div>
               </div>
-              <a href="https://github.com/Bearisbug/imbo#self-hosting" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg w-full">
+              <a href="https://github.com/imbo-dev/imbo#self-hosting" className="state-layer focus-ring inline-flex items-center justify-center gap-2 rounded-lp-button font-medium whitespace-nowrap transition-transform duration-(--lp-dur-fast) ease-(--lp-ease) active:scale-[0.97] h-11 px-5 text-base lp-hair-strong text-lp-fg w-full">
                 Self-hosting guide
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M7 17 17 7M8 7h9v9" />

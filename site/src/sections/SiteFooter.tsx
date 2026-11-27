@@ -30,16 +30,16 @@ export function SiteFooter({ base = "" }: { base?: string }) {
         <h2 className="text-sm font-semibold">Open source</h2>
         <ul className="mt-4 flex flex-col gap-1">
           <li>
-            <a href="https://github.com/Bearisbug/imbo" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">GitHub</a>
+            <a href="https://github.com/imbo-dev/imbo" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">GitHub</a>
           </li>
           <li>
-            <a href="https://github.com/Bearisbug/imbo/releases" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Releases</a>
+            <a href="https://github.com/imbo-dev/imbo/releases" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Releases</a>
           </li>
           <li>
-            <a href="https://github.com/Bearisbug/imbo#self-hosting" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Self-hosting</a>
+            <a href="https://github.com/imbo-dev/imbo#self-hosting" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">Self-hosting</a>
           </li>
           <li>
-            <a href="https://github.com/Bearisbug/imbo/blob/main/LICENSE" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">License</a>
+            <a href="https://github.com/imbo-dev/imbo/blob/main/LICENSE" className="state-layer focus-ring -mx-1.5 inline-flex min-h-8 items-center rounded-lp-control px-1.5 text-sm text-lp-fg-muted">License</a>
           </li>
         </ul>
       </nav>

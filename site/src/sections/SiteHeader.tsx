@@ -104,7 +104,7 @@ export function SiteHeader({ base = "" }: { base?: string }) {
               </li>
               {"\n"}
               <li>
-                <a href="https://github.com/Bearisbug/imbo" data-scramble="" className="group flex items-center gap-1 h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <a href="https://github.com/imbo-dev/imbo" data-scramble="" className="group flex items-center gap-1 h-8 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <span data-scramble-text="">GitHub</span>
                   <span aria-hidden="true" className="text-outline group-hover:text-on-surface">↗</span>
                 </a>
@@ -167,7 +167,7 @@ export function SiteHeader({ base = "" }: { base?: string }) {
               </a>
             </li>
             <li>
-              <a href="https://github.com/Bearisbug/imbo" className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
+              <a href="https://github.com/imbo-dev/imbo" className="flex min-h-11 items-center gap-2 rounded-md px-3 text-base text-on-surface-variant hover:text-on-surface hover:bg-on-surface/[0.08]">
                 <span aria-hidden="true" className="text-outline">{">"}</span>
                 GitHub
               </a>

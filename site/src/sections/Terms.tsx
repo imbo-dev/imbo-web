@@ -46,7 +46,7 @@ export function Terms() {
           {"\n      "}
           <p>
             {"The client, installer and server software are open source under the "}
-            <a href="https://github.com/Bearisbug/imbo/blob/main/LICENSE">Apache License 2.0</a>
+            <a href="https://github.com/imbo-dev/imbo/blob/main/LICENSE">Apache License 2.0</a>
             , which governs your use of the code. These terms don't apply to servers you or others run yourselves.
           </p>
           <h2 id="terms-3">
