@@ -1,6 +1,6 @@
 # imbo.dev 部署手册
 
-官网 imbo.dev 是 `site/` 构建出的静态单页，网页端 app.imbo.dev 是 `app/` 构建出的单页应用，都用 wrangler 手动发布到 Cloudflare Pages，没有 push 即部署管线。代码推 GitHub 私有仓 `Bearisbug/imbo-web` 存档，仓库里不放 workflow：私有仓的 Actions 按分钟计费。
+官网 imbo.dev 是 `site/` 构建出的静态单页，网页端 app.imbo.dev 是 `app/` 构建出的单页应用，都用 wrangler 手动发布到 Cloudflare Pages，没有 push 即部署管线。代码推 GitHub 公开仓 `imbo-dev/imbo-web`，发布用 `site/deploy.sh`、`app/deploy.sh`；仓库里不放 workflow。
 
 ## 1. 环境信息表
 
@@ -103,3 +103,4 @@ N/A — 本站没有数据库。
 | 2026-11-24 | 发布 | 网页端 deployment `d4e2256f`，commit `c52a01b`：Antigravity CLI 的会话显示工具名；对话列表的红点改由服务端 0.2.27 算（别人发来、本人还没读的消息，点进对话清零，迁移 0019），网页只显示；app.imbo.dev 与部署地址返回的都是新包 `index-DaBDGlLm.js`，与本地构建逐字节相同；RUN-577 线上冒烟 7/7（含 TC-041、TC-104） |
 | 2026-11-24 | 发布 | deployment `4e70ec68`，commit `ffd5b0d`：首屏徽章的图标叠排在 Cursor 后加上 Antigravity CLI 的标，共 7 个；窄于 30rem 时圆圈从 2.5rem 缩到 2rem，360 宽两边各留 18px；imbo.dev 首页 7 个圆圈，1440 与 360 宽线上截图核对，控制台无报错 |
 | 2026-11-25 | 发布 | 网页端 deployment `a07dff7d`，commit `506f361`：网页去掉给消息点 👍，旧版 App 点的 👍 不显示；主工作区有别的会话没提交的改动，所以从 `506f361` 的干净副本（`git worktree`）构建发布；app.imbo.dev 与部署地址返回的都是新包 `index-Cl_6s_LE.js`，与本地构建逐字节相同；服务端 0.2.28；RUN-604 线上 TC-041、TC-104 2/2。上一个 deployment 是 `33b228c7`（commit `0a13568`，`index-Dfrlhkue.js`，11-24 发布，本表没有它的行，RUN-589 线上冒烟 7/7 在它上面跑），回滚回它 |
+| 2026-11-27 | 仓库迁移 | 仓库迁到 GitHub 组织 imbo-dev 并公开（imbo-dev/imbo-web，Apache-2.0），发布方式不变 |
